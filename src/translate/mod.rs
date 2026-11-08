@@ -3400,19 +3400,16 @@ fn append_scale_word(
             lookup_num_phonemes(dict, &format!("_0M{scale}"))
         }
     };
-    let singular_key = format!("_1M{scale}");
+
+    let dedicated = lookup_num_phonemes(dict, &format!("_{group_value}M{scale}"));
+    if !dedicated.is_empty() {
+        dst.push_lookup_word(&dedicated);
+        return;
+    }
 
     if scale == 1 && group_value == 1 && grammar.thousands.omit_one_prefix {
         dst.push_lookup_word(&scale_word);
         return;
-    }
-
-    if group_value == 1 {
-        let singular = lookup_num_phonemes(dict, &singular_key);
-        if !singular.is_empty() {
-            dst.push_lookup_word(&singular);
-            return;
-        }
     }
 
     dst.push_pronunciation(&num3_phonemes_before_scale(dict, group_value, grammar));
