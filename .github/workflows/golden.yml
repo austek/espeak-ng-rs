@@ -54,6 +54,7 @@ jobs:
           --test number_group_stress
           --test number_empty_group_word
           --test leading_zero_numbers
+          --test arabic_thousand_and
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

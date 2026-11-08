@@ -615,6 +615,9 @@ pub struct HundredsGrammar {
     /// Put the conjunction in front of the hundreds of a group that follows a
     /// higher group — upstream `NUM_AND_HUNDRED`.
     pub conjunction_before_hundreds: bool,
+    /// Put the conjunction in front of a scaled group without hundreds that
+    /// follows a higher group — upstream `NUM_THOUSAND_AND`.
+    pub conjunction_before_bare_group: bool,
     /// Whether to omit the explicit `one` before `hundred` (in the compose path,
     /// `_{n}` + `_0C`): French "cent", not "un cent".
     pub omit_one_prefix: bool,
@@ -934,6 +937,7 @@ impl NumberGrammar {
             grammar.hundreds.conjunction_before_simple_remainder = true;
         }
         grammar.hundreds.conjunction_before_hundreds = matches!(lang, "ar" | "ku");
+        grammar.hundreds.conjunction_before_bare_group = lang == "ar";
         // C `NUM_AND_UNITS`: a conjunction joins tens→units ("si O chahar",
         // "shloshim VE arba").  Arabic also has `NUM_SWAP_TENS`, so its units
         // come first ("arba'a WA thalathun").
@@ -3339,6 +3343,7 @@ fn append_scale_word(
     dict: &Dictionary,
     grammar: &NumberGrammar,
     exact: bool,
+    and_first: bool,
 ) {
     // Slavic scale-word declension: the scale word takes a case by the count
     // before it (`M_Variant`), and — in Russian — the count's trailing "one"/"two"
@@ -3414,6 +3419,12 @@ fn append_scale_word(
         return;
     }
 
+    if and_first {
+        let and = lookup_num_phonemes(dict, "_0and");
+        if !and.is_empty() {
+            dst.push_lookup_word(&and);
+        }
+    }
     dst.push_pronunciation(&num3_phonemes_before_scale(dict, group_value, grammar));
     dst.push_lookup_word(&scale_word);
 }
@@ -3448,7 +3459,9 @@ fn append_group_body(
     preceded: bool,
 ) {
     if let Some(scale) = group.scale {
-        append_scale_word(dst, group.value, scale, dict, grammar, exact);
+        let and_first =
+            preceded && grammar.hundreds.conjunction_before_bare_group && group.value < 100;
+        append_scale_word(dst, group.value, scale, dict, grammar, exact, and_first);
     } else {
         // The last group: no scale word follows, so the plain digit form.
         //
@@ -3501,7 +3514,7 @@ fn append_ordinal_scale(
 
     // Ordinal fallback (no `_0M{n}o` key): keep the plain scale word, not the
     // exact `x` variant — that variant is a cardinal-only distinction.
-    append_scale_word(dst, group_value, scale, dict, grammar, false);
+    append_scale_word(dst, group_value, scale, dict, grammar, false, false);
     false
 }
 
