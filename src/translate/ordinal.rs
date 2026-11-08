@@ -291,7 +291,7 @@ impl OrdinalNumbers<'_> {
         }
 
         if is_ordinal && !found_ordinal && ph_ordinal.is_empty() {
-            if value >= 20 && (value % 10 == 0 || self.has(NUM_SWAP_TENS)) {
+            if value >= 20 && (value.is_multiple_of(10) || self.has(NUM_SWAP_TENS)) {
                 ph_ordinal = self.lk("_ord20");
             }
             if ph_ordinal.is_empty() {
@@ -322,10 +322,9 @@ impl OrdinalNumbers<'_> {
                 }
             }
             out = [ph_tens.as_slice(), &ph_digits].concat();
-            if self.has2(NUM2_ORDINAL_DROP_VOWEL) && !ph_ordinal.is_empty() {
-                if out.last().is_some_and(|&c| self.is_vowel(c)) {
-                    out.pop();
-                }
+            let drop_vowel = self.has2(NUM2_ORDINAL_DROP_VOWEL) && !ph_ordinal.is_empty();
+            if drop_vowel && out.last().is_some_and(|&c| self.is_vowel(c)) {
+                out.pop();
             }
             out.extend_from_slice(&ph_ordinal);
         }
@@ -390,12 +389,10 @@ impl OrdinalNumbers<'_> {
 
         let mut ph_hundred_and = Vec::new();
         if tensunits > 0 && !(self.has2(NUM2_MULTIPLE_ORDINAL)) {
-            if value > 100 || previous_thousands {
-                if self.has(NUM_HUNDRED_AND)
-                    || (self.has(NUM_HUNDRED_AND_DIGIT) && tensunits < 10)
-                {
-                    ph_hundred_and = self.lk("_0and");
-                }
+            let wants_and = self.has(NUM_HUNDRED_AND)
+                || (self.has(NUM_HUNDRED_AND_DIGIT) && tensunits < 10);
+            if (value > 100 || previous_thousands) && wants_and {
+                ph_hundred_and = self.lk("_0and");
             }
             if self.has(NUM_THOUSAND_AND) && hundreds == 0 && previous_thousands {
                 ph_hundred_and = self.lk("_0and");
