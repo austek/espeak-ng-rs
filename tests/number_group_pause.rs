@@ -1,4 +1,6 @@
-// C ends each digit-group word that has non-zero groups after it with a pause, so voicing does not carry from "тысяч" into "девятьсот". Expected strings come from C espeak-ng master (f0fb11a).
+// C ends each digit-group word that has non-zero groups after it with a pause,
+// so voicing does not carry from "тысяч" into "девятьсот".
+// Expected strings come from C espeak-ng master (f0fb11a).
 
 use espeak_ng::Translator;
 

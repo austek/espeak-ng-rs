@@ -1,4 +1,5 @@
-// C joins the digit words of a run longer than 32 digits that starts with 0, with no spaces, and cuts it at the word buffer. Expected strings come from C espeak-ng master (f0fb11a).
+// C joins the digit words of a run longer than 32 digits with no spaces and cuts
+// it at the word buffer. Expected strings come from C espeak-ng master (f0fb11a).
 
 use espeak_ng::Translator;
 

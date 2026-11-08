@@ -3294,7 +3294,8 @@ struct ScaleGroup {
 /// this into individual digits.
 const MAX_GROUPED_DIGITS: usize = 32;
 
-/// Longest digit run C translates as a single word; longer runs split per group.
+/// Longest digit run C keeps as one word; longer runs (up to `MAX_GROUPED_DIGITS`)
+/// become one word per scale group.
 const MAX_UNSPLIT_DIGITS: usize = 4;
 
 /// Three-digit groups, most significant first; scale `k` is 10^(3k). `digits` must be ASCII digits.
@@ -3892,16 +3893,17 @@ fn cardinal_pronunciation(
         return None;
     }
 
-    // A leading zero marks a code, not a quantity (C `TranslateNumber`): a short
-    // one (≤3 digits) speaks its leading zeros then the number ("007" → "zero
-    // zero seven"); a longer one is spoken digit-by-digit ("0800" → "zero eight
-    // zero zero").  A lone "0" and decimals (a separate token) are unaffected.
+    // C routes runs over 32 digits to the individual-digit path before any leading-zero handling.
     if digits.len() > MAX_GROUPED_DIGITS {
         let mut result = Pronunciation::default();
         push_individual_digits(&mut result, digits, dict);
         return Some(result);
     }
 
+    // A leading zero marks a code, not a quantity (C `TranslateNumber`): a short
+    // one (≤3 digits) speaks its leading zeros then the number ("007" → "zero
+    // zero seven"); a longer one is spoken digit-by-digit ("0800" → "zero eight
+    // zero zero").  A lone "0" and decimals (a separate token) are unaffected.
     if digits.len() > 1 && digits.starts_with('0') {
         let mut result = Pronunciation::default();
         if digits.len() > 3 {
@@ -3964,8 +3966,7 @@ fn push_cardinal_groups(
         let exact = scale_group_is_exact(digits, group.scale);
         let before = result.bytes.len();
         append_cardinal_group(result, group, dict, grammar, exact, spoken);
-        // C reads a 5+ digit run as one word per group and ends each word that
-        // has non-zero groups after it with a pause, which stops voicing.
+        // C ends each group word that is not exact with PHON_PAUSE_NOLINK, which stops regressive voicing across groups.
         if digits.len() > MAX_UNSPLIT_DIGITS && !exact && result.bytes.len() > before {
             result.bytes.push(crate::phoneme::PHON_PAUSE_NOLINK);
         }
