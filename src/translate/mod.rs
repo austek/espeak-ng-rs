@@ -9573,8 +9573,9 @@ fn set_regressive_voicing(
         })
         .collect();
 
-    // 0 = nothing in force, 1 = voiceless, 2 = voiced.
-    let mut voicing = 0u8;
+    // 0 = nothing in force, 1 = voiceless, 2 = voiced.  The clause ends in a
+    // pause, so with word-final devoicing the last consonant starts voiceless.
+    let mut voicing = u8::from(regression & 0x100 != 0);
     let mut stop_propagation = false;
 
     for i in (0..codes.len()).rev() {
