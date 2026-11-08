@@ -35,6 +35,7 @@ jobs:
           --test ku_hundred_link
           --test max_digits
           --test number_group_pause
+          --test leading_zero_long_runs
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

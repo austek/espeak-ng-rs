@@ -3896,6 +3896,12 @@ fn cardinal_pronunciation(
     // one (≤3 digits) speaks its leading zeros then the number ("007" → "zero
     // zero seven"); a longer one is spoken digit-by-digit ("0800" → "zero eight
     // zero zero").  A lone "0" and decimals (a separate token) are unaffected.
+    if digits.len() > MAX_GROUPED_DIGITS {
+        let mut result = Pronunciation::default();
+        push_individual_digits(&mut result, digits, dict);
+        return Some(result);
+    }
+
     if digits.len() > 1 && digits.starts_with('0') {
         let mut result = Pronunciation::default();
         if digits.len() > 3 {
@@ -3920,12 +3926,6 @@ fn cardinal_pronunciation(
         } else {
             push_cardinal_groups(&mut result, digits, dict, grammar);
         }
-        return Some(result);
-    }
-
-    if digits.len() > MAX_GROUPED_DIGITS {
-        let mut result = Pronunciation::default();
-        push_individual_digits(&mut result, digits, dict);
         return Some(result);
     }
 
