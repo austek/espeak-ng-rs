@@ -24,7 +24,7 @@ fn ordinal_zero_reads_zeroth() {
         assert!(z.contains("zˈiəɹəʊ") && z.ends_with("θ"), "0th should be zeroth: {z}");
         // Regression: other ordinals (incl. scale) still render.
         assert!(t.text_to_ipa("1st").unwrap().contains("fˈɜːst"));
-        assert!(t.text_to_ipa("1000000th").unwrap().contains("mˈɪliənθ"));
+        assert!(t.text_to_ipa("1000000th").unwrap().contains("mˈɪliən θ"));
     }
 }
 
@@ -148,16 +148,16 @@ fn italian_irregular_ordinals() {
         return;
     };
     let ipa = |s: &str| t.text_to_ipa(s).unwrap();
-    // 1º…10º are irregular (primo…decimo); the dict lacks them, so the regular
-    // "-esimo" fallback used to give wrong words ("unesimo" for primo).
+    // 1º…10º are irregular (primo…decimo): the `_<n>ox` entries.  Expected
+    // output is from C espeak-ng master (which lengthens the 4º vowel).
     let cases: &[(&str, &str)] = &[
-        ("1º", "primo"), ("2º", "secondo"), ("3º", "terzo"), ("4º", "quarto"),
-        ("5º", "quinto"), ("6º", "sesto"), ("7º", "settimo"), ("8º", "ottavo"),
-        ("9º", "nono"), ("10º", "decimo"),
-        ("1ª", "prima"), ("3ª", "terza"), // feminine
+        ("1º", "prˈimo"), ("2º", "sekˈondo"), ("3º", "tˈɛrtso"), ("4º", "kwˈaːrto"),
+        ("5º", "kwˈinto"), ("6º", "sˈɛsto"), ("7º", "sˈɛtːimo"), ("8º", "otːˈavo"),
+        ("9º", "nˈono"), ("10º", "dˈɛtʃimo"),
+        ("1ª", "prˈima"), ("3ª", "tˈɛrtsa"), // feminine
     ];
-    for (ord, word) in cases {
-        assert_eq!(ipa(ord), ipa(word), "it {ord} should read as {word}");
+    for (ord, expected) in cases {
+        assert_eq!(ipa(ord), *expected, "it {ord}");
     }
     // 11+ keep the regular -esimo form (undicesimo, ventesimo).
     assert!(ipa("11º").contains("zimo"), "it 11º stays -esimo: {}", ipa("11º"));

@@ -19,7 +19,7 @@ fn compound_ordinals_are_one_word() {
     // A compound ordinal must not split into "zwanzig erste" (two words with the
     // units read as a separate ordinal).  The old bug produced "erste"/"zweite"
     // etc. as a trailing word — guard against that stress pattern.
-    for (input, tail_of_20s) in [("21.", "tsvˈantsɪçtə"), ("22.", "tsvˈantsɪçtə")] {
+    for (input, tail_of_20s) in [("21.", "tsvˈantsɪçstə"), ("22.", "tsvˈantsɪçstə")] {
         let got = ipa(input);
         assert!(got.ends_with(tail_of_20s), "{input} should end like '…zwanzigste': {got}");
         assert!(!got.contains("ˈeːɾstə"), "{input} must not read a separate 'erste': {got}");
@@ -29,10 +29,10 @@ fn compound_ordinals_are_one_word() {
     // Round and small ordinals are unchanged.
     assert_eq!(ipa("1."), "ˈeːɾstə");
     assert_eq!(ipa("3."), "dɾˈɪtə");
-    assert_eq!(ipa("20."), "tsvˈantsɪçtə");
-    assert_eq!(ipa("100."), "hˈʊndɜtstə");
+    assert_eq!(ipa("20."), "tsvˈantsɪçstə");
+    assert_eq!(ipa("100."), "ˈaɪnhˈʊndɜtstə");
     // A German date reads naturally.
-    assert!(ipa("der 21. Mai").contains("ʊnttsvˈantsɪçtə"), "{}", ipa("der 21. Mai"));
+    assert!(ipa("der 21. Mai").contains("ʊnttsvˈantsɪçstə"), "{}", ipa("der 21. Mai"));
 }
 
 #[test]
@@ -91,5 +91,5 @@ fn english_compound_ordinals_unaffected() {
     let ipa = |s: &str| t.text_to_ipa(s).unwrap();
     assert_eq!(ipa("21st"), "twˈɛnti fˈɜːst");
     assert_eq!(ipa("33rd"), "θˈɜːti θˈɜːd");
-    assert_eq!(ipa("101st"), "wˈɒnhˈʌndɹɪd fˈɜːst");
+    assert_eq!(ipa("101st"), "wˈɒnhˈʌndɹɪdən fˈɜːst");
 }

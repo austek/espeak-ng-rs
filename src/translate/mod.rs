@@ -27,6 +27,7 @@ pub mod ipa_table;
 pub mod phoneme_ipa;
 pub mod compat;
 pub mod ssml;
+mod ordinal;
 
 use std::path::{Path, PathBuf};
 
@@ -532,6 +533,10 @@ pub struct NumberGrammar {
     /// Bit `n` set: a digit group ends when `n` digits remain, for the
     /// digit-by-digit reading (upstream `langopts.break_numbers`).
     pub break_numbers: u32,
+    /// C's `langopts.numbers` bitmask for the language.
+    pub c_numbers: u32,
+    /// C's `langopts.numbers2` bitmask for the language.
+    pub c_numbers2: u32,
 }
 
 /// Slavic scale-word (thousand/million/…) declension.  The scale word takes a
@@ -579,13 +584,14 @@ pub struct OrdinalGrammar {
     /// These carry gender/second-vs-deuxième information the renderer uses to
     /// generate the ordinal word (`premier`/`première`/`deuxième`/`second`).
     pub french: bool,
-    /// Italian ordinals: 1–10 are irregular (`primo`…`decimo`) and absent from
-    /// the dict, so they're generated; 11+ use the regular `-esimo` rule.
-    pub italian: bool,
     /// Germanic compound ordinals: a compound like 21 forms its ordinal as the
     /// whole *cardinal* + the ordinal suffix ("einundzwanzig" + "ste" =
     /// "einundzwanzigste"), not tens-ordinal + units-ordinal ("zwanzig erste").
     pub compound_cardinal_suffix: bool,
+    /// Suffixes in the text that the dictionary defines as ordinal markers
+    /// (`_#de` in Afrikaans, `_#ος` in Greek); filled per translation by
+    /// [`with_dict_ordinal_suffixes`].
+    pub dict_suffixes: Vec<String>,
 }
 
 /// Word-order rule for tens and units.
@@ -662,7 +668,6 @@ impl NumberGrammar {
             "it" => {
                 // "cento", not "uno cento" (1000 is already "mille").
                 grammar.hundreds.omit_one_prefix = true;
-                grammar.ordinals.italian = true; // 1º=primo … 10º=decimo
                 grammar.elide_tens_vowel = true; // "trentuno", "quarantotto"
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
@@ -971,6 +976,7 @@ impl NumberGrammar {
             lang,
             "af" | "da" | "en" | "fo" | "is" | "kl" | "nb" | "nl" | "no" | "sv"
         );
+        (grammar.c_numbers, grammar.c_numbers2) = ordinal::c_number_flags(lang);
         grammar
     }
 }
@@ -1000,6 +1006,8 @@ impl Default for NumberGrammar {
             thousands_variant: SlavicThousands::None,
             max_digits: 14,
             break_numbers: BREAK_THOUSANDS,
+            c_numbers: 1,
+            c_numbers2: 0,
         }
     }
 }
@@ -1268,6 +1276,45 @@ fn is_ordinal_suffix(suffix: &str, digits: &str, grammar: &NumberGrammar) -> boo
     }
     grammar.ordinals.indicator.as_deref() == Some(suffix)
         || (grammar.ordinals.french && is_french_ordinal_suffix(suffix))
+        || (!matches!(suffix, "st" | "nd" | "rd" | "th")
+            && grammar.ordinals.dict_suffixes.iter().any(|s| s == suffix))
+}
+
+/// The letters glued to a number anywhere in `text`, lower-cased.
+fn glued_number_suffixes(text: &str) -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if !c.is_ascii_digit() {
+            continue;
+        }
+        while chars.peek().is_some_and(char::is_ascii_digit) {
+            chars.next();
+        }
+        let mut suffix = String::new();
+        while let Some(&next) = chars.peek() {
+            if !(next.is_alphabetic() || next == 'º' || next == 'ª') {
+                break;
+            }
+            suffix.extend(next.to_lowercase());
+            chars.next();
+        }
+        if !suffix.is_empty() && !found.contains(&suffix) {
+            found.push(suffix);
+        }
+    }
+    found
+}
+
+/// `grammar` extended with the glued suffixes of `text` that the dictionary
+/// defines as ordinal markers (`_#<suffix>`), which is how C decides.
+fn with_dict_ordinal_suffixes(grammar: &NumberGrammar, text: &str, dict: &Dictionary) -> NumberGrammar {
+    let mut extended = grammar.clone();
+    extended.ordinals.dict_suffixes = glued_number_suffixes(text)
+        .into_iter()
+        .filter(|suffix| !lookup_num_phonemes(dict, &format!("_#{suffix}")).is_empty())
+        .collect();
+    extended
 }
 
 /// The French written ordinal markers: `1er`/`1ers` (premier), `1re`/`1ère`
@@ -1390,27 +1437,6 @@ fn french_ordinal_word(digits: &str, suffix: &str) -> Option<String> {
         None => ("", card.as_str()),
     };
     Some(format!("{head}{}", ordinalize_fr_word(last)))
-}
-
-/// The irregular Italian ordinal word for `1..=10` (`3º` → "terzo", `3ª` →
-/// "terza"), which the dict lacks — 11+ use the regular `-esimo` rule and are
-/// left to the normal path.  Gender comes from the indicator (`º`/`°` masculine,
-/// `ª` feminine).  `None` outside 1–10.
-fn italian_ordinal_word(digits: &str, suffix: &str) -> Option<String> {
-    let n: u32 = digits.parse().ok()?;
-    if !(1..=10).contains(&n) {
-        return None;
-    }
-    const MASC: [&str; 10] = [
-        "primo", "secondo", "terzo", "quarto", "quinto",
-        "sesto", "settimo", "ottavo", "nono", "decimo",
-    ];
-    const FEM: [&str; 10] = [
-        "prima", "seconda", "terza", "quarta", "quinta",
-        "sesta", "settima", "ottava", "nona", "decima",
-    ];
-    let table = if suffix == "ª" { &FEM } else { &MASC };
-    Some(table[(n - 1) as usize].to_string())
 }
 
 /// Spell a Portuguese cardinal group `0..=999` as text (European Portuguese).
@@ -3243,6 +3269,13 @@ impl Pronunciation {
         self.bytes.extend_from_slice(trim_lookup(src));
     }
 
+    /// Append C's phoneme string, whose words are separated by END_WORD.
+    fn push_c_words(&mut self, raw: &[u8]) {
+        for word in raw.split(|&b| b == PHON_END_WORD).filter(|word| !word.is_empty()) {
+            self.push_lookup_word(word);
+        }
+    }
+
     fn push_pronunciation(&mut self, other: &Pronunciation) {
         let len = other.trimmed_len();
         if len == 0 {
@@ -3492,30 +3525,25 @@ fn append_ordinal_scale(
     scale: u8,
     dict: &Dictionary,
     grammar: &NumberGrammar,
-) -> bool {
-    let singular_ord_key = format!("_1M{scale}o");
-    if group_value == 1 {
-        let singular_ord = lookup_num_phonemes(dict, &singular_ord_key);
-        if !singular_ord.is_empty() {
-            dst.push_lookup_word(&singular_ord);
-            return true;
-        }
+) {
+    let dedicated = lookup_num_phonemes(dict, &format!("_{group_value}M{scale}o"));
+    if !dedicated.is_empty() {
+        dst.push_lookup_word(&dedicated);
+        return;
     }
 
-    let ord_key = format!("_0M{scale}o");
-    let ord_scale = lookup_num_phonemes(dict, &ord_key);
+    let ord_scale = lookup_num_phonemes(dict, &format!("_0M{scale}o"));
     if !ord_scale.is_empty() {
         if !(scale == 1 && group_value == 1 && grammar.thousands.omit_one_prefix) {
             dst.push_pronunciation(&num3_phonemes_before_scale(dict, group_value, grammar));
         }
         dst.push_lookup_word(&ord_scale);
-        return true;
+        return;
     }
 
-    // Ordinal fallback (no `_0M{n}o` key): keep the plain scale word, not the
-    // exact `x` variant — that variant is a cardinal-only distinction.
-    append_scale_word(dst, group_value, scale, dict, grammar, false, false);
-    false
+    // Only a scale with nothing below it is ordinal, so C's `LookupThousands`
+    // takes the exact variant (`_0M{n}x`) here as it does for a cardinal.
+    append_scale_word(dst, group_value, scale, dict, grammar, true, false);
 }
 
 /// Convert a number value (0-999) to phonemes.
@@ -3962,8 +3990,20 @@ fn push_cardinal_groups(
     dict: &Dictionary,
     grammar: &NumberGrammar,
 ) {
+    push_cardinal_group_prefix(result, digits, dict, grammar, usize::MAX);
+}
+
+/// The first `count` groups of `digits` as cardinal words; returns whether any
+/// of them was non-zero.
+fn push_cardinal_group_prefix(
+    result: &mut Pronunciation,
+    digits: &str,
+    dict: &Dictionary,
+    grammar: &NumberGrammar,
+    count: usize,
+) -> bool {
     let mut spoken = false;
-    for group in split_scale_groups(digits, dict) {
+    for group in split_scale_groups(digits, dict).into_iter().take(count) {
         let exact = scale_group_is_exact(digits, group.scale);
         let before = result.bytes.len();
         append_cardinal_group(result, group, dict, grammar, exact, spoken);
@@ -3980,6 +4020,7 @@ fn push_cardinal_groups(
         }
         spoken |= group.value != 0;
     }
+    spoken
 }
 
 fn push_individual_digits(result: &mut Pronunciation, digits: &str, dict: &Dictionary) {
@@ -4059,90 +4100,6 @@ fn scale_group_is_exact(digits: &str, scale: Option<u8>) -> bool {
     }
 }
 
-fn ordinal_sub_thousand_pronunciation(
-    value: u32,
-    dict: &Dictionary,
-    grammar: &NumberGrammar,
-    suffix_ph: &[u8],
-) -> (Pronunciation, bool) {
-    let hundreds = value / 100;
-    let tensunits = value % 100;
-    let units = value % 10;
-    let tens = tensunits / 10;
-
-    let mut pronunciation = Pronunciation::default();
-    let mut found_ordinal = false;
-
-    // Exactly zero → the cardinal "zero"; the caller appends the ordinal suffix
-    // ("zeroth").  Without this, `ordinal_sub_thousand` emits nothing for 0 and
-    // only the bare suffix survives.
-    if value == 0 {
-        pronunciation.push_pronunciation(&num3_phonemes(dict, 0, false, grammar));
-        return (pronunciation, false);
-    }
-
-    if hundreds > 0 {
-        if tensunits == 0 {
-            let ord_hundreds = lookup_num_phonemes(dict, "_0Co");
-            if !ord_hundreds.is_empty() {
-                if hundreds > 1 {
-                    pronunciation.push_lookup_word(&lookup_num_phonemes(dict, &num_key(hundreds)));
-                }
-                pronunciation.push_lookup_word(&ord_hundreds);
-                found_ordinal = true;
-            } else {
-                pronunciation.push_pronunciation(&num3_phonemes(dict, hundreds * 100, false, grammar));
-            }
-        } else {
-            pronunciation.push_pronunciation(&num3_phonemes(dict, hundreds * 100, false, grammar));
-        }
-    }
-
-    let full_ord = lookup_num_phonemes(dict, &format!("_{tensunits}o"));
-    if !full_ord.is_empty() {
-        pronunciation.push_lookup_word(&full_ord);
-        found_ordinal = true;
-    } else if tens >= 2 && units > 0 && grammar.ordinals.compound_cardinal_suffix {
-        // German-style: the whole compound cardinal takes the ordinal suffix —
-        // 21 → "einundzwanzig" + "ste" = "einundzwanzigste" (not "zwanzig erste").
-        pronunciation.push_pronunciation(&num3_phonemes(dict, tensunits, false, grammar));
-        // The ordinal suffix is the dot-marker's own suffix (`_#.`), else the
-        // generic `_ord` — the same suffix the round-ten ordinals use, so a
-        // compound reads consistently with them (21 → "einund" + "zwanzig(s)te").
-        let ord_suffix: Vec<u8> = if !suffix_ph.is_empty() {
-            suffix_ph.to_vec()
-        } else {
-            lookup_num_phonemes(dict, "_ord")
-        };
-        if !ord_suffix.is_empty() {
-            pronunciation.append_lookup_suffix(&ord_suffix);
-            found_ordinal = true;
-        }
-    } else if tens >= 2 && units > 0 {
-        let tens_ord = lookup_num_phonemes(dict, &format!("_{tens}Xo"));
-        if !tens_ord.is_empty() {
-            pronunciation.push_lookup_word(&tens_ord);
-            pronunciation.append_lookup_suffix(suffix_ph);
-        } else {
-            pronunciation.push_lookup_word(&lookup_num_phonemes(dict, &format!("_{tens}X")));
-        }
-
-        let units_ord = lookup_num_phonemes(dict, &format!("_{units}o"));
-        if !units_ord.is_empty() {
-            pronunciation.push_lookup_word(&units_ord);
-            found_ordinal = true;
-        } else {
-            pronunciation.push_lookup_word(&lookup_num_phonemes(dict, &num_key(units)));
-        }
-    } else if tens >= 2 {
-        pronunciation.push_lookup_word(&lookup_num_phonemes(dict, &format!("_{tens}X")));
-    } else if tensunits > 0 {
-        pronunciation.push_pronunciation(&num3_phonemes(dict, tensunits, false, grammar));
-    }
-
-    (pronunciation, found_ordinal)
-}
-
 /// Try to interpret a word as an ordinal number (e.g. "2nd", "1st", "3º").
 ///
 /// Splits the word into a leading digit string and a trailing non-digit suffix,
@@ -4160,18 +4117,32 @@ fn try_ordinal_number(
     stress_opts: &StressOpts,
     grammar: &NumberGrammar,
 ) -> Option<WordResult> {
-    let suffix = match &ordinal.marker {
-        OrdinalMarker::Suffix(suffix) => suffix.as_str(),
-        OrdinalMarker::Dot => ".",
+    // Only a `_#<suffix>` entry gives the number a suffix word; a dot or the
+    // language's own indicator (Dutch `e`) marks the ordinal without one.
+    let (suffix_ph, suffix_ph_alt) = match &ordinal.marker {
+        OrdinalMarker::Suffix(suffix) => (
+            trim_lookup(&lookup_num_phonemes(dict, &format!("_#{suffix}"))).to_vec(),
+            trim_lookup(&lookup_num_phonemes(dict, &format!("_x#{suffix}"))).to_vec(),
+        ),
+        OrdinalMarker::Dot => (Vec::new(), Vec::new()),
     };
-
-    let suffix_ph = lookup_num_phonemes(dict, &format!("_#{suffix}"));
-    let is_ordinal = !suffix_ph.is_empty()
-        || grammar.ordinals.indicator.as_deref() == Some(suffix)
-        || matches!(ordinal.marker, OrdinalMarker::Dot) && grammar.ordinals.dot_marks_ordinal;
+    let is_ordinal = match &ordinal.marker {
+        OrdinalMarker::Suffix(suffix) => {
+            !suffix_ph.is_empty() || grammar.ordinals.indicator.as_deref() == Some(suffix.as_str())
+        }
+        OrdinalMarker::Dot => grammar.ordinals.dot_marks_ordinal,
+    };
     if !is_ordinal {
         return None;
     }
+    let numbers = ordinal::OrdinalNumbers {
+        dict,
+        phdata,
+        numbers: grammar.c_numbers,
+        numbers2: grammar.c_numbers2,
+        ph_ordinal2: suffix_ph,
+        ph_ordinal2x: suffix_ph_alt,
+    };
 
     let digits = ordinal.digits.as_str();
     if digits.is_empty()
@@ -4181,7 +4152,26 @@ fn try_ordinal_number(
         return None;
     }
     let mut pronunciation = Pronunciation::default();
+    let year = digits.parse::<u32>().ok().filter(|year| {
+        grammar.year_1900 && digits.len() == 4 && (1900..=1999).contains(year)
+    });
+    if let Some(year) = year {
+        pronunciation.push_c_words(&numbers.num3(year, false, false));
+        let mut phonemes = pronunciation.finish();
+        set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, STRESS_UNBOUNDED);
+        return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false });
+    }
     let groups = split_scale_groups(digits, dict);
+    // C makes every group of a long number a word of its own: the higher ones are
+    // cardinals with their scale word, and only the last group takes the ordinal.
+    if digits.len() > MAX_UNSPLIT_DIGITS {
+        let last = groups[groups.len() - 1];
+        let spoken = push_cardinal_group_prefix(&mut pronunciation, digits, dict, grammar, groups.len() - 1);
+        pronunciation.push_c_words(&numbers.num3(last.value, spoken, spoken));
+        pronunciation.word_ends.push(pronunciation.bytes.len());
+        let phonemes = stress_each_word(pronunciation, phdata, stress_opts, STRESS_UNBOUNDED);
+        return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false });
+    }
     // For a zero value there is no non-zero group; fall back to the *last* group
     // (the units, scale-less) so "0th" renders "zeroth" instead of dropping the
     // number or attaching a spurious scale word.
@@ -4197,30 +4187,12 @@ fn try_ordinal_number(
     }
 
     let final_group = groups[last_nonzero];
-    let found_ordinal = if let Some(scale) = final_group.scale {
-        append_ordinal_scale(
-            &mut pronunciation,
-            final_group.value,
-            scale,
-            dict,
-            grammar,
-        )
+    if let Some(scale) = final_group.scale {
+        append_ordinal_scale(&mut pronunciation, final_group.value, scale, dict, grammar);
+        pronunciation.push_c_words(&numbers.ph_ordinal2);
     } else {
-        let (remainder_ordinal, found) =
-            ordinal_sub_thousand_pronunciation(final_group.value, dict, grammar, &suffix_ph);
-        pronunciation.push_pronunciation(&remainder_ordinal);
-        found
-    };
-
-    if found_ordinal {
-        pronunciation.append_lookup_suffix(&suffix_ph);
-    } else {
-        let ord_ph = lookup_num_phonemes(dict, "_ord");
-        if !ord_ph.is_empty() {
-            pronunciation.append_lookup_suffix(&ord_ph);
-        } else {
-            pronunciation.append_lookup_suffix(&suffix_ph);
-        }
+        let previous = groups[..last_nonzero].iter().any(|group| group.value != 0);
+        pronunciation.push_c_words(&numbers.num3(final_group.value, previous, previous));
     }
 
     let mut phonemes = pronunciation.finish();
@@ -6138,7 +6110,6 @@ fn ordinal_is_recognised(ordinal: &OrdinalNumber, dict: &Dictionary, grammar: &N
         OrdinalMarker::Suffix(suffix) => {
             grammar.ordinals.indicator.as_deref() == Some(suffix)
                 || (grammar.ordinals.french && is_french_ordinal_suffix(suffix))
-                || (grammar.ordinals.italian && matches!(suffix.as_str(), "º" | "ª"))
                 || !lookup_num_phonemes(dict, &format!("_#{suffix}")).is_empty()
         }
     }
@@ -7625,28 +7596,6 @@ pub(crate) fn build_translate_entries(
                         continue;
                     }
                 }
-                // Italian irregular ordinals 1–10 (1º=primo … 10º=decimo): the it
-                // dict lacks them, so the regular `-esimo` fallback produces wrong
-                // words ("unesimo"); generate the correct form (11+ is left to the
-                // regular path, which is right).
-                if options.number_grammar.ordinals.italian {
-                    if let NumberToken::Ordinal(ord) = token {
-                        if let OrdinalMarker::Suffix(suffix) = &ord.marker {
-                            if let Some(word) = italian_ordinal_word(&ord.digits, suffix) {
-                                let wr = word_to_phonemes(&word, dict, phdata, stress_opts, options);
-                                entries.push(TranslateEntry {
-                                    phonemes:   wr.phonemes,
-                                    dict_flags: wr.dict_flags,
-                    found_in_list: wr.found_in_list,
-                                    kind:       TranslateEntryKind::Word,
-                                    word_lower: Some(word),
-                        no_word_gap: false
-                                });
-                                continue;
-                            }
-                        }
-                    }
-                }
                 // French letter-suffix ordinals (1er, 2e, 21e…): the fr dict has
                 // no `_No` ordinal words, so build the ordinal word from the value
                 // and let the French rules pronounce it ("premier"/"deuxième").
@@ -8734,8 +8683,9 @@ impl Translator {
         };
 
         let text = normalize_apostrophes(text);
-        let mut tokens = split_overlong_clauses(tokenize_opts(&text, &self.options.number_grammar));
-        split_unrecognised_ordinals(&mut tokens, &dict, &self.options.number_grammar);
+        let number_grammar = with_dict_ordinal_suffixes(&self.options.number_grammar, &text, &dict);
+        let mut tokens = split_overlong_clauses(tokenize_opts(&text, &number_grammar));
+        split_unrecognised_ordinals(&mut tokens, &dict, &number_grammar);
         apply_roman_numerals(&mut tokens, lang);
         suppress_abbreviation_periods(&mut tokens, lang);
         apply_time_reading(&mut tokens, lang);
@@ -10258,6 +10208,7 @@ mod tests {
         let mut nl = g("nl");
         nl.dutch_ij = false;
         nl.ordinals.compound_cardinal_suffix = false;
+        (nl.c_numbers, nl.c_numbers2) = (g("mt").c_numbers, g("mt").c_numbers2);
         // Dutch is also one of C's `NUM_1900` languages ("negentienhonderd"),
         // Maltese is not.
         assert!(g("nl").year_1900 && !g("mt").year_1900, "nl reads 19xx as a year");
@@ -11007,16 +10958,16 @@ mod tests {
             ("3rd",  "θˈɜːd"),
             ("4th",  "fˈɔːθ"),
             ("21st", "twˈɛnti fˈɜːst"),
-            ("100th","wˈɒnhˈʌndɹɪdθ"),
+            ("100th","wˈɒnhˈʌndɹɪd θ"),
         ]);
     }
 
     #[test]
     fn ordinals_english_large_scales() {
         run_ipa_table("en", "en_dict", &[
-            ("1000th",    "wˈɒn θˈaʊzəndθ"),
-            ("1001st",    "wˈɒn θˈaʊzənd fˈɜːst"),
-            ("1000000th", "wˈɒn mˈɪliənθ"),
+            ("1000th",    "wˈɒn θˈaʊzənd θ"),
+            ("1001st",    "wˈɒn θˈaʊzənd ən fˈɜːst"),
+            ("1000000th", "wˈɒn mˈɪliən θ"),
         ]);
     }
 
@@ -11024,8 +10975,8 @@ mod tests {
     fn ordinals_spanish() {
         run_ipa_table("es", "es_dict", &[
             ("1º",   "pɾimˈɛɾo"),
-            ("21º",  "βixˈɛsimˌo pɾimˈɛɾo"),
-            ("100º", "θɛntˈɛsimo"),
+            ("21º",  "βixˌɛsimˌopɾimˈɛɾo"),
+            ("100º", "θɛntˈɛsim o"),
         ]);
     }
 
@@ -11069,9 +11020,9 @@ mod tests {
         run_ipa_table("de", "de_dict", &[
             ("1.",  "ˈeːɾstə"),
             ("3.",  "dɾˈɪtə"),
-            ("20.", "tsvˈantsɪçtə"),
+            ("20.", "tsvˈantsɪçstə"),
             // "einundzwanzigste" — the unit "1" apocopates to "ein" (not "eins").
-            ("21.", "ˈaɪn ʊnttsvˈantsɪçtə"),
+            ("21.", "ˈaɪn ʊnttsvˈantsɪçstə"),
         ]);
     }
 
