@@ -25,9 +25,10 @@ fn katakana_reads_identically_to_hiragana() {
         assert!(!k.trim().is_empty(), "{kata} produced no phonemes");
         assert_eq!(k, h, "{kata:?} should read like {hira:?}");
     }
-    // The prolonged-sound mark ー lengthens the preceding vowel (ハート → haːto).
+    // The prolonged-sound mark ー lengthens the preceding vowel; espeak-ng
+    // writes the vowel's IPA name twice for it (ハート → hˈääto̞).
     let haato = ipa("ハート");
-    assert!(haato.contains('ː'), "ハート should carry a long vowel: {haato}");
+    assert_eq!(haato, "hˈääto̞", "ハート should carry a long vowel");
     // A longer loanword with several ー marks still reads.
     assert!(!ipa("コンピューター").trim().is_empty(), "コンピューター should read");
 }
