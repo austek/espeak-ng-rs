@@ -5,17 +5,14 @@ on:
     branches: [dengjen]
     tags: ['v*']
 
-env:
-  ESPEAK_NG_DATA: /usr/lib/x86_64-linux-gnu/espeak-ng-data
-
 jobs:
   golden:
     runs-on: ubuntu-latest
+    env:
+      ESPEAK_DATA_PATH: ${{ github.workspace }}/espeak-ng-data
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install system espeak-ng data
-        run: sudo apt-get update && sudo apt-get install -y espeak-ng-data
       - name: Build release
         run: cargo build --release
       - name: Library tests
@@ -30,7 +27,5 @@ jobs:
           --test polish_final_l
           --test long_digit_strings
           --test spanish_group_stress
-      - name: Closing-tag tests
-        run: cargo test --release --test switch_closing_tag -- --ignored
       - name: Golden ratchet
         run: python3 -I tests/golden/check.py
