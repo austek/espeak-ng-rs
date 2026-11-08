@@ -3896,7 +3896,7 @@ fn cardinal_pronunciation(
         let mut result = Pronunciation::default();
         if digits.len() > 3 {
             for d in digits.bytes() {
-                result.push_lookup_word(&lookup_num_phonemes(dict, &num_key(d - b'0')));
+                result.append_lookup_suffix(&lookup_num_phonemes(dict, &num_key(d - b'0')));
             }
             return Some(result);
         }
@@ -3908,7 +3908,7 @@ fn cardinal_pronunciation(
             .take_while(|&b| b == b'0')
             .count();
         for _ in 0..n_leading {
-            result.push_lookup_word(&lookup_num_phonemes(dict, "_0"));
+            result.append_lookup_suffix(&lookup_num_phonemes(dict, "_0"));
         }
         if digits.bytes().all(|b| b == b'0') {
             // "000" → the leading zeros plus a final "zero" (an all-zero run).

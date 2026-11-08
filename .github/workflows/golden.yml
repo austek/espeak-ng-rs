@@ -53,6 +53,7 @@ jobs:
           --test lengthened_consonant_position
           --test number_group_stress
           --test number_empty_group_word
+          --test leading_zero_numbers
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

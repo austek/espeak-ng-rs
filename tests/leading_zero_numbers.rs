@@ -2,32 +2,68 @@
 //
 // A number with a leading zero is a code, not a quantity (C `TranslateNumber`):
 // a short one (≤3 digits) speaks its leading zeros then the number, a longer one
-// is spoken digit-by-digit.  Previously the leading zeros were dropped ("007" →
-// "seven").
+// is spoken digit-by-digit.  C joins the zeros into one word and the spelled
+// digits of a four-digit code into one word, so no space separates them.
+// Expected strings are espeak-ng master (f0fb11a8) output.
 
 use espeak_ng::Translator;
 
-#[test]
-fn leading_zero_numbers_spell_the_zeros() {
-    let Some(t) = Translator::new("en", None).ok() else {
-        eprintln!("[SKIP] no en data");
+fn check(lang: &str, cases: &[(&str, &str)]) {
+    let Some(t) = Translator::new(lang, None).ok() else {
+        eprintln!("[SKIP] no {lang} data");
         return;
     };
-    let ipa = |s: &str| t.text_to_ipa(s).unwrap();
-    let zero = ipa("0");
-    let seven = ipa("7");
+    for (text, want) in cases {
+        assert_eq!(t.text_to_ipa(text).unwrap(), *want, "{lang} {text}");
+    }
+}
 
-    // ≤3 digits: leading zeros, then the number.
-    assert_eq!(ipa("007"), format!("{zero} {zero} {seven}"));
-    assert_eq!(ipa("05"), format!("{zero} {}", ipa("5")));
-    assert_eq!(ipa("000"), format!("{zero} {zero} {zero}"));
+#[test]
+fn leading_zeros_join_into_one_word() {
+    check(
+        "en",
+        &[
+            ("007", "zˈiəɹəʊzˈiəɹəʊ sˈɛvən"),
+            ("000", "zˈiəɹəʊzˈiəɹəʊ zˈiəɹəʊ"),
+            ("05", "zˈiəɹəʊ fˈaɪv"),
+            ("00", "zˈiəɹəʊ zˈiəɹəʊ"),
+        ],
+    );
+    check("de", &[("007", "nˈʊlnˈʊl zˈiːbən")]);
+    check("fr", &[("007", "zeʁozeʁo sˈɛt")]);
+    check("ru", &[("007", "nˈoɭnˈoɭ sʲˈejm")]);
+    check("ar", &[("007", "s̪-ˈifrs̪-ˈifr sˈabʕʕˌa"), ("05", "s̪-ˈifr xˈamsa")]);
+}
 
-    // >3 digits with a leading zero: every digit individually.
-    assert_eq!(ipa("0800"), format!("{zero} {} {zero} {zero}", ipa("8")));
+#[test]
+fn four_digit_code_is_one_word() {
+    check(
+        "en",
+        &[
+            ("0800", "zˈiəɹəʊˈeɪtzˈiəɹəʊzˈiəɹəʊ"),
+            ("0012", "zˈiəɹəʊzˈiəɹəʊwˈɒntˈuː"),
+            ("0000", "zˈiəɹəʊzˈiəɹəʊzˈiəɹəʊzˈiəɹəʊ"),
+        ],
+    );
+    check(
+        "ar",
+        &[
+            ("0800", "s̪-ˈifrθamˈaːnijˌas̪-ˈifrs̪-ˈifr"),
+            ("0100", "s̪-ˈifrwˈaːħids̪-ˈifrs̪-ˈifr"),
+        ],
+    );
+}
 
-    // Unaffected: a lone 0, ordinary numbers, and decimals.
-    assert_eq!(ipa("0"), zero);
-    assert_eq!(ipa("7"), seven);
-    assert_eq!(ipa("42"), "fˈɔːti tˈuː");
-    assert!(ipa("0.5").starts_with(&zero), "0.5 keeps 'zero point five': {}", ipa("0.5"));
+#[test]
+fn longer_codes_and_plain_numbers_are_unchanged() {
+    check(
+        "en",
+        &[
+            ("00123", "zˈiəɹəʊzˈiəɹəʊ wˈɒntˈuːθɹˈiː"),
+            ("01234", "zˈiəɹəʊwˈɒn tˈuːθɹˈiːfˈɔː"),
+            ("42", "fˈɔːti tˈuː"),
+            ("0", "zˈiəɹəʊ"),
+            ("012", "zˈiəɹəʊ twˈɛlv"),
+        ],
+    );
 }
