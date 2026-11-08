@@ -1060,7 +1060,7 @@ impl LangOptions {
             "ga" | "gd" => 3,
             "bg" => 0x432,
             "sl" => 0x76,
-            _ => 0,
+            _ => 's' as u32,
         };
         let max_initial_consonants = match primary_bcp47_subtag(&lang) {
             "az" | "kk" | "ku" | "tr" => 2,
