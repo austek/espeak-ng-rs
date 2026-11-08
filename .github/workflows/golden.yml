@@ -48,6 +48,7 @@ jobs:
           --test german_unit_one
           --test dutch_prefix_rule_flags
           --test dutch_dieresis
+          --test arabic_syllabic_consonant
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

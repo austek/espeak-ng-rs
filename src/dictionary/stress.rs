@@ -1184,6 +1184,7 @@ pub fn set_word_stress(
         &phonetic
     };
 
+    let mut carried_stress: Option<u8> = None;
     let mut pi = 0usize;
     while pi < phonetic_slice.len() && (unbounded || output.len() < N_WORD_PHONEMES - 3) {
         let phcode = phonetic_slice[pi];
@@ -1195,10 +1196,8 @@ pub fn set_word_stress(
         let ph_flags = ph.map(|p| p.phflags).unwrap_or(0);
 
         let _is_pause = ph_type == PH_PAUSE;
-        let is_vowel = ph_type == PH_VOWEL && ph_flags & PH_NONSYLLABIC == 0;
-
-        // Check for syllabic marker (next phoneme PHON_SYLLABIC)
-        // We don't have lookahead here, so skip for now
+        let syllabic_consonant = phonetic_slice.get(pi) == Some(&PHON_SYLLABIC);
+        let is_vowel = ph_type == PH_VOWEL && ph_flags & PH_NONSYLLABIC == 0 || syllabic_consonant;
 
         if is_vowel {
             debug_assert!(v <= vowel_count, "v={} vowel_count={}", v, vowel_count);
@@ -1235,12 +1234,17 @@ pub fn set_word_stress(
 
                 // Emit stress marker if needed
                 // Emit if DIMINISHED (0) or > UNSTRESSED (1)
-                if v_stress == STRESS_IS_DIMINISHED as i32
-                    || v_stress > STRESS_IS_UNSTRESSED as i32
-                {
-                    let idx = v_stress.max(0).min(6) as usize;
-                    output.push(STRESS_PHONEMES[idx]);
+                let own_mark = (v_stress == STRESS_IS_DIMINISHED as i32
+                    || v_stress > STRESS_IS_UNSTRESSED as i32)
+                    .then(|| STRESS_PHONEMES[v_stress.max(0).min(6) as usize]);
+                // A syllabic consonant does not consume the stress that was
+                // pending for it: the next syllable without a mark of its own
+                // takes it too.
+                let mark = own_mark.or(carried_stress);
+                if let Some(m) = mark {
+                    output.push(m);
                 }
+                carried_stress = if syllabic_consonant { mark } else { None };
 
                 // `LOPT_IT_LENGTHEN`: drop the `:` that follows a vowel which is
                 // not stressed enough to keep it.  Slovenian's rules give every

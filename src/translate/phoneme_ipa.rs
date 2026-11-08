@@ -18,7 +18,7 @@
 use std::path::Path;
 
 use crate::phoneme::{
-    PhonemeData, PHON_END_WORD, PHON_STRESS_2, PHON_STRESS_3, PHON_STRESS_D, PHON_STRESS_P,
+    PhonemeData, PHON_END_WORD, PHON_STRESS_2, PHON_SYLLABIC, PHON_STRESS_3, PHON_STRESS_D, PHON_STRESS_P,
     PHON_STRESS_P2, PHON_STRESS_PREV, PHON_STRESS_TONIC, PHON_STRESS_U,
 };
 use crate::synthesize::bytecode::{interpret_phoneme, Neighbours};
@@ -40,26 +40,30 @@ pub fn write_ph_mnemonic_ipa(phdata: &PhonemeData, code: u8, nb: &Neighbours) ->
         return String::new();
     };
 
-    if ph.program != 0 {
-        let fx = interpret_phoneme(ph.program, &phdata.phonindex, nb, |c| phdata.get(c).cloned());
-        if let Some(s) = fx.ipa_string.as_deref() {
-            let b = s.as_bytes();
-            // A leading space is C's "this phoneme has no IPA name" marker.
-            if b.first() == Some(&0x20) {
-                return String::new();
-            }
-            // A leading byte below 0x20 is a flags byte, not text.
-            let s = match b.first() {
-                Some(&c) if c < 0x20 => &s[1..],
-                _ => s,
-            };
-            if !s.is_empty() {
-                return s.to_string();
-            }
-        }
-    }
+    program_ipa_name(phdata, code, nb)
+        .unwrap_or_else(|| mnemonic_to_ipa_c(ph.mnemonic, ph.typ == 2 /* phVOWEL */))
+}
 
-    mnemonic_to_ipa_c(ph.mnemonic, ph.typ == 2 /* phVOWEL */)
+/// The IPA name a phoneme's own program declares; `Some("")` is C's "this
+/// phoneme has no IPA name" marker, `None` means the program names nothing.
+fn program_ipa_name(phdata: &PhonemeData, code: u8, nb: &Neighbours) -> Option<String> {
+    let ph = phdata.get(code)?;
+    if ph.program == 0 {
+        return None;
+    }
+    let fx = interpret_phoneme(ph.program, &phdata.phonindex, nb, |c| phdata.get(c).cloned());
+    let s = fx.ipa_string.as_deref()?;
+    let b = s.as_bytes();
+    // A leading space is C's "this phoneme has no IPA name" marker.
+    if b.first() == Some(&0x20) {
+        return Some(String::new());
+    }
+    // A leading byte below 0x20 is a flags byte, not text.
+    let s = match b.first() {
+        Some(&c) if c < 0x20 => &s[1..],
+        _ => s,
+    };
+    (!s.is_empty()).then(|| s.to_string())
 }
 
 /// The mnemonic fallback of `WritePhMnemonic`, character for character.
@@ -147,7 +151,9 @@ pub fn codes_to_ipa_opts(
 ) -> String {
     // Indices of the codes that are actual sounds, for neighbour lookups.
     let is_sound =
-        |c: &PhonemeCode| !c.is_boundary && c.code > 8 && c.code != PHON_END_WORD;
+        |c: &PhonemeCode| {
+            !c.is_boundary && c.code > 8 && c.code != PHON_END_WORD && c.code != PHON_SYLLABIC
+        };
     let real: Vec<usize> = codes
         .iter()
         .enumerate()
@@ -173,6 +179,7 @@ pub fn codes_to_ipa_opts(
     let mut wrote_phoneme = false;
     let mut after_word_break = true;
     let mut pending_stress = String::new();
+    let mut last_sound: Option<(u8, Neighbours)> = None;
 
     for (i, pc) in codes.iter().enumerate() {
         if let Some(CodeMarker::Punctuation(c)) = &pc.marker {
@@ -289,7 +296,21 @@ pub fn codes_to_ipa_opts(
                     }
                 }
                 let nb = neighbours_at(codes, &real, &starts, rank[i], phdata);
-                let name = write_ph_mnemonic_ipa(phdata, code, &nb);
+                let name = match &last_sound {
+                    // C writes the marker through the consonant's own phoneme
+                    // entry, so a declared IPA name is printed a second time.
+                    Some((prev, prev_nb))
+                        if code == PHON_SYLLABIC
+                            && phdata.get(*prev).is_some_and(|p| p.typ != 2) =>
+                    {
+                        program_ipa_name(phdata, *prev, prev_nb)
+                            .unwrap_or_else(|| write_ph_mnemonic_ipa(phdata, code, &nb))
+                    }
+                    _ => write_ph_mnemonic_ipa(phdata, code, &nb),
+                };
+                if code != PHON_SYLLABIC {
+                    last_sound = Some((code, nb));
+                }
                 if let Some(sep) = sep {
                     // Not before the clause's first phoneme, not straight after
                     // a word break, and not before a modifier letter.
