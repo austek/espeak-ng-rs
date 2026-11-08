@@ -3201,6 +3201,9 @@ struct Pronunciation {
     bytes: Vec<u8>,
     /// Offsets in `bytes` where C's separate words end, each stressed on its own.
     word_ends: Vec<usize>,
+    /// Per word: C's number code starts it with an end-of-word marker (its
+    /// tens and units, no hundreds, come first), see [`starts_with_word_break`].
+    word_breaks: Vec<bool>,
 }
 
 impl Pronunciation {
@@ -3974,6 +3977,7 @@ fn push_cardinal_group_prefix(
         }
         if digits.len() > MAX_UNSPLIT_DIGITS {
             result.word_ends.push(result.bytes.len());
+            result.word_breaks.push(group.value < 100);
         }
         spoken |= group.value != 0;
     }
@@ -4165,6 +4169,7 @@ fn try_ordinal_number(
         let spoken = push_cardinal_group_prefix(&mut pronunciation, digits, dict, grammar, groups.len() - 1);
         pronunciation.push_c_words(&numbers.num3(last.value, spoken, spoken));
         pronunciation.word_ends.push(pronunciation.bytes.len());
+        pronunciation.word_breaks.push(last.value < 100);
         let phonemes = stress_each_word(pronunciation, phdata, stress_opts, STRESS_UNBOUNDED);
         return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false });
     }
@@ -4195,8 +4200,19 @@ fn try_ordinal_number(
     }
 
     let mut phonemes = pronunciation.finish();
+    if starts_with_word_break(digits) {
+        phonemes.insert(0, PHON_END_WORD);
+    }
     set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, STRESS_UNBOUNDED);
     Some(WordResult { phonemes, dict_flags: 0, found_in_list: false })
+}
+
+/// Whether C's `LookupNum3` leaves an end-of-word marker in front of the
+/// number's first sound: it writes `hundreds + marker + tens/units`, so a
+/// leading group below 100 (1, 2, 5 or 6… digits, no leading zero) starts with
+/// the marker, and `SetWordStress` puts its vowel break before it.
+fn starts_with_word_break(digits: &str) -> bool {
+    !digits.starts_with('0') && (digits.len() <= 2 || (digits.len() > 4 && digits.len() % 3 != 0))
 }
 
 /// Stress every word of a grouped number separately, as C does when it
@@ -4209,15 +4225,19 @@ fn stress_each_word(
 ) -> Vec<u8> {
     let mut out: Vec<u8> = Vec::new();
     let mut start = 0;
-    for end in pronunciation.word_ends {
-        let mut word = pronunciation.bytes[start..end].to_vec();
+    for (n, end) in pronunciation.word_ends.iter().copied().enumerate() {
+        let slice = &pronunciation.bytes[start..end];
+        let body = slice.strip_prefix(&[PHON_END_WORD]).unwrap_or(slice);
+        let mut word = Vec::with_capacity(body.len() + 2);
+        if pronunciation.word_breaks.get(n).copied().unwrap_or(false) {
+            word.push(PHON_END_WORD);
+        }
+        word.extend_from_slice(body);
         word.push(0);
         set_word_stress(&mut word, phdata, stress_opts, Some(0), -1, control);
         out.extend(word.iter().copied().take_while(|&b| b != 0));
-        start = end;
-    }
-    if out.last() != Some(&PHON_END_WORD) {
         out.push(PHON_END_WORD);
+        start = end;
     }
     out.push(0);
     out
@@ -4258,7 +4278,19 @@ fn translate_number_token(
                 let phonemes = stress_each_word(pronunciation, phdata, stress_opts, control);
                 return Some(WordResult { phonemes, dict_flags: 0, found_in_list: true });
             }
+            let leading_break = match token {
+                NumberToken::Cardinal(digits) => {
+                    digits.len() <= MAX_GROUPED_DIGITS && starts_with_word_break(digits)
+                }
+                NumberToken::Decimal { integer, .. } => {
+                    integer.len() <= MAX_GROUPED_DIGITS && starts_with_word_break(integer)
+                }
+                NumberToken::Ordinal(_) => false,
+            };
             let mut phonemes = number_token_to_phonemes(token, dict, grammar)?;
+            if leading_break {
+                phonemes.insert(0, PHON_END_WORD);
+            }
             set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, control);
             Some(WordResult { phonemes, dict_flags: 0, found_in_list: true })
         }
