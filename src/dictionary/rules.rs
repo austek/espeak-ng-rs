@@ -24,7 +24,7 @@ use super::{
     DOLLAR_UNPR, DOLLAR_NOPREFIX, DOLLAR_LIST,
     BITNUM_FLAG_ALT,
     SUFX_UNPRON, SUFX_P,
-    FLAG_SUFFIX_VOWEL, FLAG_UNPRON_TEST, FLAG_PREFIX_REMOVED, FLAG_SUFFIX_REMOVED,
+    FLAG_SUFFIX_VOWEL, FLAG_UNPRON_TEST, FLAG_PREFIX_REMOVED, FLAG_SUFFIX_REMOVED, FLAG_NO_PREFIX,
     FLAG_HYPHEN, FLAG_HYPHEN_AFTER, FLAG_FIRST_UPPER,
     LETTERGP_VOWEL2, LETTERGP_C,
     REPLACED_E,
@@ -1226,6 +1226,10 @@ pub fn translate_rules_ext(
         }
 
         if match1.points > 0 {
+            // `FLAG_NO_PREFIX`: a prefix match is ignored and its phonemes are
+            // appended like those of any other rule.
+            let want_ending = want_ending
+                && !(match1.end_type & SUFX_P != 0 && word_flags & FLAG_NO_PREFIX != 0);
             // Append phonemes from best match
             if match1.phonemes_offset != MatchRecord::NONE {
                 let ph_start = match1.phonemes_offset;

@@ -169,6 +169,8 @@ pub const FLAG_HAS_DOT:      u32 = 0x0001_0000;
 pub const FLAG_FIRST_WORD:   u32 = 0x0000_0200;
 pub const FLAG_PREFIX_REMOVED:u32 = 0x0080_0000;
 pub const FLAG_SUFFIX_REMOVED:u32 = 0x0000_2000;
+/// Passed to the rules to ignore a match on a prefix (C `FLAG_NO_PREFIX`).
+pub const FLAG_NO_PREFIX:    u32 = 0x2000_0000;
 pub const FLAG_UNPRON_TEST:  u32 = 0x8000_0000;
 pub const FLAG_NO_TRACE:     u32 = 0x1000_0000;
 /// `$abbrev` (bit 13) — "use this pronunciation rather than split into

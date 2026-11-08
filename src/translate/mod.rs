@@ -3035,6 +3035,56 @@ fn dutch_suffix_doubles_vowel(stem: &str, dict: &Dictionary) -> bool {
         && !is_vowel(before)
 }
 
+/// C's `confirm_prefix`: a word whose rules matched a prefix keeps it only if
+/// the prefix is still recognised once the word's own suffix is removed, and
+/// then the prefix is the one matched on the shortened word.  Otherwise the
+/// match with prefixes ignored (`FLAG_NO_PREFIX`) stands.
+#[allow(clippy::too_many_arguments)]
+fn confirm_prefix(
+    result: crate::dictionary::rules::RulesResult,
+    word: &str,
+    word_buf: &[u8],
+    word_start: usize,
+    word_flags: u32,
+    dict_flags: u32,
+    dict: &Dictionary,
+    lang_opts: &LangOptions,
+    phdata: &PhonemeData,
+) -> crate::dictionary::rules::RulesResult {
+    const SUFX_B: u32 = 0x20000;
+    if result.end_type & SUFX_P == 0 || result.end_type & SUFX_B != 0 {
+        return result;
+    }
+    let run = |buf: &[u8], start: usize, flags: u32| {
+        let (mut vowels, mut stressed) = (0i32, 0i32);
+        crate::dictionary::rules::translate_rules_ext(
+            dict,
+            buf,
+            start,
+            flags,
+            dict_flags,
+            &dict.letter_bits,
+            lang_opts.dict_condition,
+            &mut vowels,
+            &mut stressed,
+            Some(phdata),
+            true,
+        )
+    };
+    let suffix_only = run(word_buf, word_start, word_flags | crate::dictionary::FLAG_NO_PREFIX);
+    if suffix_only.end_type == 0 {
+        return result;
+    }
+    let Some((stem, _, _)) = remove_standard_suffix(word, suffix_only.end_type, dict) else {
+        return result;
+    };
+    let mut stem_buf = vec![b' '];
+    stem_buf.extend_from_slice(stem.as_bytes());
+    stem_buf.extend_from_slice(&[b' ', 0]);
+    let without_suffix = run(&stem_buf, 1, word_flags);
+    if without_suffix.end_type & SUFX_P == 0 { suffix_only } else { without_suffix }
+}
+
 fn remove_standard_prefix(word: &str, end_type: u32) -> Option<(String, u32)> {
     if end_type & SUFX_P == 0 {
         return None;
@@ -4920,6 +4970,9 @@ fn word_to_phonemes_inner(
         &mut vowel_count,
         &mut stressed_count,
         Some(phdata),
+    );
+    let result = confirm_prefix(
+        result, word, &word_buf, word_start, rule_word_flags, rules_flags, dict, lang_opts, phdata,
     );
 
     // C's second `TranslateRules` call, with `end_phonemes == NULL`: translate the
