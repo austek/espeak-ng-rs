@@ -8174,6 +8174,31 @@ fn apply_tone_sandhi(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang:
     }
 }
 
+/// C's `count_pitch_vowels` puts the tonic of a clause with no stressed syllable
+/// on its last syllable, and every `phVOWEL` is one there — a non-syllabic
+/// vowel (`@-`) included. When the clause's last vowel is such a vowel, give it
+/// primary stress. Returns whether it did.
+fn promote_trailing_nonsyllabic_vowel(entries: &mut [TranslateEntry], phdata: &PhonemeData) -> bool {
+    let is_vowel = |c: u8| phdata.get(c).is_some_and(|p| p.typ == crate::phoneme::PH_VOWEL);
+    let last_vowel = entries.iter().enumerate().rev().find_map(|(ei, e)| {
+        if e.kind != TranslateEntryKind::Word {
+            return None;
+        }
+        e.phonemes.iter().rposition(|&c| is_vowel(c)).map(|pi| (ei, pi))
+    });
+    let Some((ei, pi)) = last_vowel else {
+        return false;
+    };
+    let nonsyllabic = phdata
+        .get(entries[ei].phonemes[pi])
+        .is_some_and(|p| p.phflags & crate::phoneme::PH_NONSYLLABIC != 0);
+    if !nonsyllabic {
+        return false;
+    }
+    entries[ei].phonemes.insert(pi, PHON_STRESS_P);
+    true
+}
+
 pub(crate) fn promote_translate_entries(
     entries: &mut [TranslateEntry],
     phdata: &PhonemeData,
@@ -8261,7 +8286,7 @@ pub(crate) fn promote_translate_entries(
 
             if let Some(idx) = last_secondary {
                 change_word_stress(&mut entries[idx].phonemes, phdata, 4);
-            } else {
+            } else if !promote_trailing_nonsyllabic_vowel(entries, phdata) {
                 let last_word = entries
                     .iter()
                     .enumerate()

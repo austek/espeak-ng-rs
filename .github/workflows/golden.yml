@@ -65,6 +65,7 @@ jobs:
           --test accent_removal
           --test spelled_replacement
           --test dutch_number_word_break
+          --test dutch_nonsyllabic_tonic
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
