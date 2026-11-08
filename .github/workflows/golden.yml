@@ -40,6 +40,9 @@ jobs:
           --test dutch_spelled_letters
           --test dutch_pause
           --test dutch_prefix_stress
+          --test german_brk_last_word
+          --test german_spelled_letters
+          --test german_loanword_voicing
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

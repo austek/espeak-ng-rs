@@ -9202,7 +9202,12 @@ impl Translator {
         // Regressive voicing assimilation runs over the whole clause, after the
         // per-word passes — C calls it once on `ph_list2` in `MakePhonemeList`.
         if stress_opts.regressive_voicing != 0 {
-            set_regressive_voicing(&mut out, &phdata, stress_opts.regressive_voicing);
+            set_regressive_voicing(
+                &mut out,
+                &phdata,
+                stress_opts.regressive_voicing,
+                &self.options.lang,
+            );
         }
         // The voice's own `replace` substitutions run over the finished list,
         // ahead of the pause insertion (C does them at the top of
@@ -9548,14 +9553,36 @@ fn drop_unsurfaced_liaison(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData) {
 /// `regression` bits: `0x02` = `v`/`R` stop propagation, `0x04` = stop at a word
 /// boundary, `0x08` = propagate through liquids and nasals (Polish), `0x100` =
 /// devoice word-finally.
-fn set_regressive_voicing(codes: &mut [PhonemeCode], phdata: &PhonemeData, regression: u32) {
+fn set_regressive_voicing(
+    codes: &mut [PhonemeCode],
+    phdata: &PhonemeData,
+    regression: u32,
+    own_lang: &str,
+) {
     use crate::phoneme::{PH_FRICATIVE, PH_PAUSE, PH_STOP, PH_VFRICATIVE, PH_VOWEL, PH_VSTOP};
+
+    // Phonemes of a switched-in language keep their own voicing (`SFLAG_SWITCHED_LANG`).
+    let mut in_switch = false;
+    let switched: Vec<bool> = codes
+        .iter()
+        .map(|c| {
+            if let Some(CodeMarker::LangSwitch(target)) = &c.marker {
+                in_switch = target != own_lang;
+            }
+            in_switch && c.marker.is_none()
+        })
+        .collect();
 
     // 0 = nothing in force, 1 = voiceless, 2 = voiced.
     let mut voicing = 0u8;
     let mut stop_propagation = false;
 
     for i in (0..codes.len()).rev() {
+        if switched[i] {
+            stop_propagation = false;
+            voicing = u8::from(regression & 0x100 != 0);
+            continue;
+        }
         // A word boundary is a marker, not a phoneme; note it and move on.
         if codes[i].is_boundary
             || codes[i].marker.is_some()
