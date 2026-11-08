@@ -1051,7 +1051,7 @@ pub fn translate_rules_phdata(
 #[allow(clippy::too_many_arguments)]
 pub fn translate_rules_ext(
     dict: &Dictionary,
-    word_buf: &[u8],
+    word_buf_in: &[u8],
     word_start: usize,
     word_flags: u32,
     dict_flags: u32,
@@ -1078,8 +1078,11 @@ pub fn translate_rules_ext(
     let mut pos = word_start; // current position in word_buf
 
     let rules_abs_base = dict.rules_offset;
+    let diereses = matches!(dict.lang.split('-').next().unwrap_or(""), "af" | "nl" | "lt" | "lv");
+    let mut buf = word_buf_in.to_vec();
 
-    while pos < word_buf.len() {
+    while pos < buf.len() {
+        let word_buf: &[u8] = &buf;
         let c = word_buf[pos];
         if c == 0 || c == b' ' { break; }
 
@@ -1188,6 +1191,24 @@ pub fn translate_rules_ext(
                     let mut np = pos;
                     match1 = match_rule(dict, &ctx, def_rules, def_abs, &mut np);
                     next_pos1 = np;
+                }
+
+                // LOPT_DIERESES: a dieresis vowel without a rule of its own becomes
+                // its plain vowel in the buffer, and translation carries on there.
+                if match1.points == 0
+                    && diereses
+                    && matches!(wc, 0xe4 | 0xeb | 0xef | 0xf6 | 0xfc | 0xff)
+                {
+                    let total = wc_bytes + 1;
+                    let alone = word_buf[pos - 1] == b' ' && word_buf.get(pos + total) == Some(&b' ');
+                    if !alone {
+                        let base = fold_accent(char::from_u32(wc).unwrap_or(' ')) as u8;
+                        buf[pos] = base;
+                        buf.drain(pos + 1..pos + total);
+                        let end = buf[pos..].iter().position(|&b| b == b' ').map_or(buf.len(), |i| pos + i);
+                        buf.splice(end + 1..end + 1, std::iter::repeat_n(b' ', total - 1));
+                        continue;
+                    }
                 }
 
                 if match1.points == 0 && is_alpha(wc) {

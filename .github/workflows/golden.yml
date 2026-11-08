@@ -47,6 +47,7 @@ jobs:
           --test german_clause_final_devoicing
           --test german_unit_one
           --test dutch_prefix_rule_flags
+          --test dutch_dieresis
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
