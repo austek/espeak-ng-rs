@@ -519,10 +519,6 @@ pub struct NumberGrammar {
     /// "IJ" digraph (`IJssel`) is not split.  Mirrors espeak's
     /// `translator_name == L('n','l')` guard.
     pub dutch_ij: bool,
-    /// Combining ("apocopated") form of the unit *one* used inside a compound —
-    /// German "einundzwanzig" uses "ein", not the standalone "eins".  Looked up
-    /// as a dictionary word; `None` (the default) keeps the plain `_1` unit.
-    pub combining_one: Option<String>,
     /// Italian tens-vowel elision: a tens word (trenta/quaranta/…) drops its
     /// final vowel before a vowel-initial unit (uno/otto) → "trentuno",
     /// "quarantotto".  The 20s already elide via dedicated `_21`/`_28` entries.
@@ -672,8 +668,6 @@ impl NumberGrammar {
                 grammar.ordinals.dot_marks_ordinal = true;
                 grammar.ordinals.compound_cardinal_suffix = true;
                 grammar.tens = TensGrammar::UnitsThenConjunction;
-                // "einundzwanzig", not "einsundzwanzig" (standalone 1 = "eins").
-                grammar.combining_one = Some("ein".to_string());
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
                 // German keeps the "ein": upstream reads 100 as "einhundert" and
@@ -998,7 +992,6 @@ impl Default for NumberGrammar {
             caps_word_split: true,
             caps_mark_stress: false,
             dutch_ij: false,
-            combining_one: None,
             elide_tens_vowel: false,
             thousands_variant: SlavicThousands::None,
             max_digits: 14,
@@ -3679,13 +3672,9 @@ fn num3_phonemes_g(
 
                 match grammar.tens {
                     TensGrammar::UnitsThenConjunction if units != 0 => {
-                        // The unit "1" apocopates inside a compound in German
-                        // ("einundzwanzig", not "einsundzwanzig").
-                        let unit = match (units, grammar.combining_one.as_deref()) {
-                            (1, Some(one)) => lookup_num_phonemes(dict, one),
-                            _ => lookup_num_phonemes(dict, &num_key(units)),
-                        };
-                        tens_part.push_lookup_word(&unit);
+                        // C's `NUM_SWAP_TENS` takes the combining `_<n>a` unit
+                        // (German `_1a` = "ein"), else the plain `_<n>`.
+                        tens_part.push_lookup_word(&unit_before_scale(dict, units));
                         tens_part.append_lookup_suffix(&lookup_num_phonemes(dict, "_0and"));
                         tens_part.append_lookup_suffix(&lookup_num_phonemes(dict, &format!("_{tens}X")));
                     }

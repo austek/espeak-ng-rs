@@ -45,6 +45,7 @@ jobs:
           --test german_loanword_voicing
           --test dutch_final_devoicing
           --test german_clause_final_devoicing
+          --test german_unit_one
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
