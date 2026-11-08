@@ -1,0 +1,36 @@
+name: golden
+
+on:
+  push:
+    branches: [dengjen]
+    tags: ['v*']
+
+env:
+  ESPEAK_NG_DATA: /usr/lib/x86_64-linux-gnu/espeak-ng-data
+
+jobs:
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install system espeak-ng data
+        run: sudo apt-get update && sudo apt-get install -y espeak-ng-data
+      - name: Build release
+        run: cargo build --release
+      - name: Library tests
+        run: cargo test --lib
+      - name: Fix-branch tests
+        run: >
+          cargo test --release
+          --test cli_invalid_utf8
+          --test dictionary_bounds
+          --test english_letter_group_y
+          --test italian_rule_stress
+          --test polish_final_l
+          --test long_digit_strings
+          --test spanish_group_stress
+      - name: Closing-tag tests
+        run: cargo test --release --test switch_closing_tag -- --ignored
+      - name: Golden ratchet
+        run: python3 -I tests/golden/check.py
