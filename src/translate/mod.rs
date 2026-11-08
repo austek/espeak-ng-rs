@@ -1753,6 +1753,96 @@ pub fn parse_embedded_commands(text: &str) -> (String, Vec<EmbeddedCmd>) {
     (out, cmds)
 }
 
+/// C's `N_TR_SOURCE`: the source bytes one clause can hold.
+const CLAUSE_SOURCE_BYTES: usize = 800;
+
+/// Clause ends at the last byte that fits (C `ReadClause`).
+const CLAUSE_HARD_BYTES: usize = CLAUSE_SOURCE_BYTES - 4;
+/// Past this size, the next non-alphanumeric byte ends the clause.
+const CLAUSE_SOFT_BYTES: usize = CLAUSE_SOURCE_BYTES - 75;
+
+/// Splits `text` at the hard clause limit, flagging each piece after which a clause ends. Updates `used`.
+fn clause_pieces(text: &str, used: &mut usize) -> Vec<(String, bool)> {
+    let mut pieces: Vec<(String, bool)> = Vec::new();
+    let mut current = String::new();
+    for c in text.chars() {
+        current.push(c);
+        *used += c.len_utf8();
+        if *used >= CLAUSE_HARD_BYTES {
+            pieces.push((std::mem::take(&mut current), true));
+            *used = 0;
+        }
+    }
+    if !current.is_empty() {
+        pieces.push((current, false));
+    }
+    pieces
+}
+
+/// Adds the clause boundaries C's `ReadClause` inserts when its source buffer fills.
+fn split_overlong_clauses(tokens: Vec<Token>) -> Vec<Token> {
+    let mut out = Vec::with_capacity(tokens.len());
+    let mut used = 0usize;
+    let mut after_space = true;
+    for token in tokens {
+        match token {
+            Token::ClauseBoundary(_) => {
+                used = 0;
+                after_space = true;
+                out.push(token);
+            }
+            Token::Space => {
+                if !after_space {
+                    used += 1;
+                }
+                after_space = true;
+                out.push(token);
+                if used > CLAUSE_SOFT_BYTES {
+                    out.push(Token::ClauseBoundary(ssml::SSML_BREAK));
+                    used = 0;
+                }
+            }
+            Token::Word(word) => {
+                after_space = false;
+                for (piece, ends) in clause_pieces(&word, &mut used) {
+                    out.push(Token::Word(piece));
+                    if ends {
+                        out.push(Token::ClauseBoundary(ssml::SSML_BREAK));
+                        after_space = true;
+                    }
+                }
+            }
+            Token::Number(NumberToken::Cardinal(digits)) => {
+                after_space = false;
+                for (piece, ends) in clause_pieces(&digits, &mut used) {
+                    out.push(Token::Number(NumberToken::Cardinal(piece)));
+                    if ends {
+                        out.push(Token::ClauseBoundary(ssml::SSML_BREAK));
+                        after_space = true;
+                    }
+                }
+            }
+            Token::Number(number) => {
+                after_space = false;
+                used += number.surface().len();
+                out.push(Token::Number(number));
+            }
+            Token::Punctuation(c) | Token::Operator(c) => {
+                after_space = false;
+                used += c.len_utf8();
+                out.push(token);
+                if used > CLAUSE_SOFT_BYTES {
+                    out.push(Token::ClauseBoundary(ssml::SSML_BREAK));
+                    used = 0;
+                    after_space = true;
+                }
+            }
+            other => out.push(other),
+        }
+    }
+    out
+}
+
 pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     let text = normalize_number_symbols(text);
     let text = text.as_ref();
@@ -8365,7 +8455,7 @@ impl Translator {
         };
 
         let text = normalize_apostrophes(text);
-        let mut tokens = tokenize_opts(&text, &self.options.number_grammar);
+        let mut tokens = split_overlong_clauses(tokenize_opts(&text, &self.options.number_grammar));
         apply_roman_numerals(&mut tokens, lang);
         suppress_abbreviation_periods(&mut tokens, lang);
         apply_time_reading(&mut tokens, lang);
