@@ -27,5 +27,14 @@ jobs:
           --test polish_final_l
           --test long_digit_strings
           --test spanish_group_stress
+          --test pt_articles
+          --test portuguese_numbers
+          --test ipa_from_codes
+          --test upstream_1_53_parity
+          --test geminates_and_alt_vowels
+      - name: Switch closing tag tests
+        run: cargo test --release --test switch_closing_tag -- --ignored
+        env:
+          ESPEAK_NG_DATA: ${{ github.workspace }}/espeak-ng-data
       - name: Golden ratchet
         run: python3 -I tests/golden/check.py

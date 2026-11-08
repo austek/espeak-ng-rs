@@ -13,7 +13,7 @@ The Rust port is not bit-identical to C. The ratchet does not demand zero differ
 
 The script runs `target/release/espeak-ng-rs` with `ESPEAK_DATA_PATH` set to the repo's `espeak-ng-data`, counts differing rows per language and exits 1 if any language exceeds its ceiling. Options: `--binary`, `--data`, `--out DIR` (keep the captured TSVs), `--show N` (print N differing rows per language).
 
-CI sets `ESPEAK_DATA_PATH` to the repo's bundled `espeak-ng-data`, so runs do not depend on the runner's apt package. The ceilings hold only for that data: the apt `espeak-ng-data` gives different counts (for example fa 370, ru 99). CI does not run the ignored `switch_closing_tag` tests, which expect the language-switch markers of the system data; run them locally with `ESPEAK_NG_DATA=/usr/lib/x86_64-linux-gnu/espeak-ng-data cargo test --release --test switch_closing_tag -- --ignored`.
+CI sets `ESPEAK_DATA_PATH` to the repo's bundled `espeak-ng-data`, so runs do not depend on the runner's apt package. The ceilings hold only for that data: the apt `espeak-ng-data` gives different counts (for example fa 370, ru 99). The workflow also runs the formerly ignored `switch_closing_tag` tests against the bundled data.
 
 ## Lower a ceiling
 
@@ -23,20 +23,20 @@ When a change fixes rows, the script prints `LOWER THE CEILING` for that languag
 
 and commit the new `ceilings.json`. Ceilings may only go down. Raising one needs a stated reason in the commit.
 
-## Measured on dengjen.1 (bundled data)
+## Measured on dengjen.3 (refreshed bundled data)
 
-| lang | ceiling |
-|------|---------|
-| ar | 8 |
-| de | 78 |
-| en | 160 |
-| es | 6 |
-| fa | 0 |
-| fr | 53 |
-| it | 29 |
-| ku | 32 |
-| nl | 61 |
-| pl | 18 |
-| pt | 729 |
-| ru | 2 |
-| tr | 9 |
+| lang | dengjen.2 | ceiling |
+|------|-----------|---------|
+| ar | 8 | 7 |
+| de | 78 | 78 |
+| en | 160 | 159 |
+| es | 6 | 6 |
+| fa | 0 | 0 |
+| fr | 53 | 53 |
+| it | 29 | 25 |
+| ku | 32 | 4 |
+| nl | 61 | 60 |
+| pl | 18 | 16 |
+| pt | 729 | 39 |
+| ru | 2 | 2 |
+| tr | 9 | 9 |
