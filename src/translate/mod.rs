@@ -4302,6 +4302,9 @@ pub struct PosExpect {
     /// buffer.  The port translates a word at a time, so the next word's opening
     /// is carried here and appended to the rules buffer.
     pub next_word: [u8; 8],
+    /// Return the phonemes unstressed: the caller is a prefix branch that
+    /// stresses prefix and stem together, as C's `TranslateWord3` does.
+    pub defer_stress: bool,
 }
 
 /// A [`PosExpect`] carrying only the opening of the word that follows, so a
@@ -4840,6 +4843,9 @@ fn word_to_phonemes_inner(
                 return WordResult { phonemes: result.phonemes.clone(), dict_flags, found_in_list: true };
             }
             let mut phonemes = result.phonemes.clone();
+            if expect.defer_stress {
+                return WordResult { phonemes, dict_flags, found_in_list: true };
+            }
             // Apply stress placement
             set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags as u32), -1, 0);
             // (No stressed-vowel upgrading here: the pronunciation came from the
@@ -4970,10 +4976,11 @@ fn word_to_phonemes_inner(
 
     if rules_produced_output(&result) {
         let mut stress_dict_flags = dict_flags_from_lookup;
+        let mut stress_done = false;
         let mut phonemes = if result.end_type != 0 && (result.end_type & SUFX_P) != 0 {
             if let Some((stem, stem_word_flags)) = remove_standard_prefix(word, result.end_type) {
-                let mut combined = Vec::new();
-                append_raw_phonemes(&mut combined, &result.end_phonemes);
+                let mut prefix_ph = Vec::new();
+                append_raw_phonemes(&mut prefix_ph, &result.end_phonemes);
                 let stem_wr = word_to_phonemes_inner(
                     &stem,
                     dict,
@@ -4981,10 +4988,37 @@ fn word_to_phonemes_inner(
                     stress_opts,
                     lang_opts,
                     stem_word_flags,
-                    expect,
+                    PosExpect { defer_stress: true, ..expect },
                 );
-                append_raw_phonemes(&mut combined, &stem_wr.phonemes);
-                stress_dict_flags = stem_wr.dict_flags;
+                let mut stem_ph = Vec::new();
+                append_raw_phonemes(&mut stem_ph, &stem_wr.phonemes);
+                let prefix_flags = stress_dict_flags != 0;
+                if stress_dict_flags == 0 {
+                    stress_dict_flags = stem_wr.dict_flags;
+                }
+                let prefix_stressed = prefix_ph
+                    .iter()
+                    .any(|&b| b == crate::phoneme::PHON_STRESS_P || b == crate::phoneme::PHON_STRESS_P2);
+                // C stresses the stem alone unless the prefix or a list entry
+                // already fixes the stress of the whole word.
+                if !expect.defer_stress {
+                    let flags = Some(stress_dict_flags as u32);
+                    if prefix_flags || prefix_stressed {
+                        if stress_opts.prefixes {
+                            stem_ph.push(0);
+                            set_word_stress(&mut stem_ph, phdata, stress_opts, flags, 3, 0);
+                            stem_ph.retain(|&b| b != 0);
+                            reduce_later_primaries(&mut prefix_ph);
+                        }
+                    } else {
+                        stem_ph.push(0);
+                        set_word_stress(&mut stem_ph, phdata, stress_opts, flags, -1, 0);
+                        stem_ph.retain(|&b| b != 0);
+                        stress_done = true;
+                    }
+                }
+                let mut combined = prefix_ph;
+                combined.extend_from_slice(&stem_ph);
                 combined.push(0);
                 combined
             } else {
@@ -5137,7 +5171,12 @@ fn word_to_phonemes_inner(
         } else {
             Some(0)  // non-NULL mirrors C's behavior of passing non-NULL dictionary_flags
         };
-        set_word_stress(&mut phonemes, phdata, stress_opts, flags_for_stress, -1, 0);
+        if expect.defer_stress {
+            return WordResult { phonemes, dict_flags: stress_dict_flags, found_in_list: false };
+        }
+        if !stress_done {
+            set_word_stress(&mut phonemes, phdata, stress_opts, flags_for_stress, -1, 0);
+        }
         // Stressed-vowel upgrading (e.g. Turkish e→E, o→O under primary stress)
         if stress_opts.alt_stress_upgrade {
             apply_alt_stress_upgrade(&mut phonemes, phdata);
@@ -5851,6 +5890,17 @@ fn spell_unpronounceable<'a>(
 
 /// Identity helper so `is_unpronounceable` can take the options by reference.
 fn lang_opts_ref(o: &LangOptions) -> &LangOptions { o }
+
+/// Keep the first primary stress of a prefix and demote the others to secondary.
+fn reduce_later_primaries(prefix: &mut [u8]) {
+    let mut seen = false;
+    for b in prefix.iter_mut().filter(|b| **b == PHON_STRESS_P) {
+        if seen {
+            *b = PHON_STRESS_3;
+        }
+        seen = true;
+    }
+}
 
 /// Drop the break that stress placement puts before a vowel-initial letter name.
 ///

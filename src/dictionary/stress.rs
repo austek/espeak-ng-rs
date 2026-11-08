@@ -165,6 +165,9 @@ pub struct StressOpts {
     /// * bit 1 — treat the most stressed syllable of an unstressed word as
     ///   carrying primary stress (Bulgarian, Icelandic, Russian).
     pub reduce: u32,
+    /// `LOPT_PREFIXES` — a removed prefix keeps a stress of its own, and the
+    /// stem drops to secondary stress before the whole word is stressed.
+    pub prefixes: bool,
 }
 
 impl Default for StressOpts {
@@ -189,6 +192,7 @@ impl Default for StressOpts {
             caps_mark_stress: false,
             word_gap: 0,
             reduce: 0,
+            prefixes: false,
         }
     }
 }
@@ -322,6 +326,8 @@ impl StressOpts {
             "bg" | "is" | "ru" => 2,
             _ => 0,
         };
+
+        opts.prefixes = matches!(primary, "af" | "da" | "de" | "nl");
 
         // `langopts.word_gap` — the language's own inter-word pause.
         opts.word_gap = match primary {
