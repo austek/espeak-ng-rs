@@ -6096,7 +6096,8 @@ fn spell_word_letters(
     options: &LangOptions,
 ) -> Option<Vec<u8>> {
     let mut out: Vec<u8> = Vec::new();
-    for c in word.chars() {
+    let replaced = dict.apply_replacements(word);
+    for c in replaced.as_deref().unwrap_or(word).chars() {
         if !c.is_alphanumeric() {
             continue;
         }

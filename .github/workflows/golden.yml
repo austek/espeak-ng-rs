@@ -63,6 +63,7 @@ jobs:
           --test accented_letters
           --test prefix_confirmation
           --test accent_removal
+          --test spelled_replacement
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
