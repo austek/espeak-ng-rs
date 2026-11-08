@@ -55,6 +55,7 @@ jobs:
           --test number_empty_group_word
           --test leading_zero_numbers
           --test arabic_thousand_and
+          --test ordinal_unknown_suffix
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

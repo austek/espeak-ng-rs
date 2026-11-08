@@ -6130,6 +6130,35 @@ fn is_roman_context_keyword(lower: &str) -> bool {
     )
 }
 
+/// Whether the language treats `ordinal` as an ordinal: C accepts a suffix only
+/// when the dictionary has `_#<suffix>` (or it is the language's own indicator).
+fn ordinal_is_recognised(ordinal: &OrdinalNumber, dict: &Dictionary, grammar: &NumberGrammar) -> bool {
+    match &ordinal.marker {
+        OrdinalMarker::Dot => true,
+        OrdinalMarker::Suffix(suffix) => {
+            grammar.ordinals.indicator.as_deref() == Some(suffix)
+                || (grammar.ordinals.french && is_french_ordinal_suffix(suffix))
+                || (grammar.ordinals.italian && matches!(suffix.as_str(), "º" | "ª"))
+                || !lookup_num_phonemes(dict, &format!("_#{suffix}")).is_empty()
+        }
+    }
+}
+
+/// A number glued to a suffix the language has no ordinal entry for is the number
+/// followed by the suffix as a word ("1st" in es is "uno" + the letters "st").
+fn split_unrecognised_ordinals(tokens: &mut Vec<Token>, dict: &Dictionary, grammar: &NumberGrammar) {
+    let split = |token: Token| match token {
+        Token::Number(NumberToken::Ordinal(ord))
+            if !ordinal_is_recognised(&ord, dict, grammar) =>
+        {
+            let OrdinalMarker::Suffix(suffix) = ord.marker else { unreachable!("dot ordinals are recognised") };
+            vec![Token::Number(NumberToken::Cardinal(ord.digits)), Token::Word(suffix)]
+        }
+        other => vec![other],
+    };
+    *tokens = std::mem::take(tokens).into_iter().flat_map(split).collect();
+}
+
 /// Convert an uppercase Roman numeral that immediately follows a recognised
 /// enumeration keyword into a cardinal number ("Chapter IV" → "Chapter 4").
 /// Keyword-gated to avoid misreading real all-caps words (MIX, MI, CID…) as
@@ -8706,6 +8735,7 @@ impl Translator {
 
         let text = normalize_apostrophes(text);
         let mut tokens = split_overlong_clauses(tokenize_opts(&text, &self.options.number_grammar));
+        split_unrecognised_ordinals(&mut tokens, &dict, &self.options.number_grammar);
         apply_roman_numerals(&mut tokens, lang);
         suppress_abbreviation_periods(&mut tokens, lang);
         apply_time_reading(&mut tokens, lang);
