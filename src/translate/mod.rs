@@ -3294,6 +3294,9 @@ struct ScaleGroup {
 /// this into individual digits.
 const MAX_GROUPED_DIGITS: usize = 32;
 
+/// Longest digit run C translates as a single word; longer runs split per group.
+const MAX_UNSPLIT_DIGITS: usize = 4;
+
 /// Three-digit groups, most significant first; scale `k` is 10^(3k). `digits` must be ASCII digits.
 fn split_scale_groups(digits: &str, dict: &Dictionary) -> Vec<ScaleGroup> {
     let count = digits.len().div_ceil(3);
@@ -3959,7 +3962,13 @@ fn push_cardinal_groups(
     let mut spoken = false;
     for group in split_scale_groups(digits, dict) {
         let exact = scale_group_is_exact(digits, group.scale);
+        let before = result.bytes.len();
         append_cardinal_group(result, group, dict, grammar, exact, spoken);
+        // C reads a 5+ digit run as one word per group and ends each word that
+        // has non-zero groups after it with a pause, which stops voicing.
+        if digits.len() > MAX_UNSPLIT_DIGITS && !exact && result.bytes.len() > before {
+            result.bytes.push(crate::phoneme::PHON_PAUSE_NOLINK);
+        }
         spoken |= group.value != 0;
     }
 }
