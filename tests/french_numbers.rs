@@ -222,9 +222,9 @@ fn space_grouped_thousands_compose() {
         let ipa = |s: &str| t.text_to_ipa(s).unwrap();
         assert!(ipa("1 000").contains("mˈil"), "fr 1 000 → mille: {}", ipa("1 000"));
         assert!(ipa("12 000").contains("mˈil"), "fr 12 000 → douze mille: {}", ipa("12 000"));
-        // 1 234 567 = un million … mille … (carries "miljɔ̃" and "mil").
+        // 1 234 567 = un million … mille … (carries "miljˈɔ̃" and "mil").
         let big = ipa("1 234 567");
-        assert!(big.contains("miljɔ̃") && big.contains("mil"), "fr 1 234 567: {big}");
+        assert!(big.contains("miljˈɔ̃") && big.contains("mil"), "fr 1 234 567: {big}");
         // A non-3-digit trailing group is NOT merged (12 34 stays two numbers).
         let split = ipa("12 34");
         assert!(split.contains("dˈuz") && split.contains("tʁɑ̃t"), "fr 12 34 must not merge: {split}");

@@ -26,6 +26,10 @@ use crate::synthesize::bytecode::{interpret_phoneme, Neighbours};
 use super::ipa_table::{encode_utf8, ipa1_char};
 use super::{CodeMarker, PhonemeCode};
 
+/// Private-use character that stands for the empty word between two spaces
+/// until the output is finished.
+const EMPTY_WORD_MARK: char = '\u{e000}';
+
 /// C `WritePhMnemonic(..., use_ipa = 1)` for one phoneme of the list.
 ///
 /// `nb` supplies the neighbours the phoneme's program conditions on; pass
@@ -180,6 +184,7 @@ pub fn codes_to_ipa_opts(
     let mut after_word_break = true;
     let mut pending_stress = String::new();
     let mut last_sound: Option<(u8, Neighbours)> = None;
+    let mut pause_only_word = false;
 
     for (i, pc) in codes.iter().enumerate() {
         if let Some(CodeMarker::Punctuation(c)) = &pc.marker {
@@ -265,6 +270,12 @@ pub fn codes_to_ipa_opts(
                 out.push('\n');
                 wrote_phoneme = false; // a new clause starts the run again
             } else {
+                // A word that is only pauses still takes its space in C, so
+                // mark it to survive the collapsing of doubled spaces below.
+                if pause_only_word && out.ends_with(' ') {
+                    out.push(EMPTY_WORD_MARK);
+                }
+                pause_only_word = false;
                 out.push(' ');
                 // A *space* separator is emitted at a word start too, which is
                 // why `--sep` doubles the space between words — but only once,
@@ -296,6 +307,8 @@ pub fn codes_to_ipa_opts(
                     }
                 }
                 let nb = neighbours_at(codes, &real, &starts, rank[i], phdata);
+                pause_only_word |= out.ends_with(' ')
+                    && phdata.get(code).is_some_and(|p| p.typ == crate::phoneme::PH_PAUSE);
                 let name = match &last_sound {
                     // C writes the lengthener and the syllabic marker through the
                     // phoneme's own entry, so a declared IPA name is printed again.
@@ -346,6 +359,7 @@ pub fn codes_to_ipa_opts(
         }
     }
     let _ = straight_quote_open;
+    out.retain(|c| c != EMPTY_WORD_MARK);
     out.split('\n').map(str::trim).collect::<Vec<_>>().join("\n").trim_end().to_string()
 }
 

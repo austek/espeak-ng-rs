@@ -3955,7 +3955,11 @@ fn push_cardinal_groups(
         let before = result.bytes.len();
         append_cardinal_group(result, group, dict, grammar, exact, spoken);
         // C ends each group word that is not exact with PHON_PAUSE_NOLINK, which stops regressive voicing across groups.
-        if digits.len() > MAX_UNSPLIT_DIGITS && !exact && result.bytes.len() > before {
+        if digits.len() > MAX_UNSPLIT_DIGITS && !exact {
+            // An all-zero group is still a word of its own: empty, then the pause.
+            if result.bytes.len() == before {
+                result.start_word();
+            }
             result.bytes.push(crate::phoneme::PHON_PAUSE_NOLINK);
         }
         if digits.len() > MAX_UNSPLIT_DIGITS {
