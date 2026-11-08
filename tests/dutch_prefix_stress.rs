@@ -30,6 +30,7 @@ fn prefixed_words_follow_their_list_stress() {
         ("wantrouwend", "ʋɑntrˈʌʊˌənt"),
         ("onze", "ɔnzˈə"),
         ("wester", "ʋɛstˈər"),
+        ("wantoestand", "ʋˈɑntˌustˌɑnt"),
         ("vergeten", "vərɣˈeːtən"),
         ("ontvangen", "ɔntvˈɑŋən"),
         ("onderzoek", "ˈɔndərzˌuk"),
