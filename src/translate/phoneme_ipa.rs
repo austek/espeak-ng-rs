@@ -18,7 +18,7 @@
 use std::path::Path;
 
 use crate::phoneme::{
-    PhonemeData, PHON_END_WORD, PHON_STRESS_2, PHON_SYLLABIC, PHON_STRESS_3, PHON_STRESS_D, PHON_STRESS_P,
+    PhonemeData, PHON_END_WORD, PHON_STRESS_2, PHON_LENGTHEN, PHON_SYLLABIC, PHON_STRESS_3, PHON_STRESS_D, PHON_STRESS_P,
     PHON_STRESS_P2, PHON_STRESS_PREV, PHON_STRESS_TONIC, PHON_STRESS_U,
 };
 use crate::synthesize::bytecode::{interpret_phoneme, Neighbours};
@@ -297,18 +297,19 @@ pub fn codes_to_ipa_opts(
                 }
                 let nb = neighbours_at(codes, &real, &starts, rank[i], phdata);
                 let name = match &last_sound {
-                    // C writes the marker through the consonant's own phoneme
-                    // entry, so a declared IPA name is printed a second time.
+                    // C writes the lengthener and the syllabic marker through the
+                    // phoneme's own entry, so a declared IPA name is printed again.
                     Some((prev, prev_nb))
-                        if code == PHON_SYLLABIC
-                            && phdata.get(*prev).is_some_and(|p| p.typ != 2) =>
+                        if (code == PHON_LENGTHEN
+                            || (code == PHON_SYLLABIC
+                                && phdata.get(*prev).is_some_and(|p| p.typ != 2))) =>
                     {
                         program_ipa_name(phdata, *prev, prev_nb)
                             .unwrap_or_else(|| write_ph_mnemonic_ipa(phdata, code, &nb))
                     }
                     _ => write_ph_mnemonic_ipa(phdata, code, &nb),
                 };
-                if code != PHON_SYLLABIC {
+                if code != PHON_SYLLABIC && code != PHON_LENGTHEN {
                     last_sound = Some((code, nb));
                 }
                 if let Some(sep) = sep {

@@ -9175,7 +9175,7 @@ impl Translator {
             }
             own_flags.resize(own.len(), false);
             // Before the phoneme programs run, as in C's `MakePhonemeList`.
-            double_lengthened_consonants(own, &phdata);
+            double_lengthened_consonants(own, own_flags, &phdata);
             resolve_virtual_phonemes_in_codes(own, &phdata, own_flags, stress_opts.reduce);
             apply_list_editing_instructions(own, &phdata);
             if primary_bcp47_subtag(lang) == "fr" {
@@ -9785,8 +9785,18 @@ pub(crate) const NO_STRESS_LEVEL: u8 = u8::MAX;
 /// Every other type keeps the lengthener, which is why a long vowel still reads
 /// `a:` (Dutch `Qr'a:d@n`) and a phoneme that is itself long, like Italian `tS:`,
 /// is untouched.
-fn double_lengthened_consonants(codes: &mut [PhonemeCode], phdata: &PhonemeData) {
+///
+/// C inserts the copy *before* the lengthened phoneme and never for the first
+/// phoneme of a clause. A word-initial consonant therefore leaves its copy at the
+/// end of the previous word, in front of the word boundary.
+fn double_lengthened_consonants(
+    codes: &mut [PhonemeCode],
+    flags: &mut [bool],
+    phdata: &PhonemeData,
+) {
     use crate::phoneme::{PH_FRICATIVE, PH_LIQUID, PH_NASAL, PH_VFRICATIVE};
+    let is_sound = |c: &PhonemeCode| !c.is_boundary && c.marker.is_none() && c.code > 8;
+    let is_word_break = |c: &PhonemeCode| c.is_boundary || c.code == crate::phoneme::PHON_END_WORD;
     for i in 1..codes.len() {
         if codes[i].is_boundary
             || codes[i].marker.is_some()
@@ -9794,17 +9804,28 @@ fn double_lengthened_consonants(codes: &mut [PhonemeCode], phdata: &PhonemeData)
         {
             continue;
         }
-        let Some(prev) = codes[..i]
+        let clause_start = codes[..i]
             .iter()
-            .rposition(|c| !c.is_boundary && c.marker.is_none() && c.code > 8)
+            .rposition(|c| c.is_boundary && c.code == 0)
+            .map_or(0, |p| p + 1);
+        let Some(prev) = codes[clause_start..i].iter().rposition(is_sound).map(|p| p + clause_start)
         else {
             continue;
         };
         let doubled = phdata
             .get(codes[prev].code)
             .is_some_and(|p| matches!(p.typ, PH_FRICATIVE | PH_VFRICATIVE | PH_NASAL | PH_LIQUID));
-        if doubled {
-            codes[i].code = codes[prev].code;
+        let Some(before) = codes[clause_start..prev].iter().rposition(is_sound).map(|p| p + clause_start)
+        else {
+            continue;
+        };
+        if !doubled {
+            continue;
+        }
+        codes[i].code = codes[prev].code;
+        if codes[before + 1..prev].iter().any(is_word_break) {
+            codes[before + 1..=i].rotate_right(1);
+            flags[before + 1..=i].rotate_right(1);
         }
     }
 }
