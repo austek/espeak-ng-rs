@@ -10952,7 +10952,7 @@ mod tests {
             ("3.",  "dɾˈɪtə"),
             ("20.", "tsvˈantsɪçtə"),
             // "einundzwanzigste" — the unit "1" apocopates to "ein" (not "eins").
-            ("21.", "ˌaɪn ʊnttsvˈantsɪçtə"),
+            ("21.", "ˈaɪn ʊnttsvˈantsɪçtə"),
         ]);
     }
 
