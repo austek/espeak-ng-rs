@@ -38,6 +38,7 @@ jobs:
           --test leading_zero_long_runs
           --test dutch_sch_cluster
           --test dutch_spelled_letters
+          --test dutch_pause
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

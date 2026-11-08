@@ -8930,7 +8930,7 @@ impl Translator {
                             .filter(|t| is_word(t))
                             .count();
                         // C drops the `$brk` pause on the last word of a clause.
-                        if entry.dict_flags & FLAG_PAUSE1 != 0 {
+                        if entry.dict_flags & FLAG_PAUSE1 != 0 && after >= 1 {
                             pre_pause = 1;
                         }
                         // C additionally skips `$pause` at either end of the
