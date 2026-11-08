@@ -1193,20 +1193,28 @@ pub fn translate_rules_ext(
                     next_pos1 = np;
                 }
 
-                // LOPT_DIERESES: a dieresis vowel without a rule of its own becomes
-                // its plain vowel in the buffer, and translation carries on there.
-                if match1.points == 0
-                    && diereses
-                    && matches!(wc, 0xe4 | 0xeb | 0xef | 0xf6 | 0xfc | 0xff)
-                {
+                // No rule for an accented letter inside a word: replace it by its
+                // unaccented base and translate the word again from the start
+                // (LOPT_DIERESES languages carry on from the letter instead).
+                if match1.points == 0 && wc >= 0xc0 && word_buf[pos] & 0xc0 != 0x80 {
+                    let base = fold_accent(char::from_u32(wc).unwrap_or(' '));
                     let total = wc_bytes + 1;
                     let alone = word_buf[pos - 1] == b' ' && word_buf.get(pos + total) == Some(&b' ');
-                    if !alone {
-                        let base = fold_accent(char::from_u32(wc).unwrap_or(' ')) as u8;
-                        buf[pos] = base;
+                    if base.is_ascii() && base as u32 != wc && !alone {
+                        buf[pos] = base as u8;
                         buf.drain(pos + 1..pos + total);
                         let end = buf[pos..].iter().position(|&b| b == b' ').map_or(buf.len(), |i| pos + i);
                         buf.splice(end + 1..end + 1, std::iter::repeat_n(b' ', total - 1));
+                        if !(diereses && matches!(wc, 0xe4 | 0xeb | 0xef | 0xf6 | 0xfc | 0xff)) {
+                            out_phonemes.clear();
+                            out_end_phonemes.clear();
+                            out_end_type = 0;
+                            out_suffix_start = 0;
+                            out_stem_ph_len = 0;
+                            *word_vowel_count = 0;
+                            *word_stressed_count = 0;
+                            pos = word_start;
+                        }
                         continue;
                     }
                 }

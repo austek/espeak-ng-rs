@@ -62,6 +62,7 @@ jobs:
           --test french_letter_suffix
           --test accented_letters
           --test prefix_confirmation
+          --test accent_removal
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
