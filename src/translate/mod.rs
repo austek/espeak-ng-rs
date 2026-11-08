@@ -2584,6 +2584,21 @@ fn liaison_skip(c: u8) -> bool {
     (2..=8).contains(&c) || c == PHON_STRESS_TONIC || c == PHON_END_WORD || is_pause_code(c)
 }
 
+/// Whether the liaison phoneme `liaison` (`z2`, `t2`, `z3` …) is pronounced
+/// before `next`: a vowel always, and per `ph_french` also `j` (z2, t2) and
+/// `w/` (z2, z3).
+fn liaison_surfaces_before(
+    liaison: &crate::phoneme::table::PhonemeTab,
+    next: &crate::phoneme::table::PhonemeTab,
+) -> bool {
+    let b = liaison.mnemonic.to_le_bytes();
+    next.typ == 2 /* phVOWEL */
+        || match (b[0], b[1], next.mnemonic_str().as_str()) {
+            (b'z' | b't', b'2', "j") | (b'z', _, "w/") => true,
+            _ => false,
+        }
+}
+
 /// Context a token's neighbours provide for resolving French liaison phonemes at
 /// the *end* of the token (see `ph_french`: `z2`/`z3`/`t2`/`t3`).
 #[derive(Clone, Copy, Default)]
@@ -2875,7 +2890,7 @@ pub fn phonemes_to_ipa_full(
                         .take_while(|&&c| c != 0)
                         .find(|&&c| !liaison_skip(c))
                         .and_then(|&c| phdata.get(c))
-                        .map(|ph| ph.typ == 2 /* phVOWEL */);
+                        .map(|next| liaison_surfaces_before(ph, next));
                     match next_is_vowel {
                         // A real sound follows in-token: keep before a vowel, else drop.
                         Some(true) => {}
@@ -9586,7 +9601,7 @@ fn drop_unsurfaced_liaison(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData) {
         let next_is_vowel = real
             .get(n + 1)
             .and_then(|&k| phdata.get(codes[k].code))
-            .is_some_and(|n| n.typ == 2 /* phVOWEL */);
+            .is_some_and(|n| liaison_surfaces_before(ph, n));
         if !next_is_vowel {
             drop.push(i);
         }
