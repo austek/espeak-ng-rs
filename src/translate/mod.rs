@@ -5820,7 +5820,12 @@ fn spell_unpronounceable<'a>(
         if wr.phonemes.iter().all(|&b| b == 0) {
             return None;
         }
-        out.extend(wr.phonemes.iter().copied().filter(|&b| b != 0));
+        let name = if out.is_empty() {
+            &wr.phonemes[..]
+        } else {
+            without_leading_break(&wr.phonemes, stress_opts)
+        };
+        out.extend(name.iter().copied().filter(|&b| b != 0));
         rest = &rest[c.len_utf8()..];
         posn += 1;
         length = rest.chars().count();
@@ -5846,6 +5851,24 @@ fn spell_unpronounceable<'a>(
 
 /// Identity helper so `is_unpronounceable` can take the options by reference.
 fn lang_opts_ref(o: &LangOptions) -> &LangOptions { o }
+
+/// Drop the break that stress placement puts before a vowel-initial letter name.
+///
+/// C adds that break once for the whole spelled word, so only the first
+/// letter keeps it.  Languages without the `vowel_pause & 0x30` break write
+/// any leading pause in the letter name itself, which stays.
+fn without_leading_break<'a>(phonemes: &'a [u8], stress_opts: &StressOpts) -> &'a [u8] {
+    use crate::phoneme::{PHON_PAUSE_NOLINK, PHON_PAUSE_VSHORT};
+    match phonemes.first() {
+        Some(&c)
+            if stress_opts.vowel_pause & 0x30 != 0
+                && (c == PHON_PAUSE_NOLINK || c == PHON_PAUSE_VSHORT) =>
+        {
+            &phonemes[1..]
+        }
+        _ => phonemes,
+    }
+}
 
 /// Spell a word as its letters' *names*, run together as one word — C's
 /// `SpeakIndividualLetters` with `spell_word == 1`.
@@ -5873,7 +5896,12 @@ fn spell_word_letters(
         if wr.phonemes.iter().all(|&b| b == 0) {
             return None;
         }
-        out.extend(wr.phonemes.iter().copied().filter(|&b| b != 0));
+        let name = if out.is_empty() {
+            &wr.phonemes[..]
+        } else {
+            without_leading_break(&wr.phonemes, stress_opts)
+        };
+        out.extend(name.iter().copied().filter(|&b| b != 0));
     }
     if out.is_empty() {
         return None;
@@ -7377,7 +7405,9 @@ pub(crate) fn build_translate_entries(
                                 options,
                                 PosExpect { prev_letters, ..PosExpect::default() },
                             );
-                            ph.extend(tail.phonemes.iter().copied().filter(|&b| b != 0));
+                            ph.extend(
+                                without_leading_break(&tail.phonemes, stress_opts).iter().copied().filter(|&b| b != 0),
+                            );
                         }
                         wr.phonemes = ph;
                     }
@@ -8891,6 +8921,15 @@ impl Translator {
                     if !entry.phonemes.is_empty() {
                         use crate::dictionary::{FLAG_PAUSE1, FLAG_PREPAUSE};
                         let mut pre_pause = 0;
+                        let is_word = |t: &Token| {
+                            matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_))
+                        };
+                        let after = tokens[token_ix + 1..]
+                            .iter()
+                            .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
+                            .filter(|t| is_word(t))
+                            .count();
+                        // C drops the `$brk` pause on the last word of a clause.
                         if entry.dict_flags & FLAG_PAUSE1 != 0 {
                             pre_pause = 1;
                         }
@@ -8898,17 +8937,9 @@ impl Translator {
                         // clause and right after its first word, so it needs at
                         // least two words before it and one after.
                         if entry.dict_flags & FLAG_PREPAUSE != 0 {
-                            let is_word = |t: &Token| {
-                                matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_))
-                            };
                             let before = tokens[..token_ix]
                                 .iter()
                                 .rev()
-                                .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
-                                .filter(|t| is_word(t))
-                                .count();
-                            let after = tokens[token_ix + 1..]
-                                .iter()
                                 .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
                                 .filter(|t| is_word(t))
                                 .count();
