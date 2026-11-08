@@ -34,7 +34,7 @@ and commit the new `ceilings.json`. Ceilings may only go down. Raising one needs
 | fa | 0 | 0 |
 | fr | 53 | 53 |
 | it | 29 | 25 |
-| ku | 32 | 4 |
+| ku | 32 | 3 |
 | nl | 61 | 60 |
 | pl | 18 | 16 |
 | pt | 729 | 39 |

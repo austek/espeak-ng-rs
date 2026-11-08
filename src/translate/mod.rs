@@ -3988,21 +3988,16 @@ fn push_individual_digits(result: &mut Pronunciation, digits: &str, dict: &Dicti
     }
 }
 
-const MAX_GROUPED_DIGITS: usize = 32;
-
 /// Whether C splits the run into digit groups: 5 to 32 digits that exceed
-/// max_digits or start with 0, or more than 32 digits (spelled as one group).
+/// max_digits or start with 0. Longer runs take the bounded individual-digit path.
 fn reads_digit_by_digit(digits: &str, grammar: &NumberGrammar) -> bool {
     let n = digits.len();
-    n > MAX_GROUPED_DIGITS
-        || (n > 4 && (n > usize::from(grammar.max_digits) || digits.starts_with('0')))
+    (5..=MAX_GROUPED_DIGITS).contains(&n)
+        && (n > usize::from(grammar.max_digits) || digits.starts_with('0'))
 }
 
 fn digit_groups<'a>(digits: &'a str, grammar: &NumberGrammar) -> Vec<&'a str> {
     let n = digits.len();
-    if n > MAX_GROUPED_DIGITS {
-        return vec![digits];
-    }
     let mut starts: Vec<usize> = (1..n).filter(|j| grammar.break_numbers & (1 << (n - j)) != 0).collect();
     starts.insert(0, 0);
     starts.push(n);

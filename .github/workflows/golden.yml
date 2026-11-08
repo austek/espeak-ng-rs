@@ -32,6 +32,8 @@ jobs:
           --test ipa_from_codes
           --test upstream_1_53_parity
           --test geminates_and_alt_vowels
+          --test ku_hundred_link
+          --test max_digits
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
