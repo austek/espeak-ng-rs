@@ -4294,6 +4294,9 @@ pub struct PosExpect {
     /// Return the phonemes unstressed: the caller is a prefix branch that
     /// stresses prefix and stem together, as C's `TranslateWord3` does.
     pub defer_stress: bool,
+    /// Flags of the whole word, set while its stem is translated after a
+    /// prefix was removed.
+    pub word_flags: u32,
 }
 
 /// A [`PosExpect`] carrying only the opening of the word that follows, so a
@@ -4696,6 +4699,9 @@ fn word_to_phonemes_inner(
         .filter(|r| r.flags1.0 & (FLAG_FOUND_ATTRIBUTES | 0x8000_0000) != 0)
         .map(|r| r.flags1.0)
         .unwrap_or(0);
+    // A stem translated after prefix removal gets its rule conditions from the
+    // flags of the whole word.
+    let rules_flags = if expect.word_flags != 0 { expect.word_flags } else { dict_flags_from_lookup };
 
     if let Some(ref result) = dict_result {
         if result.flags1.found() && !result.phonemes.is_empty() {
@@ -4915,7 +4921,7 @@ fn word_to_phonemes_inner(
         &word_buf,
         word_start, // past the leading space and any in-word pre-context
         rule_word_flags,
-        dict_flags_from_lookup,
+        rules_flags,
         &letter_bits,
         lang_opts.dict_condition,
         &mut vowel_count,
@@ -4935,7 +4941,7 @@ fn word_to_phonemes_inner(
             &word_buf,
             word_start,
             rule_word_flags,
-            dict_flags_from_lookup,
+            rules_flags,
             &letter_bits,
             lang_opts.dict_condition,
             &mut vc,
@@ -4977,7 +4983,7 @@ fn word_to_phonemes_inner(
                     stress_opts,
                     lang_opts,
                     stem_word_flags,
-                    PosExpect { defer_stress: true, ..expect },
+                    PosExpect { defer_stress: true, word_flags: rules_flags, ..expect },
                 );
                 let mut stem_ph = Vec::new();
                 append_raw_phonemes(&mut stem_ph, &stem_wr.phonemes);
