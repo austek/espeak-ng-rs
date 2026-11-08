@@ -151,6 +151,12 @@ pub(super) struct OrdinalNumbers<'a> {
     pub numbers2: u32,
     pub ph_ordinal2: Vec<u8>,
     pub ph_ordinal2x: Vec<u8>,
+    /// Whether the number is an ordinal (C's ordinal bit in `LookupNum3`).
+    pub ordinal: bool,
+    /// Pronunciation of the last digits found together with the next word
+    /// (C `digit_lookup`), and how many digits it covers (`n_digit_lookup`).
+    pub digit_lookup: Vec<u8>,
+    pub digit_lookup_len: usize,
 }
 
 fn is_stress_code(code: u8) -> bool {
@@ -214,7 +220,16 @@ impl OrdinalNumbers<'_> {
         let (mut ph_ordinal, mut ph_tens, mut ph_digits) = (Vec::new(), Vec::new(), Vec::new());
         let (mut found, mut found_ordinal) = (false, false);
 
-        if control & 8 != 0 {
+        if control & 2 != 0 && self.digit_lookup_len == 2 {
+            let mut out = self.digit_lookup.clone();
+            self.limit_stress(&mut out);
+            return (out, false);
+        }
+        let digit_lookup = !self.digit_lookup.is_empty();
+
+        if digit_lookup {
+            // The last digits already have a pronunciation: speak tens and units.
+        } else if control & 8 != 0 {
             found = self.lk_into(&format!("_{value}fx"), &mut ph_digits)
                 || self.lk_into(&format!("_{value}f"), &mut ph_digits);
         } else if is_ordinal {
@@ -233,7 +248,7 @@ impl OrdinalNumbers<'_> {
             found_ordinal = found;
         }
 
-        if !found {
+        if !found && !digit_lookup {
             if control & 2 == 0 {
                 let variant = if self.has2(NUM2_ORDINAL_AND_THOUSANDS) && thousandplex <= 1 {
                     'o'
@@ -265,7 +280,11 @@ impl OrdinalNumbers<'_> {
                 ph_tens = self.lk(&format!("_{}X", tens & 0xfe));
             }
             ph_digits.clear();
-            if units > 0 {
+            if units > 0 && control & 2 != 0 && digit_lookup {
+                ph_digits = self.digit_lookup.clone();
+                found_ordinal = true;
+                ph_ordinal.clear();
+            } else if units > 0 {
                 let mut hit = false;
                 if control & 8 != 0 {
                     hit = self.lk_into(&format!("_{units}f"), &mut ph_digits);
@@ -346,7 +365,7 @@ impl OrdinalNumbers<'_> {
 
         if hundreds > 0 || say_zero_hundred {
             let mut ph_100 = Vec::new();
-            let mut found = tensunits == 0 && self.lk_into("_0Co", &mut ph_100);
+            let mut found = self.ordinal && tensunits == 0 && self.lk_into("_0Co", &mut ph_100);
             if !found {
                 found = tensunits == 0 && self.lk_into("_0C0", &mut ph_100);
                 if !found {
@@ -359,7 +378,7 @@ impl OrdinalNumbers<'_> {
             }
             suppress_null = true;
             found = false;
-            if tensunits == 0 || self.has2(NUM2_MULTIPLE_ORDINAL) {
+            if self.ordinal && (tensunits == 0 || self.has2(NUM2_MULTIPLE_ORDINAL)) {
                 found = self.lk_into(&format!("_{hundreds}Co"), &mut ph_digits);
                 if self.has2(NUM2_MULTIPLE_ORDINAL) && tensunits > 0 {
                     ph_digits.extend_from_slice(&self.ph_ordinal2);
@@ -388,7 +407,7 @@ impl OrdinalNumbers<'_> {
         }
 
         let mut ph_hundred_and = Vec::new();
-        if tensunits > 0 && !(self.has2(NUM2_MULTIPLE_ORDINAL)) {
+        if tensunits > 0 && !(self.ordinal && self.has2(NUM2_MULTIPLE_ORDINAL)) {
             let wants_and = self.has(NUM_HUNDRED_AND)
                 || (self.has(NUM_HUNDRED_AND_DIGIT) && tensunits < 10);
             if (value > 100 || previous_thousands) && wants_and {
@@ -401,7 +420,7 @@ impl OrdinalNumbers<'_> {
 
         let mut buf2 = Vec::new();
         if tensunits != 0 || !suppress_null {
-            let mut x = 3;
+            let mut x = if self.ordinal { 3 } else { 2 };
             if value < 100 && !previous_thousands {
                 x |= 4;
             }

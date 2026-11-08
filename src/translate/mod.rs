@@ -201,7 +201,7 @@ fn resolve_voice_lang(selector: &str, data_dir: &Path) -> Option<String> {
 use crate::error::{Error, Result};
 use crate::phoneme::load::PhonemeData;
 use crate::dictionary::file::Dictionary;
-use crate::dictionary::lookup::{lookup, LookupCtx};
+use crate::dictionary::lookup::{lookup, lookup_dict2_follow, LookupCtx};
 use crate::dictionary::rules::is_letter_wc;
 use crate::dictionary::rules::translate_rules_phdata;
 use crate::dictionary::{
@@ -580,10 +580,6 @@ pub struct OrdinalGrammar {
     pub indicator: Option<String>,
     /// Whether `3.`-style ordinals are accepted.
     pub dot_marks_ordinal: bool,
-    /// French letter-suffix ordinals (`1er`, `1re`, `2e`, `2nd`, `3ème`, …).
-    /// These carry gender/second-vs-deuxième information the renderer uses to
-    /// generate the ordinal word (`premier`/`première`/`deuxième`/`second`).
-    pub french: bool,
     /// Germanic compound ordinals: a compound like 21 forms its ordinal as the
     /// whole *cardinal* + the ordinal suffix ("einundzwanzig" + "ste" =
     /// "einundzwanzigste"), not tens-ordinal + units-ordinal ("zwanzig erste").
@@ -659,7 +655,6 @@ impl NumberGrammar {
                 grammar.group_separator = Some('.');
             }
             "fr" => {
-                grammar.ordinals.french = true; // 1er, 2e, 2nd, 3ème …
                 grammar.hundreds.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
@@ -1279,7 +1274,6 @@ fn is_ordinal_suffix(suffix: &str, digits: &str, grammar: &NumberGrammar) -> boo
         return true; // Iberian gender markers, independent of the number
     }
     grammar.ordinals.indicator.as_deref() == Some(suffix)
-        || (grammar.ordinals.french && is_french_ordinal_suffix(suffix))
         || (!matches!(suffix, "st" | "nd" | "rd" | "th")
             && grammar.ordinals.dict_suffixes.iter().any(|s| s == suffix))
 }
@@ -1335,128 +1329,6 @@ fn with_dict_ordinal_suffixes(grammar: &NumberGrammar, text: &str, dict: &Dictio
         .filter(|suffix| !lookup_num_phonemes(dict, &format!("_#{suffix}")).is_empty())
         .collect();
     extended
-}
-
-/// The French written ordinal markers: `1er`/`1ers` (premier), `1re`/`1ère`
-/// (première), `2e`/`2ème`/`2eme`/`2es` (deuxième), `2nd`/`2nde` (second).
-fn is_french_ordinal_suffix(suffix: &str) -> bool {
-    matches!(
-        suffix,
-        "er" | "ers" | "re" | "res" | "ère" | "ères"
-            | "e" | "es" | "ème" | "èmes" | "eme" | "emes"
-            | "nd" | "nds" | "nde" | "ndes"
-    )
-}
-
-/// Spell a French cardinal number in the range `0..=999` as text (the vigesimal
-/// system: `71` → "soixante et onze", `80` → "quatre-vingts", `234` → "deux cent
-/// trente-quatre").  Used only to build ordinals (the phoneme path renders
-/// cardinals directly), so it stays under 1000.
-fn fr_cardinal_text(n: u32) -> String {
-    const U: [&str; 20] = [
-        "zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf",
-        "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize",
-        "dix-sept", "dix-huit", "dix-neuf",
-    ];
-    if n < 20 {
-        return U[n as usize].to_string();
-    }
-    if n < 60 {
-        let (tens, u) = (n / 10, n % 10);
-        let base = match tens {
-            2 => "vingt",
-            3 => "trente",
-            4 => "quarante",
-            5 => "cinquante",
-            _ => unreachable!(),
-        };
-        return match u {
-            0 => base.to_string(),
-            1 => format!("{base} et un"),
-            _ => format!("{base}-{}", U[u as usize]),
-        };
-    }
-    if n < 80 {
-        // soixante + (0..=19): "soixante", "soixante et un/onze", "soixante-dix"…
-        return match n - 60 {
-            0 => "soixante".to_string(),
-            1 => "soixante et un".to_string(),
-            11 => "soixante et onze".to_string(),
-            inner => format!("soixante-{}", U[inner as usize]),
-        };
-    }
-    if n < 100 {
-        // quatre-vingt(s) + (0..=19); no "et", plural "s" only on bare 80.
-        return match n - 80 {
-            0 => "quatre-vingts".to_string(),
-            inner => format!("quatre-vingt-{}", U[inner as usize]),
-        };
-    }
-    // 100..=999.
-    let (h, rest) = (n / 100, n % 100);
-    let mut head = if h == 1 { "cent".to_string() } else { format!("{} cent", U[h as usize]) };
-    if h > 1 && rest == 0 {
-        head.push('s'); // "deux cents"
-    }
-    if rest == 0 {
-        head
-    } else {
-        format!("{head} {}", fr_cardinal_text(rest))
-    }
-}
-
-/// Turn the final cardinal word into its ordinal stem + "ième"
-/// (`quatre`→"quatrième", `cinq`→"cinquième", `neuf`→"neuvième", `un`→"unième").
-fn ordinalize_fr_word(w: &str) -> String {
-    match w {
-        "un" => return "unième".to_string(),
-        "cinq" => return "cinquième".to_string(),
-        "neuf" => return "neuvième".to_string(),
-        // The only plural forms that surface as a final word: "quatre-vingts"
-        // (80) and "deux cents" (200) → "…vingtième"/"…centième".
-        "vingt" | "vingts" => return "vingtième".to_string(),
-        "cent" | "cents" => return "centième".to_string(),
-        _ => {}
-    }
-    // Drop a silent final "e" (quatre→quatr, onze→onz, trente→trent); words
-    // ending in a *sounded* consonant (trois, six, sept) keep it.
-    let stem = w.strip_suffix('e').unwrap_or(w);
-    format!("{stem}ième")
-}
-
-/// Build the French ordinal *word* for `digits` (a written ordinal like `1er`,
-/// `2e`, `21e`) using its `suffix` for gender/`second` disambiguation.  Returns
-/// `None` outside `1..=1000` (the caller then falls back to the cardinal).
-///
-/// The fr dictionary ships no `_No` ordinal entries, so the number path can't
-/// produce "premier"/"deuxième"; instead we generate the word and let the
-/// French letter-to-sound rules pronounce it (verified to render cleanly).
-fn french_ordinal_word(digits: &str, suffix: &str) -> Option<String> {
-    let n: u32 = digits.parse().ok()?;
-    if n == 0 {
-        return None;
-    }
-    if n == 1 {
-        let feminine = matches!(suffix, "re" | "res" | "ère" | "ères");
-        return Some(if feminine { "première" } else { "premier" }.to_string());
-    }
-    if n == 2 && matches!(suffix, "nd" | "nds" | "nde" | "ndes") {
-        let feminine = matches!(suffix, "nde" | "ndes");
-        return Some(if feminine { "seconde" } else { "second" }.to_string());
-    }
-    if n == 1000 {
-        return Some("millième".to_string());
-    }
-    if n > 999 {
-        return None;
-    }
-    // Ordinalise the last hyphen/space-delimited word of the cardinal.
-    let card = fr_cardinal_text(n);
-    let (head, last) = match card.rfind(['-', ' ']) {
-        Some(i) => (&card[..=i], &card[i + 1..]),
-        None => ("", card.as_str()),
-    };
-    Some(format!("{head}{}", ordinalize_fr_word(last)))
 }
 
 /// Spell a Portuguese cardinal group `0..=999` as text (European Portuguese).
@@ -4134,6 +4006,27 @@ fn scale_group_is_exact(digits: &str, scale: Option<u8>) -> bool {
     }
 }
 
+/// The pronunciation of the last one or two digits of `digits` that a
+/// multi-word dictionary entry gives together with the word glued to them
+/// (fr `(21 ème)`, `(1 er)`), and how many digits it covers.  C
+/// `TranslateNumber_1` tries two digits first, then one digit unless it is `0`.
+fn lookup_digit_follow(dict: &Dictionary, digits: &str, word: &str) -> Option<(Vec<u8>, usize)> {
+    let follow = format!("{} ", word.to_lowercase());
+    let ctx = LookupCtx {
+        lookup_symbol: true,
+        dict_condition: dict.dict_condition,
+        ..Default::default()
+    };
+    let attempt = |n: usize| {
+        let key = digits.get(digits.len().checked_sub(n)?..)?;
+        lookup_dict2_follow(dict, key.as_bytes(), &ctx, follow.as_bytes())
+            .filter(|found| found.skipwords > 0 && !found.phonemes.is_empty())
+            .map(|found| (trim_lookup(&found.phonemes).to_vec(), n))
+    };
+    let single_is_zero = digits.ends_with('0');
+    attempt(2).or_else(|| if single_is_zero { None } else { attempt(1) })
+}
+
 /// Try to interpret a word as an ordinal number (e.g. "2nd", "1st", "3º").
 ///
 /// Splits the word into a leading digit string and a trailing non-digit suffix,
@@ -4166,9 +4059,14 @@ fn try_ordinal_number(
         }
         OrdinalMarker::Dot => grammar.ordinals.dot_marks_ordinal,
     };
-    if !is_ordinal {
+    let follow = match &ordinal.marker {
+        OrdinalMarker::Suffix(suffix) if !is_ordinal => lookup_digit_follow(dict, &ordinal.digits, suffix),
+        _ => None,
+    };
+    if !is_ordinal && follow.is_none() {
         return None;
     }
+    let (digit_lookup, digit_lookup_len) = follow.unwrap_or_default();
     let numbers = ordinal::OrdinalNumbers {
         dict,
         phdata,
@@ -4176,16 +4074,29 @@ fn try_ordinal_number(
         numbers2: grammar.c_numbers2,
         ph_ordinal2: suffix_ph,
         ph_ordinal2x: suffix_ph_alt,
+        ordinal: is_ordinal,
+        digit_lookup,
+        digit_lookup_len,
     };
 
-    let digits = ordinal.digits.as_str();
-    if digits.is_empty()
-        || digits.len() > MAX_GROUPED_DIGITS
-        || !digits.bytes().all(|b| b.is_ascii_digit())
+    let all_digits = ordinal.digits.as_str();
+    if all_digits.is_empty()
+        || all_digits.len() > MAX_GROUPED_DIGITS
+        || !all_digits.bytes().all(|b| b.is_ascii_digit())
     {
         return None;
     }
     let mut pronunciation = Pronunciation::default();
+    // A short leading-zero run is spoken as zeros first, as for a cardinal.
+    let spoken_zeros = if numbers.digit_lookup.is_empty() || all_digits.len() > 3 {
+        0
+    } else {
+        all_digits.bytes().take(all_digits.len() - 1).take_while(|&b| b == b'0').count()
+    };
+    for _ in 0..spoken_zeros {
+        pronunciation.append_lookup_suffix(&lookup_num_phonemes(dict, "_0"));
+    }
+    let digits = &all_digits[spoken_zeros..];
     let year = digits.parse::<u32>().ok().filter(|year| {
         grammar.year_1900 && digits.len() == 4 && (1900..=1999).contains(year)
     });
@@ -4221,6 +4132,9 @@ fn try_ordinal_number(
     }
 
     let final_group = groups[last_nonzero];
+    if final_group.scale.is_some() && !numbers.digit_lookup.is_empty() {
+        return None;
+    }
     if let Some(scale) = final_group.scale {
         append_ordinal_scale(&mut pronunciation, final_group.value, scale, dict, grammar);
         pronunciation.push_c_words(&numbers.ph_ordinal2);
@@ -6143,7 +6057,6 @@ fn ordinal_is_recognised(ordinal: &OrdinalNumber, dict: &Dictionary, grammar: &N
         OrdinalMarker::Dot => true,
         OrdinalMarker::Suffix(suffix) => {
             grammar.ordinals.indicator.as_deref() == Some(suffix)
-                || (grammar.ordinals.french && is_french_ordinal_suffix(suffix))
                 || !lookup_num_phonemes(dict, &format!("_#{suffix}")).is_empty()
         }
     }
@@ -6162,6 +6075,27 @@ fn split_unrecognised_ordinals(tokens: &mut Vec<Token>, dict: &Dictionary, gramm
         other => vec![other],
     };
     *tokens = std::mem::take(tokens).into_iter().flat_map(split).collect();
+}
+
+/// Join a cardinal and the word glued to it into one ordinal-style token when
+/// the dictionary has a multi-word entry for them (fr `1er`, `21ème`); the
+/// number then consumes the word, as C's `FLAG_SKIPWORDS` does.
+fn merge_digit_follow(tokens: &mut Vec<Token>, dict: &Dictionary) {
+    let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
+    let mut iter = std::mem::take(tokens).into_iter().peekable();
+    while let Some(token) = iter.next() {
+        if let (Token::Number(NumberToken::Cardinal(digits)), Some(Token::Word(word))) = (&token, iter.peek()) {
+            if lookup_digit_follow(dict, digits, word).is_some() {
+                let marker = OrdinalMarker::Suffix(word.clone());
+                let merged = NumberToken::Ordinal(OrdinalNumber { digits: digits.clone(), marker });
+                iter.next();
+                out.push(Token::Number(merged));
+                continue;
+            }
+        }
+        out.push(token);
+    }
+    *tokens = out;
 }
 
 /// Convert an uppercase Roman numeral that immediately follows a recognised
@@ -7630,69 +7564,6 @@ pub(crate) fn build_translate_entries(
                         continue;
                     }
                 }
-                // French letter-suffix ordinals (1er, 2e, 21e…): the fr dict has
-                // no `_No` ordinal words, so build the ordinal word from the value
-                // and let the French rules pronounce it ("premier"/"deuxième").
-                if options.number_grammar.ordinals.french {
-                    if let NumberToken::Ordinal(ord) = token {
-                        if let OrdinalMarker::Suffix(suffix) = &ord.marker {
-                            if let Some(word) = french_ordinal_word(&ord.digits, suffix) {
-                                // The word may be several tokens ("vingt et
-                                // unième", "deux cent trente-quatrième").  Split
-                                // on spaces *and* hyphens — the tokenizer treats a
-                                // hyphen between letters as a word break, so
-                                // "quatre-vingtième" must render the same whether
-                                // generated here or typed.  Join into ONE entry
-                                // with word-boundary markers.
-                                let mut phonemes: Vec<u8> = Vec::new();
-                                let parts: Vec<&str> = word
-                                    .split(|c: char| c.is_whitespace() || c == '-')
-                                    .filter(|p| !p.is_empty())
-                                    .collect();
-                                for (pi, part) in parts.iter().enumerate() {
-                                    let wr = word_to_phonemes_pos(
-                                        part, dict, phdata, stress_opts, options,
-                                        expect_before(parts.get(pi + 1).copied()),
-                                    );
-                                    let ph = wr.phonemes.strip_suffix(&[0]).unwrap_or(&wr.phonemes);
-                                    if ph.is_empty() {
-                                        continue;
-                                    }
-                                    if !phonemes.is_empty() {
-                                        phonemes.push(crate::phoneme::PHON_END_WORD);
-                                    }
-                                    phonemes.extend_from_slice(ph);
-                                }
-                                entries.push(TranslateEntry {
-                                    phonemes,
-                                    dict_flags: 0,
-                                    kind:       TranslateEntryKind::Word,
-                                    word_lower: Some(word),
-                        no_word_gap: false,
-                                    found_in_list: false,
-                                });
-                                continue;
-                            }
-                            // Beyond the generator's range (≥1001): the fr dict has
-                            // no ordinal words, so the ordinal path is silent — read
-                            // the plain cardinal so the number isn't dropped.
-                            let card = NumberToken::Cardinal(ord.digits.clone());
-                            if let Some(wr) = translate_number_token(
-                                &card, dict, phdata, stress_opts, &options.number_grammar,
-                            ) {
-                                entries.push(TranslateEntry {
-                                    phonemes:   wr.phonemes,
-                                    dict_flags: wr.dict_flags,
-                    found_in_list: wr.found_in_list,
-                                    kind:       TranslateEntryKind::Word,
-                                    word_lower: Some(ord.digits.clone()),
-                        no_word_gap: false
-                                });
-                                continue;
-                            }
-                        }
-                    }
-                }
                 let wr = translate_number_token(
                     token,
                     dict,
@@ -8720,6 +8591,7 @@ impl Translator {
         let number_grammar = with_dict_ordinal_suffixes(&self.options.number_grammar, &text, &dict);
         let mut tokens = split_overlong_clauses(tokenize_opts(&text, &number_grammar));
         split_unrecognised_ordinals(&mut tokens, &dict, &number_grammar);
+        merge_digit_follow(&mut tokens, &dict);
         apply_roman_numerals(&mut tokens, lang);
         suppress_abbreviation_periods(&mut tokens, lang);
         apply_time_reading(&mut tokens, lang);
@@ -11120,48 +10992,6 @@ mod tests {
             assert!(!ipa.chars().any(|c| c.is_ascii_digit()),
                 "fr {input} has raw digits in IPA: {ipa}");
         }
-    }
-
-    #[test]
-    fn french_cardinal_text_vigesimal() {
-        // The vigesimal speller used to build ordinals (data-free).
-        let cases = [
-            (0, "zéro"), (7, "sept"), (16, "seize"), (17, "dix-sept"),
-            (20, "vingt"), (21, "vingt et un"), (22, "vingt-deux"),
-            (31, "trente et un"), (60, "soixante"), (61, "soixante et un"),
-            (70, "soixante-dix"), (71, "soixante et onze"), (77, "soixante-dix-sept"),
-            (80, "quatre-vingts"), (81, "quatre-vingt-un"), (90, "quatre-vingt-dix"),
-            (91, "quatre-vingt-onze"), (99, "quatre-vingt-dix-neuf"),
-            (100, "cent"), (101, "cent un"), (200, "deux cents"),
-            (234, "deux cent trente-quatre"), (999, "neuf cent quatre-vingt-dix-neuf"),
-        ];
-        for (n, want) in cases {
-            assert_eq!(fr_cardinal_text(n), want, "fr_cardinal_text({n})");
-        }
-    }
-
-    #[test]
-    fn french_ordinal_word_generation() {
-        // digits + written suffix → ordinal word (data-free).
-        let cases = [
-            ("1", "er", "premier"), ("1", "re", "première"), ("1", "ère", "première"),
-            ("2", "e", "deuxième"), ("2", "nd", "second"), ("2", "nde", "seconde"),
-            ("3", "e", "troisième"), ("4", "e", "quatrième"), ("5", "e", "cinquième"),
-            ("9", "e", "neuvième"), ("11", "e", "onzième"), ("17", "e", "dix-septième"),
-            ("20", "e", "vingtième"), ("21", "e", "vingt et unième"),
-            ("22", "e", "vingt-deuxième"), ("70", "e", "soixante-dixième"),
-            ("71", "e", "soixante et onzième"), ("80", "e", "quatre-vingtième"),
-            ("81", "e", "quatre-vingt-unième"), ("90", "e", "quatre-vingt-dixième"),
-            ("99", "e", "quatre-vingt-dix-neuvième"), ("100", "e", "centième"),
-            ("200", "e", "deux centième"), ("234", "e", "deux cent trente-quatrième"),
-            ("1000", "e", "millième"),
-        ];
-        for (d, suf, want) in cases {
-            assert_eq!(french_ordinal_word(d, suf).as_deref(), Some(want), "{d}{suf}");
-        }
-        // Out of range (no cheap ordinal word) → None (caller reads cardinal).
-        assert_eq!(french_ordinal_word("0", "e"), None);
-        assert_eq!(french_ordinal_word("5000", "e"), None);
     }
 
     #[test]

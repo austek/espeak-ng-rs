@@ -107,36 +107,12 @@ fn french_letter_suffix_ordinals() {
         return;
     };
     let ipa = |s: &str| t.text_to_ipa(s).unwrap();
-    // A written ordinal (1er, 2e, 21e…) reads as the ordinal *word*, identical
-    // to typing that word — the fr dict has no `_No` entries, so this is
-    // generated + pronounced by the French rules.
-    let cases: &[(&str, &str)] = &[
-        ("1er", "premier"),
-        ("1re", "première"),
-        ("2e", "deuxième"),
-        ("2nd", "second"),
-        ("3e", "troisième"),
-        ("5e", "cinquième"),
-        ("9e", "neuvième"),
-        ("20e", "vingtième"),
-        ("21e", "vingt et unième"),
-        ("71e", "soixante et onzième"),
-        ("80e", "quatre-vingtième"),
-        ("100e", "centième"),
-        ("1000e", "millième"),
-    ];
-    for (digit, word) in cases {
-        // The written form joins its hyphenated parts into one word
-        // ("quatre-vingtième" → `kˈatʁvɛ̃tjˈɛm`) while the composed number keeps
-        // them separate, so compare the phonemes rather than the spacing.
-        assert_eq!(
-            ipa(digit).replace(' ', ""),
-            ipa(word).replace(' ', ""),
-            "fr {digit:?} should read as {word:?}"
-        );
-    }
-    // In-sentence: "le 1er janvier" == "le premier janvier".
+    // Only the dictionary's own forms (1er, 1ère) read as the ordinal word;
+    // other suffixes are letters after the cardinal (C espeak-ng master).
+    assert_eq!(ipa("1er"), ipa("premier"));
+    assert_eq!(ipa("1ère"), ipa("première"));
     assert_eq!(ipa("le 1er janvier"), ipa("le premier janvier"));
+    assert_eq!(ipa("2e"), "dˈø ˈə");
     // Not an ordinal: a plain decimal is untouched.
     assert!(ipa("3,5").contains("viʁɡyl"), "fr 3,5 decimal: {}", ipa("3,5"));
 }

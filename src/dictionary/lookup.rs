@@ -103,6 +103,19 @@ pub fn lookup_dict2(
     word: &[u8],  // word bytes (no null terminator expected)
     ctx: &LookupCtx,
 ) -> Option<LookupResult> {
+    lookup_dict2_follow(dict, word, ctx, &[])
+}
+
+/// [`lookup_dict2`] with the text that follows the word (C's `word2`), so a
+/// multi-word entry such as `(1 er)` matches when `follow` starts with the
+/// entry's words and a trailing space.  An empty `follow` fails every
+/// multi-word entry.
+pub fn lookup_dict2_follow(
+    dict: &Dictionary,
+    word: &[u8],
+    ctx: &LookupCtx,
+    follow: &[u8],
+) -> Option<LookupResult> {
 
     // Apply TransposeAlphabet compression if configured (all Latin-script langs).
     let word_str = std::str::from_utf8(word).unwrap_or("");
@@ -198,12 +211,11 @@ pub fn lookup_dict2(
                 }
             } else if flag > 80 {
                 // Multi-word match: flag = 81..90 means skip (flag-80) words.
-                // The remaining bytes in this entry are the following word's text.
-                // C code: if (strncmp(word2, p, n_chars) != 0) condition_failed = true;
-                // Since LookupCtx has no word2 (standalone single-word lookup),
-                // we always fail multi-word entries here.
+                // The remaining bytes in this entry are the following words' text.
                 skipwords = (flag - 80) as usize;
-                condition_failed = true;
+                if !follow.starts_with(&data[p..entry_end]) {
+                    condition_failed = true;
+                }
                 p = entry_end;
             } else if flag > 64 {
                 // Stressed syllable: put in bits 0-3 of flags1
