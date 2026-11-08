@@ -27,6 +27,7 @@ pub mod ipa_table;
 pub mod phoneme_ipa;
 pub mod compat;
 pub mod ssml;
+mod accent;
 mod ordinal;
 
 use std::path::{Path, PathBuf};
@@ -4676,6 +4677,25 @@ fn word_to_phonemes_inner(
     // flags of the whole word.
     let rules_flags = if expect.word_flags != 0 { expect.word_flags } else { dict_flags_from_lookup };
 
+    // An `$accent` entry without a pronunciation is spoken as the letter's
+    // accent-table name (`é` → "e acute").
+    if let Some(ref result) = dict_result {
+        if result.flags2.contains(crate::dictionary::FLAG_ACCENT)
+            && result.phonemes.iter().all(|&b| b == 0)
+        {
+            let letter = word.strip_prefix('_').unwrap_or(word).chars().next();
+            let mut phonemes = letter
+                .map(|c| accented_letter_phonemes(c, dict, phdata, stress_opts, lang_opts))
+                .unwrap_or_default();
+            if !phonemes.is_empty() {
+                phonemes.push(0);
+                let dict_flags = result.flags1.0;
+                set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags), -1, 0);
+                return WordResult { phonemes, dict_flags, found_in_list: false };
+            }
+        }
+    }
+
     if let Some(ref result) = dict_result {
         if result.flags1.found() && !result.phonemes.is_empty() {
             // TEXTMODE entry: the "phonemes" are really a replacement *text*
@@ -4940,6 +4960,23 @@ fn word_to_phonemes_inner(
             return true;
         }
         r.phonemes.iter().any(|&b| b != 0) || r.end_phonemes.iter().any(|&b| b != 0)
+    }
+
+    // A lone letter the rules don't cover is spoken as its name, built from the
+    // accent tables when it has none (C's `LookupLetter` fallback).
+    if result.spellword
+        && rule_word_flags == 0
+        && word.chars().count() == 1
+        && result.phonemes.iter().all(|&b| b == 0)
+    {
+        if let Some(c) = word.chars().next() {
+            let mut phonemes = accented_letter_phonemes(c, dict, phdata, stress_opts, lang_opts);
+            if !phonemes.is_empty() {
+                phonemes.push(0);
+                set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags_from_lookup), -1, 0);
+                return WordResult { phonemes, dict_flags: dict_flags_from_lookup, found_in_list: false };
+            }
+        }
     }
 
     if rules_produced_output(&result) {
@@ -5895,6 +5932,101 @@ fn without_leading_break<'a>(phonemes: &'a [u8], stress_opts: &StressOpts) -> &'
         }
         _ => phonemes,
     }
+}
+
+/// The language's own dictionary entry for `key`, unstressed, with its flags.
+fn raw_list_entry(
+    key: &str,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+) -> Option<(Vec<u8>, u32)> {
+    let expect = PosExpect { defer_stress: true, ..PosExpect::default() };
+    let wr = word_to_phonemes_inner(key, dict, phdata, stress_opts, options, 0, expect);
+    let ph: Vec<u8> = wr.phonemes.into_iter().filter(|&b| b != 0).collect();
+    (wr.found_in_list && !ph.is_empty()).then_some((ph, wr.dict_flags))
+}
+
+/// C's `LookupLetter2`: the name of a base letter, from `_x`, then `x`, then
+/// the letter-to-sound rules.
+fn base_letter_name(
+    letter: u32,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+) -> Vec<u8> {
+    let Some(c) = char::from_u32(letter) else { return Vec::new() };
+    let key = c.to_string();
+    let named = raw_list_entry(&format!("_{key}"), dict, phdata, stress_opts, options)
+        .or_else(|| raw_list_entry(&key, dict, phdata, stress_opts, options));
+    match named {
+        Some((ph, _)) => ph,
+        None => {
+            let expect = PosExpect { defer_stress: true, ..PosExpect::default() };
+            word_to_phonemes_inner(&key, dict, phdata, stress_opts, options, 0, expect)
+                .phonemes
+                .into_iter()
+                .filter(|&b| b != 0)
+                .collect()
+        }
+    }
+}
+
+/// C's `LookupAccentedLetter`: the name of an accented letter, ligature or
+/// IPA letter built from its base letter's name and its accent's name.
+/// Empty when the letter has no table entry or the language lacks a name.
+fn accented_letter_phonemes(
+    letter: char,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+) -> Vec<u8> {
+    use crate::phoneme::{PHON_PAUSE_VSHORT, PHON_STRESS_2, PHON_STRESS_P};
+    const FLAG_ACCENT_BEFORE: u32 = 0x1000;
+    let Some(spec) = accent::accent_spec(letter as u32) else { return Vec::new() };
+    let entry = |key: &str| raw_list_entry(key, dict, phdata, stress_opts, options);
+    let Some((accent1, flags1)) = entry(spec.accent1.0) else { return Vec::new() };
+    let first = base_letter_name(spec.basic, dict, phdata, stress_opts, options);
+    if first.is_empty() {
+        return Vec::new();
+    }
+    let mut out: Vec<u8> = Vec::new();
+    let mut accent2: Vec<u8> = Vec::new();
+    if let Some((ph, flags2)) = spec.accent2.and_then(entry) {
+        if flags2 & FLAG_ACCENT_BEFORE != 0 {
+            out.extend(ph);
+        } else {
+            accent2 = ph;
+        }
+    }
+    if let Some(second) = spec.second {
+        out.extend(accent1);
+        out.push(PHON_PAUSE_VSHORT);
+        out.extend(first);
+        out.push(PHON_STRESS_P);
+        out.extend(base_letter_name(second, dict, phdata, stress_opts, options));
+        out.extend(accent2);
+    } else if accents_say_first(&options.lang) || flags1 & FLAG_ACCENT_BEFORE != 0 || spec.accent1.1 {
+        out.extend(accent1);
+        out.extend([PHON_PAUSE_VSHORT, PHON_STRESS_P]);
+        out.extend(first);
+    } else {
+        out.push(PHON_STRESS_2);
+        out.extend(first);
+        out.push(PHON_PAUSE_VSHORT);
+        out.extend(accent1);
+        out.push(PHON_PAUSE_VSHORT);
+    }
+    out
+}
+
+/// `langopts.accents & 1`: Afrikaans, Croatian, Bosnian, Serbian and Swedish
+/// say the accent name before the letter name.
+fn accents_say_first(lang: &str) -> bool {
+    matches!(primary_bcp47_subtag(lang), "af" | "hr" | "bs" | "sr" | "sv")
 }
 
 /// Spell a word as its letters' *names*, run together as one word — C's

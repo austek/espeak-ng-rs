@@ -60,6 +60,7 @@ jobs:
           --test ordinal_dot_context
           --test french_liaison_glide
           --test french_letter_suffix
+          --test accented_letters
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
