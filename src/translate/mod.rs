@@ -3015,14 +3015,12 @@ fn english_suffix_needs_e(stem: &str, dict: &Dictionary) -> bool {
 /// `graden`) doubles to `graad`, while `grond` (from `gronden`) does not.
 fn dutch_suffix_doubles_vowel(stem: &str, dict: &Dictionary) -> bool {
     let chars: Vec<char> = stem.chars().collect();
-    if chars.len() < 3 {
+    if chars.len() < 2 {
         return false;
     }
-    let (last, vowel, before) = (
-        chars[chars.len() - 1],
-        chars[chars.len() - 2],
-        chars[chars.len() - 3],
-    );
+    let (last, vowel) = (chars[chars.len() - 1], chars[chars.len() - 2]);
+    // Before a two-letter stem C reads the space that precedes the word.
+    let before = chars.len().checked_sub(3).map(|i| chars[i]);
     if !last.is_ascii() || !vowel.is_ascii() {
         return false;
     }
@@ -3032,7 +3030,7 @@ fn dutch_suffix_doubles_vowel(stem: &str, dict: &Dictionary) -> bool {
     is_vowel(vowel)
         && is_letter_wc(&dict.letter_bits, last as u32, dict.letter_bits_offset,
                         crate::dictionary::LETTERGP_C)
-        && !is_vowel(before)
+        && !before.is_some_and(is_vowel)
 }
 
 /// C's `confirm_prefix`: a word whose rules matched a prefix keeps it only if
