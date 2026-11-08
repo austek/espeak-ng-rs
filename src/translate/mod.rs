@@ -3212,6 +3212,8 @@ const PHON_END_WORD: u8 = 15;
 #[derive(Debug, Clone, Default)]
 struct Pronunciation {
     bytes: Vec<u8>,
+    /// Offsets in `bytes` where C's separate words end, each stressed on its own.
+    word_ends: Vec<usize>,
 }
 
 impl Pronunciation {
@@ -3956,6 +3958,9 @@ fn push_cardinal_groups(
         if digits.len() > MAX_UNSPLIT_DIGITS && !exact && result.bytes.len() > before {
             result.bytes.push(crate::phoneme::PHON_PAUSE_NOLINK);
         }
+        if digits.len() > MAX_UNSPLIT_DIGITS {
+            result.word_ends.push(result.bytes.len());
+        }
         spoken |= group.value != 0;
     }
 }
@@ -4206,6 +4211,30 @@ fn try_ordinal_number(
     Some(WordResult { phonemes, dict_flags: 0, found_in_list: false })
 }
 
+/// Stress every word of a grouped number separately, as C does when it
+/// translates each group of digits as a word of its own.
+fn stress_each_word(
+    pronunciation: Pronunciation,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    control: i32,
+) -> Vec<u8> {
+    let mut out: Vec<u8> = Vec::new();
+    let mut start = 0;
+    for end in pronunciation.word_ends {
+        let mut word = pronunciation.bytes[start..end].to_vec();
+        word.push(0);
+        set_word_stress(&mut word, phdata, stress_opts, Some(0), -1, control);
+        out.extend(word.iter().copied().take_while(|&b| b != 0));
+        start = end;
+    }
+    if out.last() != Some(&PHON_END_WORD) {
+        out.push(PHON_END_WORD);
+    }
+    out.push(0);
+    out
+}
+
 fn translate_number_token(
     token: &NumberToken,
     dict: &Dictionary,
@@ -4226,12 +4255,22 @@ fn translate_number_token(
             Some(WordResult { phonemes, dict_flags: 0, found_in_list: true })
         }
         _ => {
-            let mut phonemes = number_token_to_phonemes(token, dict, grammar)?;
             // Over-long runs are bounded like C's word buffer; composed number words are not.
             let control = match token {
                 NumberToken::Cardinal(digits) if digits.len() > MAX_GROUPED_DIGITS => 0,
                 _ => STRESS_UNBOUNDED,
             };
+            let grouped = match token {
+                NumberToken::Cardinal(digits) if digits.len() > MAX_UNSPLIT_DIGITS => {
+                    cardinal_pronunciation(digits, dict, grammar).filter(|p| p.word_ends.len() > 1)
+                }
+                _ => None,
+            };
+            if let Some(pronunciation) = grouped {
+                let phonemes = stress_each_word(pronunciation, phdata, stress_opts, control);
+                return Some(WordResult { phonemes, dict_flags: 0, found_in_list: true });
+            }
+            let mut phonemes = number_token_to_phonemes(token, dict, grammar)?;
             set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, control);
             Some(WordResult { phonemes, dict_flags: 0, found_in_list: true })
         }
@@ -11003,13 +11042,13 @@ mod tests {
              "ˈunmiʝˈon dosθjˈentos tɾˈeɪntaikwˈatɾo mˈil kinjˈɛntos sɛsˈɛntaisjˈete",
              "ˈunmiʝˈon dosθjˈentos tɾˌeɪntaikwˈatɾo mˈil kinjˈɛntos sɛsˌɛntaisjˈete"),
             ("fr", "fr_dict",
-             "œ̃ miljɔ̃ døsɑ̃ tʁɑ̃tkatʁ mil sɛ̃ksɑ̃ swasɑ̃tsˈɛt",
+             "œ̃ miljˈɔ̃ døsɑ̃ tʁɑ̃tkatʁ mˈil sɛ̃ksɑ̃ swasɑ̃tsˈɛt",
              "œ̃ miljˈɔ̃ døsɑ̃ tʁɑ̃tkatʁ mˈil sɛ̃ksɑ̃ swasɑ̃tsˈɛt"),
             ("de", "de_dict",
              "ˈaɪnə mɪljˈoːn tsvˈaɪhˈʊndɜt fˈiːɾ ʊntdɾˈaɪsɪç tˈaʊzənt fˈʏnfhˈʊndɜt zˈiːbən ʊntzˈɛçtsɪç",
              "ˈaɪnə mɪljˈoːn tsvˈaɪhˈʊndɜt fˈiːɾ ʊntdɾˈaɪsɪç tˈaʊzənt fˈynfhˈʊndɜt zˈiːbən ʊntzˈɛçtsɪç"),
             ("nl", "nl_dict",
-             "ˈeːn mˌiljun tʋˌeːhˌɔndərt vˌirɛndˌɛrtəx dˌœyzɛnt vˌɛɪfhˌɔndərt zˌeːvənɛnzˌɛstəx",
+             "ˈeːn mˌiljun tʋˈeːhˌɔndərt vˌirɛndˌɛrtəx dˌœyzɛnt vˈɛɪfhˌɔndərt zˌeːvənɛnzˌɛstəx",
              "ˈeːn mˌiljun tʋˈeːhˌɔndərt vˌirɛndˌɛrtəx dˌœyzɛnt vˈɛɪfhˌɔndərt zˌeːvənɛnzˌɛstəx"),
         ];
         for &(lang, dict, expected, _oracle) in cases {

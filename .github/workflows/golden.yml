@@ -51,6 +51,7 @@ jobs:
           --test arabic_syllabic_consonant
           --test arabic_scale_words
           --test lengthened_consonant_position
+          --test number_group_stress
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
