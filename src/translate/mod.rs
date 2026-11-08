@@ -977,6 +977,10 @@ impl NumberGrammar {
             "af" | "da" | "en" | "fo" | "is" | "kl" | "nb" | "nl" | "no" | "sv"
         );
         (grammar.c_numbers, grammar.c_numbers2) = ordinal::c_number_flags(lang);
+        // Hungarian is left out: C declines the dot before a month name, which
+        // needs the next word's `$alt` flag.
+        grammar.ordinals.dot_marks_ordinal |=
+            lang != "hu" && grammar.c_numbers & ordinal::NUM_ORDINAL_DOT != 0;
         grammar
     }
 }
@@ -1278,6 +1282,22 @@ fn is_ordinal_suffix(suffix: &str, digits: &str, grammar: &NumberGrammar) -> boo
         || (grammar.ordinals.french && is_french_ordinal_suffix(suffix))
         || (!matches!(suffix, "st" | "nd" | "rd" | "th")
             && grammar.ordinals.dict_suffixes.iter().any(|s| s == suffix))
+}
+
+/// Whether the dot after a number marks it as an ordinal, given the text `rest`
+/// that follows the dot (C `CheckDotOrdinal`): the dot must be followed by a
+/// space and a word that does not start with a capital — German nouns are
+/// capitalised, so "am 3. Mai" is not an ordinal — or by the end of the clause.
+/// A dot at the very end of the text keeps marking an ordinal.
+fn dot_marks_ordinal_before(mut rest: impl Iterator<Item = char>) -> bool {
+    let Some(first) = rest.next() else { return true };
+    if matches!(first, 'º' | 'ª') {
+        return true;
+    }
+    if first.is_alphanumeric() {
+        return false;
+    }
+    rest.next().map_or(true, |next| next.is_alphabetic() && !next.is_uppercase())
 }
 
 /// The letters glued to a number anywhere in `text`, lower-cased.
@@ -2162,8 +2182,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             if grammar.ordinals.dot_marks_ordinal && chars.peek() == Some(&'.') {
                 let mut lookahead = chars.clone();
                 lookahead.next(); // skip '.'
-                let after_dot = lookahead.peek().copied();
-                if !after_dot.map_or(false, |c| c.is_ascii_digit()) {
+                if dot_marks_ordinal_before(lookahead) {
                     chars.next();
                     tokens.push(Token::Number(NumberToken::Ordinal(OrdinalNumber {
                         digits,

@@ -31,8 +31,9 @@ fn compound_ordinals_are_one_word() {
     assert_eq!(ipa("3."), "dɾˈɪtə");
     assert_eq!(ipa("20."), "tsvˈantsɪçstə");
     assert_eq!(ipa("100."), "ˈaɪnhˈʊndɜtstə");
-    // A German date reads naturally.
-    assert!(ipa("der 21. Mai").contains("ʊnttsvˈantsɪçstə"), "{}", ipa("der 21. Mai"));
+    // A German date reads naturally.  C declines the ordinal before a
+    // capitalised word ("der 21. Mai" is cardinal), so the date is lower-case.
+    assert!(ipa("der 21. mai").contains("ʊnttsvˈantsɪçstə"), "{}", ipa("der 21. mai"));
 }
 
 #[test]

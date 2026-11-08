@@ -57,6 +57,7 @@ jobs:
           --test arabic_thousand_and
           --test ordinal_unknown_suffix
           --test ordinal_composition
+          --test ordinal_dot_context
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

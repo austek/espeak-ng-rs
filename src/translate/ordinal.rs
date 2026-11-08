@@ -18,6 +18,7 @@ pub(super) const NUM_SINGLE_AND: u32 = 0x80;
 pub(super) const NUM_SINGLE_STRESS: u32 = 0x100;
 pub(super) const NUM_SINGLE_VOWEL: u32 = 0x200;
 pub(super) const NUM_OMIT_1_HUNDRED: u32 = 0x400;
+pub(super) const NUM_ORDINAL_DOT: u32 = 0x1_0000;
 pub(super) const NUM_AND_HUNDRED: u32 = 0x4_0000;
 pub(super) const NUM_THOUSAND_AND: u32 = 0x8_0000;
 pub(super) const NUM_VIGESIMAL: u32 = 0x10_0000;
