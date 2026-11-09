@@ -6439,6 +6439,16 @@ fn alphabet_name_key(script: Script) -> Option<&'static str> {
     })
 }
 
+/// As [`alphabet_name_key`], plus Cyrillic: a letter handed to another voice
+/// (`it м` → `_^_RU`) is announced as "cirillico", whereas a Cyrillic letter the
+/// dictionary lists as a word (`en х`) never reaches `TranslateLetter`.
+fn switched_alphabet_name_key(script: Script) -> Option<&'static str> {
+    match script {
+        Script::Cyrillic => Some("_cyr"),
+        other => alphabet_name_key(other),
+    }
+}
+
 /// Spell a word the current voice can't read: one letter name per character,
 /// looked up in this language's own dictionary (`х` → `x'a:` in English).
 ///
@@ -8049,6 +8059,12 @@ pub(crate) fn build_translate_entries(
                         }
                     }
                 }
+                let next_in_script = |from: usize| {
+                    tokens[from..].iter().find_map(|t| match t {
+                        Token::Word(w) => Some(w.chars().next().and_then(char_script) == foreign),
+                        _ => None,
+                    })
+                };
                 let switch_target = foreign_script_voice(word_script, &options.lang)
                     .or_else(|| foreign.map(script_voice));
                 if let Some(target) = switch_target.filter(|_| {
@@ -8059,16 +8075,10 @@ pub(crate) fn build_translate_entries(
                     // A lone letter goes through `TranslateLetter`, which names
                     // the alphabet first; a following word in the same script
                     // is switched along with it instead, without the name.
-                    let next_in_script = |from: usize| {
-                        tokens[from..].iter().find_map(|t| match t {
-                            Token::Word(w) => Some(w.chars().next().and_then(char_script) == foreign),
-                            _ => None,
-                        })
-                    };
                     let lone_letter = word_script.chars().count() == 1;
                     let alphabet = foreign
                         .filter(|_| lone_letter && next_in_script(token_ix + 1) != Some(true))
-                        .and_then(alphabet_name_key)
+                        .and_then(switched_alphabet_name_key)
                         .and_then(|key| raw_list_entry(key, dict, phdata, stress_opts, options));
                     // The name rides behind a NUL, past the target `switch_target` reads.
                     if let Some((name, _)) = alphabet {
@@ -8142,6 +8152,21 @@ pub(crate) fn build_translate_entries(
                         phdata.get(c).is_some_and(|p| p.typ == crate::phoneme::PH_PAUSE)
                     }) {
                         wr.phonemes.remove(0);
+                    }
+                }
+                // A letter the list hands to another voice (`it м` → `_^_RU`) is
+                // announced by the alphabet's name first, as `TranslateLetter` does.
+                if wr.phonemes.first() == Some(&crate::phoneme::PHON_SWITCH)
+                    && word.chars().count() == 1
+                    && next_in_script(token_ix + 1) != Some(true)
+                {
+                    let name = foreign
+                        .and_then(switched_alphabet_name_key)
+                        .and_then(|key| raw_list_entry(key, dict, phdata, stress_opts, options));
+                    if let Some((name, _)) = name {
+                        wr.phonemes.retain(|&b| b != 0);
+                        wr.phonemes.extend([0, crate::phoneme::PHON_PAUSE]);
+                        wr.phonemes.extend(name);
                     }
                 }
                 skip_words = wr.skip_words;

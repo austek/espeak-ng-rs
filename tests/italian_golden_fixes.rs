@@ -41,6 +41,16 @@ fn word_pause_replaces_the_glide_at_a_word_end() {
 }
 
 #[test]
+fn cyrillic_letter_handed_to_russian_is_announced() {
+    check_phonemes(&[
+        ("м", "_:tSIR'illIko_:(ru)'Em(it)"),
+        ("ш", "_:tSIR'illIko_:(ru)S'A(it)"),
+        ("x м", "'iks _:tSIR'illIko_:(ru)'Em(it)"),
+    ]);
+    check_ipa(&[("ц", "tʃɪrˈillɪko(ru)tsˈɛ(it)"), ("ж", "tʃɪrˈillɪko(ru)ʒˈɛ(it)")]);
+}
+
+#[test]
 fn end_stress_is_followed_by_the_alternate_vowel() {
     check_phonemes(&[("del", "d'el"), ("dal", "d'al")]);
 }
