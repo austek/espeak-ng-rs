@@ -33,6 +33,14 @@ fn lengthened_vowel_still_glides_into_a_vowel() {
 }
 
 #[test]
+fn word_pause_replaces_the_glide_at_a_word_end() {
+    check_phonemes(&[
+        ("adsl", "a dI_| esse_| 'Elle"),
+        ("ibm", "i bI_| 'Emme"),
+    ]);
+}
+
+#[test]
 fn end_stress_is_followed_by_the_alternate_vowel() {
     check_phonemes(&[("del", "d'el"), ("dal", "d'al")]);
 }

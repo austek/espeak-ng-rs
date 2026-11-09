@@ -9873,7 +9873,12 @@ impl Translator {
             // Before the phoneme programs run, as in C's `MakePhonemeList`.
             double_lengthened_consonants(own, own_flags, &phdata);
             resolve_virtual_phonemes_in_codes(own, &phdata, own_flags, stress_opts.reduce);
-            apply_list_editing_instructions(own, &phdata);
+            apply_list_editing_instructions(
+                own,
+                &phdata,
+                stress_opts.vowel_pause,
+                stress_opts.word_gap,
+            );
             if primary_bcp47_subtag(lang) == "fr" {
                 drop_unsurfaced_liaison(own, &phdata);
             }
@@ -10018,6 +10023,58 @@ fn token_surface(token: &Token, grammar: &NumberGrammar) -> String {
     }
 }
 
+/// The pause phoneme C puts between a word ending in a phoneme of type
+/// `prev_type` and the next word (`next_type`, `PH_PAUSE` at a clause end), or 0
+/// for none.  `next_stressed` is the next word's first vowel carrying primary
+/// stress.
+fn word_gap_phoneme(
+    vowel_pause: u32,
+    word_gap: u8,
+    prev_type: u8,
+    next_type: u8,
+    next_stressed: bool,
+) -> u8 {
+    use crate::phoneme::{PHON_PAUSE, PHON_PAUSE_LONG, PHON_PAUSE_NOLINK, PHON_PAUSE_SHORT,
+                         PHON_PAUSE_VSHORT};
+    const PH_VOWEL: u8 = 2;
+    const PH_PAUSE: u8 = 0;
+    // C `pause_phonemes[8]`; index 5 is a glottal stop, which no shipped
+    // language selects through `word_gap`.
+    const PAUSE_PHONEMES: [u8; 8] = [
+        0, PHON_PAUSE_VSHORT, PHON_PAUSE_SHORT, PHON_PAUSE, PHON_PAUSE_LONG,
+        0, PHON_PAUSE_LONG, PHON_PAUSE_LONG,
+    ];
+    let (pt, nt) = (prev_type, next_type);
+    let mut insert = 0u8;
+    if vowel_pause != 0 && pt != PH_PAUSE {
+        if pt != PH_VOWEL && vowel_pause & 0x200 != 0 {
+            insert = PHON_PAUSE_NOLINK;
+        }
+        if nt == PH_VOWEL {
+            match vowel_pause & 0x0c {
+                0 => {}
+                0xc => insert = PHON_PAUSE_NOLINK,
+                _ => insert = PHON_PAUSE_VSHORT,
+            }
+            if pt == PH_VOWEL {
+                match vowel_pause & 0x03 {
+                    0 => {}
+                    2 => insert = PHON_PAUSE_SHORT,
+                    _ => insert = PHON_PAUSE_VSHORT,
+                }
+            }
+            if vowel_pause & 0x100 != 0 && next_stressed {
+                insert = PHON_PAUSE_SHORT;
+            }
+        }
+    }
+    let x = (word_gap & 7) as usize;
+    if x != 0 && (x > 1 || (insert != PHON_PAUSE_SHORT && insert != PHON_PAUSE_NOLINK)) {
+        insert = PAUSE_PHONEMES[x];
+    }
+    insert
+}
+
 /// Insert the inter-word pause phonemes a language asks for — the
 /// `(plist3+1)->sourceix != 0` block of `MakePhonemeList` (phonemelist.c).
 ///
@@ -10033,22 +10090,18 @@ fn insert_word_gaps(
     vowel_pause: u32,
     word_gap: u8,
 ) {
-    use crate::phoneme::{PHON_END_WORD, PHON_PAUSE, PHON_PAUSE_LONG, PHON_PAUSE_NOLINK,
-                         PHON_PAUSE_SHORT, PHON_PAUSE_VSHORT};
-    const PH_VOWEL: u8 = 2;
+    use crate::phoneme::PHON_END_WORD;
     const PH_PAUSE: u8 = 0;
-    // C `pause_phonemes[8]`; index 5 is a glottal stop, which no shipped
-    // language selects through `word_gap`.
-    const PAUSE_PHONEMES: [u8; 8] = [
-        0, PHON_PAUSE_VSHORT, PHON_PAUSE_SHORT, PHON_PAUSE, PHON_PAUSE_LONG,
-        0, PHON_PAUSE_LONG, PHON_PAUSE_LONG,
-    ];
     if vowel_pause == 0 && word_gap & 7 == 0 {
         return;
     }
 
     let is_sound = |c: &PhonemeCode| {
-        c.marker.is_none() && !c.is_boundary && c.code > 8 && c.code != PHON_END_WORD
+        c.marker.is_none()
+            && !c.is_boundary
+            && c.code > 8
+            && c.code != PHON_END_WORD
+            && c.code != crate::phoneme::PHON_LENGTHEN
     };
     let real: Vec<usize> = codes
         .iter()
@@ -10074,38 +10127,16 @@ fn insert_word_gaps(
         }
         let prev = codes[real[n - 1]].code;
         let next = if n < real.len() && !at_clause_end { codes[real[n]].code } else { 0 };
-        let (pt, nt) = (typ(prev), typ(next));
-        let mut insert = 0u8;
-        if vowel_pause != 0 && pt != PH_PAUSE {
-            if pt != PH_VOWEL && vowel_pause & 0x200 != 0 {
-                insert = PHON_PAUSE_NOLINK;
-            }
-            if nt == PH_VOWEL {
-                match vowel_pause & 0x0c {
-                    0 => {}
-                    0xc => insert = PHON_PAUSE_NOLINK,
-                    _ => insert = PHON_PAUSE_VSHORT,
-                }
-                if pt == PH_VOWEL {
-                    match vowel_pause & 0x03 {
-                        0 => {}
-                        2 => insert = PHON_PAUSE_SHORT,
-                        _ => insert = PHON_PAUSE_VSHORT,
-                    }
-                }
-                if vowel_pause & 0x100 != 0 && level.get(real[n]).is_some_and(|&l| l >= 4) {
-                    insert = PHON_PAUSE_SHORT;
-                }
-            }
-        }
-        let x = (word_gap & 7) as usize;
-        if x != 0 && (x > 1 || (insert != PHON_PAUSE_SHORT && insert != PHON_PAUSE_NOLINK)) {
-            insert = PAUSE_PHONEMES[x];
-        }
+        let next_stressed = n < real.len() && level.get(real[n]).is_some_and(|&l| l >= 4);
+        let insert = word_gap_phoneme(vowel_pause, word_gap, typ(prev), typ(next), next_stressed);
         if insert != 0 && phdata.get(insert).is_some() {
             // The gap belongs to the *previous* word — upstream prints
             // `bUondZ'O@-*no_| a`, with the pause before the word separator.
-            inserts.push((real[n - 1] + 1, insert));
+            let mut at = real[n - 1] + 1;
+            while codes.get(at).is_some_and(|c| c.code == crate::phoneme::PHON_LENGTHEN && !c.is_boundary) {
+                at += 1;
+            }
+            inserts.push((at, insert));
         }
     }
 
@@ -10604,7 +10635,12 @@ fn double_lengthened_consonants(
     }
 }
 
-fn apply_list_editing_instructions(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData) {
+fn apply_list_editing_instructions(
+    codes: &mut Vec<PhonemeCode>,
+    phdata: &PhonemeData,
+    vowel_pause: u32,
+    word_gap: u8,
+) {
     // C turns a lengthen mark into a flag on the vowel before it, so the
     // neighbours of a phoneme never include one (`i:` still sees the next vowel).
     let is_sound = |c: &PhonemeCode| {
@@ -10619,6 +10655,7 @@ fn apply_list_editing_instructions(codes: &mut Vec<PhonemeCode>, phdata: &Phonem
     }
 
     let starts = word_starts(codes, &real);
+    let (level, _) = stress_levels(codes, phdata);
     // (index to insert at, code, before?) — collected first so indices stay valid.
     let mut edits: Vec<(usize, u8, bool)> = Vec::new();
     let mut replacements: Vec<(usize, u8)> = Vec::new();
@@ -10641,6 +10678,7 @@ fn apply_list_editing_instructions(codes: &mut Vec<PhonemeCode>, phdata: &Phonem
                 .iter()
                 .any(|c| c.is_boundary || c.code == crate::phoneme::PHON_END_WORD)
         });
+        let next_stressed = real.get(n + 1).is_some_and(|&k| level.get(k).is_some_and(|&l| l >= 4));
         let nb = crate::synthesize::bytecode::Neighbours {
             prev,
             this: code,
@@ -10663,11 +10701,27 @@ fn apply_list_editing_instructions(codes: &mut Vec<PhonemeCode>, phdata: &Phonem
         if let Some(c) = fx.insert_phoneme.filter(|&c| c != 0) {
             edits.push((i, c, true));
         }
+        // A pause between words takes the slot C's `pd_APPENDPHONEME` would
+        // use, so the Italian `dI; esse` glide is `dI_| esse`.
+        let word_gap_fills_slot = {
+            let at_clause_end = real.get(n + 1).is_none_or(|&k| {
+                codes[i + 1..k].iter().any(|c| c.is_boundary && c.code == 0)
+            });
+            (at_clause_end || next_wordstart)
+                && word_gap_phoneme(
+                    vowel_pause,
+                    word_gap,
+                    ph.typ,
+                    if at_clause_end { 0 } else { phdata.get(next).map_or(0, |p| p.typ) },
+                    !at_clause_end && next_stressed,
+                ) != 0
+        };
         let appended = fx.append_phoneme.filter(|&c| c != 0).or_else(|| {
             fx.append_if_next_vowel
                 .filter(|&c| c != 0)
                 .filter(|_| matches!(phdata.get(next), Some(n) if n.typ == 2 /* phVOWEL */))
         });
+        let appended = appended.filter(|_| !word_gap_fills_slot);
         if let Some(c) = appended {
             edits.push((i, c, false));
         }
