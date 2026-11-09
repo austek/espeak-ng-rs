@@ -74,6 +74,11 @@ fn ordinal_indicator_letters_are_spelled_as_one_word() {
 }
 
 #[test]
+fn suffix_stem_keeps_the_word_flags_for_w_alt_rules() {
+    check(&[("shavian", "ʃˈeɪviən"), ("Avers", "ˈeɪvəz")]);
+}
+
+#[test]
 fn abbrev_flag_survives_a_suffix_stem_lookup() {
     check(&[("os", "ˌəʊˈɛs"), ("OS", "ˌəʊˈɛs")]);
 }

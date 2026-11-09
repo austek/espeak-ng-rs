@@ -5275,7 +5275,7 @@ fn word_to_phonemes_inner(
                         &stem_buf,
                         1,
                         stem_word_flags,
-                        0,
+                        rules_flags,
                         &letter_bits,
                         lang_opts.dict_condition,
                         &mut stem_vc,
