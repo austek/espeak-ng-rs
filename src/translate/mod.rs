@@ -10994,10 +10994,29 @@ fn resolve_virtual_phonemes_in_codes(
                 // The NULL phoneme: `ChangePhoneme(NULL)` deletes this phoneme.
                 deleted.push(i);
             } else {
+                // A vowel turned into a consonant (French `i` → `j`) is no
+                // longer a syllable, so the stress mark before it goes.
+                if ph.typ == 2 && phdata.get(changed).is_some_and(|c| c.typ != 2) {
+                    let marks = codes[..i]
+                        .iter()
+                        .rev()
+                        .take_while(|c| {
+                            !c.is_boundary
+                                && matches!(
+                                    c.code,
+                                    PHON_STRESS_D | PHON_STRESS_U | PHON_STRESS_2 | PHON_STRESS_3
+                                        | PHON_STRESS_P | PHON_STRESS_P2 | PHON_STRESS_TONIC
+                                )
+                        })
+                        .count();
+                    deleted.extend(i - marks..i);
+                }
                 codes[i].code = changed;
             }
         }
     }
+    deleted.sort_unstable();
+    deleted.dedup();
     for &i in deleted.iter().rev() {
         codes.remove(i);
     }

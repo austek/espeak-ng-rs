@@ -14,6 +14,19 @@ fn ipa_cases(cases: &[(&str, &str)]) {
     }
 }
 
+fn phoneme_cases(cases: &[(&str, &str)]) {
+    let data = concat!(env!("CARGO_MANIFEST_DIR"), "/espeak-ng-data");
+    for (text, want) in cases {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_espeak_cli"))
+            .args(["-q", "-x", "-v", "fr", "--", text])
+            .env("ESPEAK_DATA_PATH", data)
+            .output()
+            .expect("run cli");
+        let got = String::from_utf8_lossy(&out.stdout).trim().replace('\n', " ");
+        assert_eq!(&got, want, "text {text:?}");
+    }
+}
+
 #[test]
 fn abbrev_entries_spell_letters_with_stress() {
     ipa_cases(&[
@@ -29,4 +42,14 @@ fn abbrev_entries_spell_letters_with_stress() {
         ("nvda", "ˌɛnvˌedˌeˈa"),
         ("wma", "dubləvˌeˌɛmˈa"),
     ]);
+}
+
+#[test]
+fn spelled_i_before_a_vowel_is_a_glide_without_stress() {
+    ipa_cases(&[
+        ("cia", "sˌejˈa"),
+        ("cio", "sˌejˈo"),
+        ("pcmcia", "pˌesˌeˈɛmsˌejˈa"),
+    ]);
+    phoneme_cases(&[("cia", "s,ej'a"), ("cio", "s,ej'o")]);
 }
