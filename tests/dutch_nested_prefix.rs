@@ -40,6 +40,15 @@ fn stem_of_a_nested_prefix_gets_no_break_of_its_own() {
 }
 
 #[test]
+fn nested_prefixes_stress_the_innermost_stem_once() {
+    check(&[
+        ("onverantwoord", "Onv@r_!'Antv#O:rt"),
+        ("onverantwoordelijk", "Onv@r_!'Antv#O:rd@l@k"),
+        ("onbeantwoord", "Onb@_!'Antv#O:rt"),
+    ]);
+}
+
+#[test]
 fn vowel_initial_word_with_stressed_inner_prefix_breaks_at_the_word_start() {
     check(&[("onopgelost", "_|On'OpQ@l,Ost"), ("onuitstaanbaar", "_|On'Wytst,a:nba:r")]);
 }

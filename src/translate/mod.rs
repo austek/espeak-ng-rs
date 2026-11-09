@@ -5174,17 +5174,10 @@ fn word_to_phonemes_inner(
                     .iter()
                     .any(|&b| b == crate::phoneme::PHON_STRESS_P || b == crate::phoneme::PHON_STRESS_P2);
                 // C stresses the stem alone unless the prefix or a list entry
-                // already fixes the stress of the whole word.
-                if expect.defer_stress {
-                    // A stem that carries a second prefix: C stresses the
-                    // innermost stem once, and the outer word finishes.
-                    if stress_opts.prefixes {
-                        let flags = Some(rules_flags as u32);
-                        stem_ph.push(0);
-                        set_word_stress(&mut stem_ph, phdata, stress_opts, flags, 3, 0);
-                        stem_ph.retain(|&b| b != 0);
-                    }
-                } else {
+                // already fixes the stress of the whole word.  A word that is
+                // itself the stem of an outer prefix leaves all stress to the
+                // outermost call, which sees the whole prefix run.
+                if !expect.defer_stress {
                     let flags = Some(stress_dict_flags as u32);
                     if prefix_flags || prefix_stressed {
                         if stress_opts.prefixes {
