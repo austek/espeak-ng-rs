@@ -51,11 +51,12 @@ fn dutch_compound_ordinals_are_one_word() {
     // 21e = "een en" + the '20e' ending (one compound word).  The compound
     // demotes the second element's stress to secondary, as upstream does
     // (`ˈeːnɛntʋˌɪntəxstə`), so compare the segments rather than the marks.
-    let strip = |s: String| s.chars().filter(|c| !matches!(c, 'ˈ' | 'ˌ')).collect::<String>();
+    let strip = |s: String| s.chars().filter(|c| !matches!(c, 'ˈ' | 'ˌ' | ' ')).collect::<String>();
     assert_eq!(strip(ipa("21e")), format!("eːnɛn{}", strip(ipa("20e"))));
     assert!(ipa("21e").contains("tʋˌɪntəx"), "the compound's tail is secondary: {}", ipa("21e"));
     // Round/small unchanged.
-    assert_eq!(ipa("1e"), "ˈɪːrstə");
+    // C writes a space before a vowel-initial number word (dutch_number_leading_space).
+    assert_eq!(ipa("1e"), " ˈɪːrstə");
     assert_eq!(ipa("100e"), "hˈɔndɛrtstə");
 }
 

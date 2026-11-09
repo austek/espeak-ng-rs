@@ -15,7 +15,7 @@ fn hungarian_numbers_keep_final_consonant() {
     };
     let ipa = |s: &str| t.text_to_ipa(s).unwrap();
     // 5/6/7/15/25 all end in "t" and must keep it.
-    assert_eq!(ipa("5"), "ˈøt", "hu 5 = öt");
+    assert_eq!(ipa("5"), " ˈøt", "hu 5 = öt");
     assert_eq!(ipa("6"), "hˈɑt", "hu 6 = hat");
     assert_eq!(ipa("7"), "hˈeːt", "hu 7 = hét");
     assert!(ipa("15").ends_with("øt"), "hu 15 = tizenöt: {}", ipa("15"));

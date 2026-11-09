@@ -8130,7 +8130,16 @@ pub(crate) fn build_translate_entries(
                     all_upper: letters.clone().next().is_some()
                         && letters.clone().all(char::is_uppercase),
                     next_word,
-                    follow: follow_text(tokens, token_ix + 1, &options.lang),
+                    // The tone-sandhi pass indexes one syllable run per word and
+                    // cannot take a merged phrase entry.
+                    follow: if matches!(
+                        primary_bcp47_subtag(&options.lang),
+                        "cmn" | "zh" | "yue" | "hak" | "vi" | "shn"
+                    ) {
+                        [0; 32]
+                    } else {
+                        follow_text(tokens, token_ix + 1, &options.lang)
+                    },
                     hyphen_after: matches!(tokens.get(token_ix + 1), Some(Token::WordJoin)),
                     ..pos_expect_after(prev_word.as_deref())
                 };

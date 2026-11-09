@@ -42,7 +42,7 @@ fn ordinals_match_c() {
         ("de", "der 100. tag", "dɛɾ ˈaɪnhˈʊndɜtstə tˈɑːk"),
         ("de", "der 1000. tag", "dɛɾ ˈaɪn tˈaʊzənt tˈɑːk"),
         ("de", "der 101. tag", "dɛɾ ˈaɪnhˈʊndɜt ˈeːɾstə tˈɑːk"),
-        ("nl", "21e", "ˈeːnɛntʋˌɪntəxstə"),
+        ("nl", "21e", " ˈeːnɛntʋˌɪntəxstə"),
         ("nl", "100e", "hˈɔndɛrtstə"),
         ("nl", "1000e", "dˈœyzɛnt"),
         ("af", "21de", "ˈiənɛntwˈəntəxdə"),
