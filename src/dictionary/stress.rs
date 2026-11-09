@@ -391,10 +391,9 @@ impl StressOpts {
             // `af` and `sq` set nothing in C; they keep the port's own
             // word-final devoicing, which predates this transcription.
             "af" | "sq" => opts.word_final_devoicing = true,
-            "de" | "nl" | "mt" => {
-                opts.word_final_devoicing = true;
-                opts.regressive_voicing = 0x100;
-            }
+            // The clause-wide pass devoices them, where a pause the next word
+            // brings with it (`$pause` words like `en`) keeps the consonant voiced.
+            "de" | "nl" | "mt" => opts.regressive_voicing = 0x100,
             "sl" => {
                 opts.word_final_devoicing = true;
                 opts.regressive_voicing = 0x103;
