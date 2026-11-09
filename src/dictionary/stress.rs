@@ -1195,9 +1195,12 @@ pub fn set_word_stress(
         let ph_type = ph.map(|p| p.typ).unwrap_or(0);
         let ph_flags = ph.map(|p| p.phflags).unwrap_or(0);
 
-        let _is_pause = ph_type == PH_PAUSE;
+        // C tests for a pause first, so a `||` word break before a syllabic
+        // marker does not count as the syllabic consonant's syllable (`jEr||-d'uRa`).
+        let is_pause = ph_type == PH_PAUSE;
         let syllabic_consonant = phonetic_slice.get(pi) == Some(&PHON_SYLLABIC);
-        let is_vowel = ph_type == PH_VOWEL && ph_flags & PH_NONSYLLABIC == 0 || syllabic_consonant;
+        let is_vowel = !is_pause
+            && (ph_type == PH_VOWEL && ph_flags & PH_NONSYLLABIC == 0 || syllabic_consonant);
 
         if is_vowel {
             debug_assert!(v <= vowel_count, "v={} vowel_count={}", v, vowel_count);

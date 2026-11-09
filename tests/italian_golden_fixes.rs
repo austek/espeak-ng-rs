@@ -51,6 +51,12 @@ fn cyrillic_letter_handed_to_russian_is_announced() {
 }
 
 #[test]
+fn syllabic_marker_after_a_word_break_takes_no_syllable() {
+    check_phonemes(&[("ъ", "jer dUR'a"), ("й", "I b@-*ev'e")]);
+    check_ipa(&[("ъ", "jer dʊrˈa"), ("й", "ɪ brevˈe")]);
+}
+
+#[test]
 fn end_stress_is_followed_by_the_alternate_vowel() {
     check_phonemes(&[("del", "d'el"), ("dal", "d'al")]);
 }

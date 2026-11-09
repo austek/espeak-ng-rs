@@ -9657,7 +9657,7 @@ impl Translator {
                             from_dict.resize(codes.len(), false);
                         }
                     }
-                    for &b in &entry.phonemes {
+                    for &b in &consume_word_break_syllabic(&entry.phonemes, &phdata) {
                         // `phonX1` is a marker, not a sound: C reads it as
                         // "double the next word's initial consonant"
                         // (`FLAG_DOUBLING`) and does *not* put it in the phoneme
@@ -10170,6 +10170,32 @@ fn apply_voice_replacements(
 /// same phoneme list the IPA renderer builds, so English gets its linking `r-`
 /// ("sofa area" → `s'oUf@r- 'e@ri@`) and the `;` glide after `aI` ("my apple" →
 /// `maI; 'ap@L`) in the audio too.
+/// C's `SetPlist2` reads a syllabic marker as "the previous phoneme is a
+/// syllable of its own, with the stress still pending" — and after a `||` word
+/// break the pending stress is the default, so the list entry `'I||-b@-*'eve`
+/// (Italian `й`) leaves `I` unstressed and puts no `-` in the list.
+fn consume_word_break_syllabic(phonemes: &[u8], phdata: &PhonemeData) -> Vec<u8> {
+    const PH_STRESS: u8 = 1;
+    const PH_VOWEL: u8 = 2;
+    let kind = |c: u8| phdata.get(c).map(|p| p.typ);
+    let mut out: Vec<u8> = Vec::with_capacity(phonemes.len());
+    for &b in phonemes {
+        let after_break = out.last() == Some(&crate::phoneme::PHON_END_WORD);
+        if b != crate::phoneme::PHON_SYLLABIC || !after_break {
+            out.push(b);
+            continue;
+        }
+        let n = out.len();
+        let stressed_vowel = n >= 3
+            && kind(out[n - 2]) == Some(PH_VOWEL)
+            && kind(out[n - 3]) == Some(PH_STRESS);
+        if stressed_vowel {
+            out.remove(n - 3);
+        }
+    }
+    out
+}
+
 /// Drop a French liaison phoneme that doesn't surface.
 ///
 /// `z2`, `t2`, `n2`, `z3` … are consonants that are only pronounced before a
