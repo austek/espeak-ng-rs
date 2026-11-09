@@ -1551,12 +1551,6 @@ fn normalize_number_symbols_except<'a>(text: &'a str, keep: &[char]) -> std::bor
             // Subscript digits (₀₁₂₃₄₅₆₇₈₉ = U+2080..2089).
             '₀' => " 0", '₁' => " 1", '₂' => " 2", '₃' => " 3", '₄' => " 4",
             '₅' => " 5", '₆' => " 6", '₇' => " 7", '₈' => " 8", '₉' => " 9",
-            // Vulgar fractions.
-            '½' => " 1/2 ", '⅓' => " 1/3 ", '⅔' => " 2/3 ", '¼' => " 1/4 ",
-            '¾' => " 3/4 ", '⅕' => " 1/5 ", '⅖' => " 2/5 ", '⅗' => " 3/5 ",
-            '⅘' => " 4/5 ", '⅙' => " 1/6 ", '⅚' => " 5/6 ", '⅐' => " 1/7 ",
-            '⅛' => " 1/8 ", '⅜' => " 3/8 ", '⅝' => " 5/8 ", '⅞' => " 7/8 ",
-            '⅑' => " 1/9 ", '⅒' => " 1/10 ",
             // Arabic/Persian native separators → their Latin equivalents (kept
             // adjacent to the digits so `١٫٥`→`1.5`, `١٬٠٠٠`→`1,000`, `٥٪`→`5%`).
             '\u{066B}' => ".", // ARABIC DECIMAL SEPARATOR ٫
@@ -5714,7 +5708,8 @@ fn is_single_letter_word(w: &str) -> bool {
 }
 
 fn is_spoken_symbol(c: char) -> bool {
-    matches!(c, '.' | '#' | '$' | '%' | '&' | '*' | '+' | '/' | '=' | '@' | '~'
+    matches!(c, '\u{00BC}'..='\u{00BE}' | '\u{2150}'..='\u{215E}')
+        || matches!(c, '.' | '#' | '$' | '%' | '&' | '*' | '+' | '/' | '=' | '@' | '~'
                 | '×' | '÷' | '°' | '±' | '−' | '§' | '№'
                 | '∞' | '√' | '∑' | '≈' | '≠' | '≤' | '≥'
                 | '℃' | '℉' | '™' | '®' | '©'
@@ -11168,10 +11163,9 @@ mod tests {
         assert_eq!(words("1/2"), vec!["1", "half"]);
         assert_eq!(words("3/4"), vec!["3", "quarters"]);
         assert_eq!(words("2/3"), vec!["2", "thirds"]);
-        assert_eq!(words("½"), vec!["1", "half"]); // vulgar fraction, normalized then read
-        // Mixed numbers: "1½" → "one and one half", "2¾" → "two and three quarters".
-        assert_eq!(words("1½"), vec!["1", "and", "1", "half"]);
-        assert_eq!(words("2¾"), vec!["2", "and", "3", "quarters"]);
+        // Mixed numbers: "1 1/2" → "one and one half".
+        assert_eq!(words("1 1/2"), vec!["1", "and", "1", "half"]);
+        assert_eq!(words("2 3/4"), vec!["2", "and", "3", "quarters"]);
         // A date-like `a/b/c` is not a fraction.
         assert!(rewrite("3/4/2024", "en").iter().any(|t| matches!(t, Token::Punctuation('/'))));
         // A large denominator is left as a slash.
@@ -11250,10 +11244,8 @@ mod tests {
         assert_eq!(normalize_number_symbols("x²"), "x 2");
         assert_eq!(normalize_number_symbols("10³"), "10 3");
         assert_eq!(normalize_number_symbols("H₂O"), "H 2O");
-        // Vulgar fractions → n/m.
-        assert_eq!(normalize_number_symbols("½"), " 1/2 ");
-        assert_eq!(normalize_number_symbols("3½"), "3 1/2 ");
-        assert_eq!(normalize_number_symbols("⅔"), " 2/3 ");
+        // Vulgar fractions stay symbols: the dictionary names them.
+        assert_eq!(normalize_number_symbols("½"), "½");
         // Plain text is returned borrowed (no allocation).
         assert!(matches!(normalize_number_symbols("hello"), Cow::Borrowed("hello")));
 
