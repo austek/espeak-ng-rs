@@ -69,6 +69,7 @@ jobs:
           --test dutch_short_stem_vowel_doubling
           --test dutch_prefix_confirmation
           --test dutch_first_suffix_match
+          --test absent_letters
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

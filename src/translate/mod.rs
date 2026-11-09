@@ -4351,6 +4351,9 @@ pub struct PosExpect {
     /// Flags of the whole word, set while its stem is translated after a
     /// prefix was removed.
     pub word_flags: u32,
+    /// Leave the `.replace` table out.  C applies it while reading the clause,
+    /// so a letter looked up by name (`LookupLetter`) is never substituted.
+    pub no_replace: bool,
 }
 
 /// A [`PosExpect`] carrying only the opening of the word that follows, so a
@@ -4720,7 +4723,7 @@ fn word_to_phonemes_inner(
     // katakana and every voiced kana produce no phonemes.  Other languages use
     // it for their own normalisation.  No-op (None, no alloc) without a
     // `.replace` section; runs here so it also covers TEXTMODE re-expansion.
-    let normalized = dict.apply_replacements(word);
+    let normalized = if expect.no_replace { None } else { dict.apply_replacements(word) };
     let word = normalized.as_deref().unwrap_or(word);
 
     // Korean: break each Hangul syllable into its jamo (the ko rules match the
@@ -6207,6 +6210,148 @@ fn spell_foreign_word(
     (!out.is_empty()).then_some(out)
 }
 
+/// C's `derived_letters` (`IsSuperscript`): the base character of a super- or
+/// subscript letter or digit.
+fn derived_letter(c: char) -> Option<char> {
+    let cp = c as u32;
+    let digit = |zero: u32| char::from_digit(cp - zero, 10);
+    match cp {
+        0xaa => Some('a'),
+        0xba => Some('o'),
+        0xb2 => Some('2'),
+        0xb3 => Some('3'),
+        0xb9 => Some('1'),
+        0x2b0 | 0x2095 => Some('h'),
+        0x2b1 => Some('\u{266}'),
+        0x2b2 => Some('j'),
+        0x2b3 => Some('r'),
+        0x2b4 => Some('\u{279}'),
+        0x2b5 => Some('\u{27b}'),
+        0x2b6 => Some('\u{281}'),
+        0x2b7 => Some('w'),
+        0x2b8 => Some('y'),
+        0x2c0 => Some('\u{294}'),
+        0x2c1 => Some('\u{295}'),
+        0x2e0 => Some('\u{263}'),
+        0x2e1 | 0x2097 => Some('l'),
+        0x2e2 | 0x209b => Some('s'),
+        0x2e3 | 0x2093 => Some('x'),
+        0x2070 => Some('0'),
+        0x2071 => Some('i'),
+        0x2074..=0x2079 => digit(0x2070),
+        0x2080..=0x2089 => digit(0x2080),
+        0x207a | 0x208a => Some('+'),
+        0x207b | 0x208b => Some('-'),
+        0x207c | 0x208c => Some('='),
+        0x207d | 0x208d => Some('('),
+        0x207e | 0x208e => Some(')'),
+        0x207f | 0x2099 => Some('n'),
+        0x2090 => Some('a'),
+        0x2091 => Some('e'),
+        0x2092 => Some('o'),
+        0x2094 => Some('\u{259}'),
+        0x2096 => Some('k'),
+        0x2098 => Some('m'),
+        0x209a => Some('p'),
+        0x209c => Some('t'),
+        _ => None,
+    }
+}
+
+/// C's `LookupLetter`: the name of one letter in this language, from `_x`, then
+/// `x`, then the letter-to-sound rules, then the accent tables.  Stressed, no
+/// terminator; a result that starts with `phonSWITCH` hands the letter to
+/// another language.
+fn letter_name(
+    letter: char,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+) -> Vec<u8> {
+    let key = letter.to_string();
+    let spoken = |wr: &WordResult| wr.phonemes.iter().any(|&b| b != 0);
+    let word = |text: &str| {
+        let expect = PosExpect { no_replace: true, ..PosExpect::default() };
+        word_to_phonemes_inner(text, dict, phdata, stress_opts, options, 0, expect)
+    };
+    let mut wr = word(&format!("_{key}"));
+    if !spoken(&wr) || wr.dict_flags == 0 {
+        wr = word(&key);
+    }
+    if spoken(&wr) {
+        return wr.phonemes.into_iter().filter(|&b| b != 0).collect();
+    }
+    let mut accented = accented_letter_phonemes(letter, dict, phdata, stress_opts, options);
+    if accented.is_empty() {
+        return accented;
+    }
+    accented.push(0);
+    set_word_stress(&mut accented, phdata, stress_opts, Some(0), -1, 0);
+    accented.retain(|&b| b != 0);
+    accented
+}
+
+/// How `LetterFallback` says a letter the language cannot pronounce.
+pub(crate) struct LetterEntry {
+    pub(crate) phonemes: Vec<u8>,
+    pub(crate) word: String,
+}
+
+/// C's `TranslateLetter` for a lone letter the rules left silent.
+///
+/// The letter's own name first (a super- or subscript letter by its base
+/// letter's name), then — for a voice that is not English — the English name,
+/// which `english_has` vouches for, and last the word "letter" followed by the
+/// digits of the letter's code point.
+fn letter_fallback(
+    letter: char,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+    english_has: &dyn Fn(char) -> bool,
+) -> Option<LetterEntry> {
+    use crate::phoneme::{PHON_PAUSE, PHON_PAUSE_VSHORT, PHON_SWITCH};
+    let (mut letter, mut name) = (letter, Vec::new());
+    for candidate in std::iter::once(letter).chain(derived_letter(letter)) {
+        letter = candidate;
+        name = letter_name(letter, dict, phdata, stress_opts, options);
+        if !name.is_empty() {
+            break;
+        }
+    }
+    let entry = |mut phonemes: Vec<u8>, word: String| {
+        phonemes.push(0);
+        Some(LetterEntry { phonemes, word })
+    };
+    if !name.is_empty() {
+        return entry(name, letter.to_string());
+    }
+    if primary_bcp47_subtag(&options.lang) != "en" && english_has(letter) {
+        let mut switch = vec![PHON_SWITCH];
+        switch.extend_from_slice(b"en");
+        return entry(switch, format!("_{letter}"));
+    }
+    let own = |key: &str| raw_list_entry(key, dict, phdata, stress_opts, options).map(|(ph, _)| ph);
+    let mut out = Some(letter)
+        .filter(|c| c.is_alphabetic())
+        .and_then(|_| own("_?A"))
+        .or_else(|| (!letter.is_whitespace()).then(|| own("_??")).flatten())
+        .unwrap_or_else(|| parse_inline_phonemes("l'et@", phdata));
+    const HEX_NAMES: [&str; 6] = ["'e:j", "b'i:", "s'i:", "d'i:", "'i:", "'ef"];
+    for digit in format!("{:x}", letter as u32).chars() {
+        out.push(PHON_PAUSE_VSHORT);
+        let mut spelled = letter_name(digit, dict, phdata, stress_opts, options);
+        if spelled.first().is_none_or(|&b| b == PHON_SWITCH) && digit >= 'a' {
+            spelled = parse_inline_phonemes(HEX_NAMES[(digit as u8 - b'a') as usize], phdata);
+        }
+        out.extend(spelled);
+    }
+    out.push(PHON_PAUSE);
+    entry(out, letter.to_string())
+}
+
 /// The canonical Roman numeral for `n` (`4` → "IV"), used to validate parses.
 fn to_roman(mut n: u32) -> String {
     const TABLE: [(u32, &str); 13] = [
@@ -7478,6 +7623,7 @@ pub(crate) fn build_translate_entries(
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     options: &LangOptions,
+    english_has: &dyn Fn(char) -> bool,
 ) -> Vec<TranslateEntry> {
     let mut entries: Vec<TranslateEntry> = Vec::with_capacity(tokens.len());
     // `$max3` bookkeeping: which symbol is repeating, and how many times so far.
@@ -7653,6 +7799,25 @@ pub(crate) fn build_translate_entries(
                     ..pos_expect_after(prev_word.as_deref())
                 };
                 let mut wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
+                if !wr.found_in_list && wr.phonemes.iter().all(|&b| b == 0) {
+                    let mut chars = lower.chars();
+                    let lone = chars.next().filter(|c| c.is_alphabetic() && chars.next().is_none());
+                    let reading = lone.and_then(|c| {
+                        letter_fallback(c, dict, phdata, stress_opts, options, english_has)
+                    });
+                    if let Some(reading) = reading {
+                        prev_word = Some(lower.clone());
+                        entries.push(TranslateEntry {
+                            phonemes: reading.phonemes,
+                            dict_flags: 0,
+                            kind: TranslateEntryKind::Word,
+                            word_lower: Some(reading.word),
+                            no_word_gap: false,
+                            found_in_list: false,
+                        });
+                        continue;
+                    }
+                }
                 // C spells a word whose list entry carries `$abbrev` but gives no
                 // pronunciation ("the word has $abbrev flag, but no pronunciation
                 // specified.  Speak as individual letters") — English `usa` is
@@ -8613,11 +8778,23 @@ impl Translator {
         let mut phdata = PhonemeData::load(&self.data_dir).ok()?;
         select_phoneme_table(&mut phdata, &self.data_dir, &self.options.lang).ok()?;
         let stress_opts = StressOpts::for_lang_in(&self.options.lang, &self.data_dir);
+        // A letter is named as `LookupLetter` does, ending in the accent tables.
+        if c.is_alphabetic() {
+            let mut name = letter_name(c, &dict, &phdata, &stress_opts, &self.options);
+            if name.is_empty() {
+                return None;
+            }
+            name.push(0);
+            return Some(name);
+        }
         // The `_<char>` name first, then the character's own entry — the order
         // `LookupCharName` uses, and what makes `_@` "at sign" while `#`, which
         // has no `_#` entry, still reads "hash".
         for key in [format!("_{c}"), c.to_string()] {
-            let wr = word_to_phonemes(&key, &dict, &phdata, &stress_opts, &self.options);
+            let expect = PosExpect { no_replace: true, ..PosExpect::default() };
+            let wr = word_to_phonemes_inner(
+                &key, &dict, &phdata, &stress_opts, &self.options, 0, expect,
+            );
             if wr.phonemes.iter().any(|&b| b != 0) {
                 return Some(wr.phonemes);
             }
@@ -8847,12 +9024,20 @@ impl Translator {
         apply_currency(&mut tokens, lang);
         apply_fractions(&mut tokens, lang);
         apply_exponents(&mut tokens, lang);
+        let english: std::cell::OnceCell<Option<Translator>> = std::cell::OnceCell::new();
+        let english_has = |c: char| {
+            english
+                .get_or_init(|| Translator::new("en", Some(&self.data_dir)).ok())
+                .as_ref()
+                .is_some_and(|en| en.char_name_phonemes(c).is_some())
+        };
         let mut entries = build_translate_entries(
             &tokens,
             &dict,
             &phdata,
             &stress_opts,
             &self.options,
+            &english_has,
         );
         promote_translate_entries(&mut entries, &phdata, lang);
         if primary_bcp47_subtag(lang) == "en" {
