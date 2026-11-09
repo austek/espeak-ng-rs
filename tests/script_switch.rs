@@ -57,10 +57,15 @@ fn unspellable_scripts_fall_back_to_a_voice() {
         let out = en.text_to_ipa("你好").unwrap();
         assert!(out.contains("(cmn)"), "Han should fall back to a voice: {out}");
     }
-    if tr("he").is_some() {
-        let out = en.text_to_ipa("שלום").unwrap();
-        assert!(out.contains("(he)"), "Hebrew should fall back to a voice: {out}");
-    }
+}
+
+/// English lists Hebrew letter names (`_ש`), so upstream spells a Hebrew word
+/// with the alphabet name before each letter instead of switching voice.
+#[test]
+fn hebrew_is_spelled_with_the_alphabet_name() {
+    let Some(en) = tr("en") else { return };
+    let out = en.text_to_ipa("שלום").unwrap();
+    assert_eq!(out, "hˈiːbɹuːʃin hˈiːbɹuːlˈamed hˈiːbɹuːvˈav hˈiːbɹuːmˈem");
 }
 
 #[test]
