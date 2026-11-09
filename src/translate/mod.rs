@@ -6623,6 +6623,11 @@ fn letter_fallback(
         switch.extend_from_slice(b"en");
         return entry(switch, format!("_{letter}"));
     }
+    // C's `alphabets[]` hands 0xa700..0xd7ff to Korean, which has no name and
+    // does not speak a code.
+    if (0xa700..=0xd7ff).contains(&(letter as u32)) {
+        return None;
+    }
     let own = |key: &str| raw_list_entry(key, dict, phdata, stress_opts, options).map(|(ph, _)| ph);
     let mut out = Some(letter)
         .filter(|c| c.is_alphabetic())

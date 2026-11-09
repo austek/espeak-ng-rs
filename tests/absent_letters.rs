@@ -63,6 +63,16 @@ fn a_letter_nobody_names_is_read_as_its_code_point() {
 }
 
 #[test]
+fn a_letter_in_the_korean_range_is_silent() {
+    check(&[
+        ("fr", "ꝑ", ""),
+        ("pl", "ꜱ", ""),
+        ("tr", "ꝑ", ""),
+        ("sv", "ꜱ", ""),
+    ]);
+}
+
+#[test]
 fn superscript_letters_are_read_as_their_base_letter() {
     check(&[
         ("fr", "ˢ", "ˈɛs"),
