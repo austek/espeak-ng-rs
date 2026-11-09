@@ -3994,9 +3994,9 @@ fn cardinal_pronunciation(
     if digits.len() > 1 && digits.starts_with('0') {
         let mut result = Pronunciation::default();
         if digits.len() > 3 {
-            for d in digits.bytes() {
-                result.append_lookup_suffix(&lookup_num_phonemes(dict, &num_key(d - b'0')));
-            }
+            // The rules speak each digit from the list and add a no-link pause
+            // after every second one, as for a long run (`push_individual_digits`).
+            push_individual_digits(&mut result, digits, dict);
             return Some(result);
         }
         // Speak the leading zeros (at most all but the last digit), then read the
@@ -4134,8 +4134,14 @@ fn spelled_digit_groups(
     let mut out = Vec::new();
     for group in digit_groups(digits, grammar) {
         let mut word = Pronunciation::default();
-        for d in group.bytes() {
-            word.append_lookup_suffix(&lookup_num_phonemes(dict, &num_key(d - b'0')));
+        for (ix, d) in group.bytes().enumerate() {
+            let mut piece = trim_lookup(&lookup_num_phonemes(dict, &num_key(d - b'0'))).to_vec();
+            // As `push_individual_digits`: every second digit of a group is
+            // followed by a no-link pause.
+            if ix % 2 == 1 {
+                piece.push(crate::phoneme::PHON_PAUSE_NOLINK);
+            }
+            word.append_lookup_suffix(&piece);
         }
         let mut phonemes = word.finish();
         set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
@@ -6929,7 +6935,6 @@ fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
     let connector = match primary_bcp47_subtag(lang) {
         "de" => Some("uhr"),
         "fr" => Some("heures"),
-        "it" => Some("e"),
         _ => None,
     };
     let is_colon = |t: Option<&Token>| matches!(t, Some(Token::Punctuation(':')));
@@ -6969,6 +6974,11 @@ fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
                             out.push(Token::Word(word.to_string()));
                             out.push(Token::Space);
                         }
+                    } else if primary_bcp47_subtag(lang) == "it" && h_val <= 23 {
+                        // The Italian rule `_L16_) : (_L17D_` gives the colon a
+                        // paused, diminished "e" of its own rather than the word.
+                        out.push(Token::InlinePhonemes("_%%E_".to_string()));
+                        out.push(Token::Space);
                     }
                     out.push(Token::Number(NumberToken::Cardinal(minute)));
                     let mut j = i + 3;

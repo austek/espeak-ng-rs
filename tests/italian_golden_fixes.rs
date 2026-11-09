@@ -69,6 +69,25 @@ fn decimal_fraction_is_read_as_one_number() {
 }
 
 #[test]
+fn clock_time_gets_the_paused_connector() {
+    check_phonemes(&[
+        ("12:30", "d'oditSI _e_ t@-*'e:nta"),
+        ("ore 10:15", "'oRe dj'EtSI _e_ kw'imditSI"),
+    ]);
+}
+
+#[test]
+fn zero_led_digit_runs_pause_after_every_second_digit() {
+    check_phonemes(&[
+        ("0600", "dz'E*os'Ej_!dz'E*odz'E*o_!"),
+        (
+            "0612345678",
+            "dz'E*o s'Ej'uno_!d'ue t@-*'ekw'at:@-*o_!tS'inkwe s'Ejs'Et:e_!'Ot:o",
+        ),
+    ]);
+}
+
+#[test]
 fn end_stress_is_followed_by_the_alternate_vowel() {
     check_phonemes(&[("del", "d'el"), ("dal", "d'al")]);
 }
