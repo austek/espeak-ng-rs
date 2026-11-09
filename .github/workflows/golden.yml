@@ -97,6 +97,7 @@ jobs:
           --test pt_spelling_rule_symbol
           --test pt_final_u_glide
           --test pt_underscore_symbols
+          --test pt_currency_and_degrees
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

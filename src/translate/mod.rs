@@ -7109,28 +7109,6 @@ fn apply_dimensions(tokens: &mut [Token], lang: &str) {
     }
 }
 
-/// A degree sign followed by `C`/`F` is a temperature scale, not a stray letter:
-/// `20°C` → "twenty degrees Celsius".  The `°` already reads "degrees" (or the
-/// language's word); this just expands the trailing `C`/`F`.  Any language.
-fn apply_temperature(tokens: &mut Vec<Token>, _lang: &str) {
-    for i in 0..tokens.len() {
-        if !matches!(tokens[i], Token::Punctuation('°')) {
-            continue;
-        }
-        let j = if matches!(tokens.get(i + 1), Some(Token::Space | Token::WordJoin)) { i + 2 } else { i + 1 };
-        if let Some(Token::Word(w)) = tokens.get(j) {
-            let scale = match w.as_str() {
-                "C" => Some("celsius"),
-                "F" => Some("fahrenheit"),
-                _ => None,
-            };
-            if let Some(s) = scale {
-                tokens[j] = Token::Word(s.to_string());
-            }
-        }
-    }
-}
-
 /// Spell out a common, unambiguous unit abbreviation as `(singular, plural)` for
 /// the language.  Only multi-letter units are listed — single letters (`m`, `g`,
 /// `s`, `W`) are too ambiguous.  English uses British spelling (metre/litre); the
@@ -7791,6 +7769,8 @@ fn next_word_opening(tokens: &[Token], from: usize, lang: &str) -> [u8; 8] {
         .find_map(|t| match t {
             Token::Word(w) => Some(lowercase_for_lang(w, lang)),
             Token::Number(n) => Some(n.surface().to_string()),
+            // A currency sign stays in C's clause text (pt `r (_\$` reads "R$").
+            Token::Punctuation(c) if matches!(c, '$' | '€' | '£' | '¥' | '¢') => Some(c.to_string()),
             _ => None,
         })
     else {
@@ -9313,7 +9293,6 @@ impl Translator {
         apply_dash_reading(&mut tokens, lang);
         apply_decades(&mut tokens, lang);
         apply_units(&mut tokens, lang);
-        apply_temperature(&mut tokens, lang);
         apply_dimensions(&mut tokens, lang);
         apply_number_abbrev(&mut tokens, lang);
         apply_space_grouping(&mut tokens, &self.options.number_grammar);

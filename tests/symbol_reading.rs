@@ -60,10 +60,9 @@ fn math_and_degree_symbols_are_spoken() {
     assert!(cel.contains("dɪɡɹˈiːz") && cel.contains("sˈɛlsɪəs"), "℃ → degrees celsius: {cel}");
     let fah = t.text_to_ipa("72℉").unwrap();
     assert!(fah.contains("dɪɡɹˈiːz") && fah.contains("fˈaɹənhˌaɪt"), "℉ → degrees fahrenheit: {fah}");
-    // The two-character forms °C / °F read the same as the single-char ℃ / ℉
-    // (the trailing letter is the scale, not a stray "see"/"eff").
-    assert_eq!(t.text_to_ipa("20°C").unwrap(), t.text_to_ipa("20℃").unwrap(), "°C == ℃");
-    assert_eq!(t.text_to_ipa("72°F").unwrap(), t.text_to_ipa("72℉").unwrap(), "°F == ℉");
+    // The two-character forms °C / °F say "degrees" and the letter, as upstream does.
+    assert_eq!(t.text_to_ipa("20°C").unwrap(), "twˈɛnti dɪɡɹˈiːz sˈiː");
+    assert_eq!(t.text_to_ipa("72°F").unwrap(), "sˈɛvənti tˈuː dɪɡɹˈiːz ˈɛf");
     // A bare degree (an angle) stays just "degrees".
     let ang = t.text_to_ipa("90°").unwrap();
     assert!(ang.contains("dɪɡɹˈiːz") && !ang.contains("sˈɛlsɪəs"), "90° stays degrees: {ang}");
