@@ -36,7 +36,7 @@ fn better_readings_are_preserved() {
     assert!(!x("™").unwrap().contains("ˈɛm"), "folded to T M: {:?}", x("™"));
     assert!(x("№5").unwrap().contains("njˈuːm"), "{:?}", x("№5"));
     assert_eq!(x("①②③").unwrap(), "wˈɒn tˈuː θɹˈiː");
-    assert!(x("x²").unwrap().contains("skwˈeəd"), "{:?}", x("x²"));
+    assert_eq!(x("x²").unwrap(), "ˈɛks tˈuː");
     assert_eq!(x("ｈｅｌｌｏ").unwrap(), x("hello").unwrap(), "full-width already folds");
 }
 

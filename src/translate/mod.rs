@@ -1533,8 +1533,8 @@ fn normalize_number_symbols(text: &str) -> std::borrow::Cow<'_, str> {
                 '\u{2070}' => " 0", '⁴' => " 4", '⁵' => " 5", '⁶' => " 6",
                 '⁷' => " 7", '⁸' => " 8", _ => " 9",
             },
-            // Superscript ²/³ are powers, read "squared"/"cubed" (not "two").
-            '¹' => " 1", '²' => " squared ", '³' => " cubed ",
+            // Upstream reads them as the plain digits (`m²` is "m two").
+            '¹' => " 1", '²' => " 2", '³' => " 3",
             // Subscript digits (₀₁₂₃₄₅₆₇₈₉ = U+2080..2089).
             '₀' => " 0", '₁' => " 1", '₂' => " 2", '₃' => " 3", '₄' => " 4",
             '₅' => " 5", '₆' => " 6", '₇' => " 7", '₈' => " 8", '₉' => " 9",
@@ -11346,9 +11346,9 @@ mod tests {
     #[test]
     fn unicode_number_symbols_are_normalized() {
         use std::borrow::Cow;
-        // Superscript ²/³ read as powers; subscripts stay digits (H₂O).
-        assert_eq!(normalize_number_symbols("x²"), "x squared ");
-        assert_eq!(normalize_number_symbols("10³"), "10 cubed ");
+        // Superscripts read as plain digits; subscripts too (H₂O).
+        assert_eq!(normalize_number_symbols("x²"), "x 2");
+        assert_eq!(normalize_number_symbols("10³"), "10 3");
         assert_eq!(normalize_number_symbols("H₂O"), "H 2O");
         // Vulgar fractions → n/m.
         assert_eq!(normalize_number_symbols("½"), " 1/2 ");
@@ -11368,12 +11368,11 @@ mod tests {
         assert_eq!(stylized_to_ascii('𝐳'), Some('z'));
         assert_eq!(stylized_to_ascii('A'), None); // plain ASCII untouched
 
-        // End-to-end: `x²` reads "x squared"; a subscript `H₂` still yields a
-        // number token (not vanishing).
+        // End-to-end: `x²` yields a number token; so does a subscript `H₂`.
         let en = NumberGrammar::for_lang("en");
         assert!(
-            tokenize_opts("x²", &en).iter().any(|t| t == &Token::Word("squared".into())),
-            "superscript ² should read 'squared'"
+            tokenize_opts("x²", &en).iter().any(|t| t == &Token::Number(NumberToken::Cardinal("2".into()))),
+            "superscript ² should yield a number token"
         );
         assert!(
             tokenize_opts("H₂", &en).iter().any(|t| t == &Token::Number(NumberToken::Cardinal("2".into()))),

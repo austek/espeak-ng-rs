@@ -48,6 +48,11 @@ fn start_of_word_rules_decide_whether_a_word_is_spelled() {
 }
 
 #[test]
+fn superscript_two_and_three_read_as_digits() {
+    check(&[("²", "tˈuː"), ("³", "θɹˈiː"), ("x²", "ˈɛks tˈuː"), ("10³", "tˈɛn θɹˈiː")]);
+}
+
+#[test]
 fn abbrev_flag_survives_a_suffix_stem_lookup() {
     check(&[("os", "ˌəʊˈɛs"), ("OS", "ˌəʊˈɛs")]);
 }

@@ -226,13 +226,13 @@ fn common_abbreviations_expand() {
 }
 
 #[test]
-fn superscript_powers_read_squared_cubed() {
+fn superscript_powers_read_as_digits() {
     let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
     let ipa = |s: &str| t.text_to_ipa(s).unwrap();
-    // Superscript ² / ³ are powers, not the digit "two"/"three".
-    assert_eq!(ipa("5²"), ipa("5 squared"), "5² → five squared");
-    assert_eq!(ipa("x³"), ipa("x cubed"), "x³ → x cubed");
-    assert_eq!(ipa("E=mc²"), ipa("E = mc squared"), "E=mc² → …mc squared");
+    // Upstream espeak-ng master reads ² / ³ as the digits "two" / "three".
+    assert_eq!(ipa("5²"), ipa("5 two"), "5² → five two");
+    assert_eq!(ipa("x³"), ipa("x three"), "x³ → x three");
+    assert_eq!(ipa("E=mc²"), "ˈiː ˈiːkwəlz ˌɛmsˈiː tˈuː");
     // Subscripts stay digits (chemical formulae): H₂O → "H two O".
     assert!(ipa("H₂O").contains("tˈuː"), "H₂O keeps the digit: {}", ipa("H₂O"));
     assert!(!ipa("H₂O").contains("skwˈeəd"), "H₂O is not 'squared'");
