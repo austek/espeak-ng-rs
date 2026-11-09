@@ -29,6 +29,9 @@ use super::{CodeMarker, PhonemeCode};
 /// Private-use character that stands for the empty word between two spaces
 /// until the output is finished.
 const EMPTY_WORD_MARK: char = '\u{e000}';
+/// Stands for the space C writes before a clause's first spoken word when a
+/// silent pause phoneme came first; it must survive the line trimming.
+const LEADING_SPACE_MARK: char = '\u{e001}';
 
 /// C `WritePhMnemonic(..., use_ipa = 1)` for one phoneme of the list.
 ///
@@ -185,6 +188,7 @@ pub fn codes_to_ipa_opts(
     let mut pending_stress = String::new();
     let mut last_sound: Option<(u8, Neighbours)> = None;
     let mut pause_only_word = false;
+    let mut leading_pause = false;
 
     for (i, pc) in codes.iter().enumerate() {
         if let Some(CodeMarker::Punctuation(c)) = &pc.marker {
@@ -269,6 +273,7 @@ pub fn codes_to_ipa_opts(
                 }
                 out.push('\n');
                 wrote_phoneme = false; // a new clause starts the run again
+                leading_pause = false;
             } else {
                 // A word that is only pauses still takes its space in C, so
                 // mark it to survive the collapsing of doubled spaces below.
@@ -276,7 +281,13 @@ pub fn codes_to_ipa_opts(
                     out.push(EMPTY_WORD_MARK);
                 }
                 pause_only_word = false;
-                out.push(' ');
+                let line_empty = out.is_empty() || out.ends_with('\n');
+                if line_empty && leading_pause && sep.is_none() {
+                    out.push(LEADING_SPACE_MARK);
+                } else {
+                    out.push(' ');
+                }
+                leading_pause = false;
                 // A *space* separator is emitted at a word start too, which is
                 // why `--sep` doubles the space between words — but only once,
                 // even where two boundaries meet (a switched word brings its
@@ -307,7 +318,16 @@ pub fn codes_to_ipa_opts(
                     }
                 }
                 let nb = neighbours_at(codes, &real, &starts, rank[i], phdata);
-                pause_only_word |= out.ends_with(' ')
+                // C marks the first phoneme of each word as a word start and
+                // writes a space before every one but the clause's first.  A
+                // silent pause at the clause start is that first phoneme, so a
+                // word break after it (a Dutch number word) still gets its space.
+                if (out.is_empty() || out.ends_with('\n'))
+                    && phdata.get(code).is_some_and(|p| p.typ == crate::phoneme::PH_PAUSE)
+                {
+                    leading_pause = true;
+                }
+                pause_only_word |=out.ends_with(' ')
                     && phdata.get(code).is_some_and(|p| p.typ == crate::phoneme::PH_PAUSE);
                 let name = match &last_sound {
                     // C writes the lengthener and the syllabic marker through the
@@ -360,7 +380,17 @@ pub fn codes_to_ipa_opts(
     }
     let _ = straight_quote_open;
     out.retain(|c| c != EMPTY_WORD_MARK);
-    out.split('\n').map(str::trim).collect::<Vec<_>>().join("\n").trim_end().to_string()
+    let kept: Vec<String> = out
+        .split('\n')
+        .map(|line| {
+            let line = line.trim();
+            match line.strip_prefix(LEADING_SPACE_MARK) {
+                Some(rest) => format!(" {}", rest.trim_start()),
+                None => line.to_string(),
+            }
+        })
+        .collect();
+    kept.join("\n").trim_end().to_string()
 }
 
 /// The neighbour context for the phoneme that is `real[n]`, built the same way

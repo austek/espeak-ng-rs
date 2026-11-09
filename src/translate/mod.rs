@@ -11766,7 +11766,7 @@ mod tests {
     fn ordinals_dutch() {
         // ordinal_indicator="e" mechanism
         run_ipa_table("nl", "nl_dict", &[
-            ("1e", "ˈɪːrstə"),
+            ("1e", " ˈɪːrstə"),
             ("3e", "dˈɛrdə"),
         ]);
     }
@@ -11805,7 +11805,7 @@ mod tests {
              "ˈaɪnə mɪljˈoːn tsvˈaɪhˈʊndɜt fˈiːɾ ʊntdɾˈaɪsɪç tˈaʊzənt fˈʏnfhˈʊndɜt zˈiːbən ʊntzˈɛçtsɪç",
              "ˈaɪnə mɪljˈoːn tsvˈaɪhˈʊndɜt fˈiːɾ ʊntdɾˈaɪsɪç tˈaʊzənt fˈynfhˈʊndɜt zˈiːbən ʊntzˈɛçtsɪç"),
             ("nl", "nl_dict",
-             "ˈeːn mˌiljun tʋˈeːhˌɔndərt vˌirɛndˌɛrtəx dˌœyzɛnt vˈɛɪfhˌɔndərt zˌeːvənɛnzˌɛstəx",
+             " ˈeːn mˌiljun tʋˈeːhˌɔndərt vˌirɛndˌɛrtəx dˌœyzɛnt vˈɛɪfhˌɔndərt zˌeːvənɛnzˌɛstəx",
              "ˈeːn mˌiljun tʋˈeːhˌɔndərt vˌirɛndˌɛrtəx dˌœyzɛnt vˈɛɪfhˌɔndərt zˌeːvənɛnzˌɛstəx"),
         ];
         for &(lang, dict, expected, _oracle) in cases {
