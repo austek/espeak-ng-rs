@@ -7481,6 +7481,12 @@ fn dict_names_symbol(dict: &Dictionary, c: char, dict_condition: u32) -> bool {
     dict_symbol_flags(dict, c, dict_condition).is_some()
 }
 
+/// Whether the dictionary has a `_<char>` name entry for the character.
+fn has_underscore_name(dict: &Dictionary, c: char, dict_condition: u32) -> bool {
+    let ctx = LookupCtx { lookup_symbol: true, dict_condition, ..Default::default() };
+    lookup(dict, &format!("_{c}"), &ctx).is_some_and(|r| r.flags1.found())
+}
+
 /// The dictionary flags of a bare single-character entry, when it has one.
 /// `$max3` lives here: a symbol entry carrying it is spoken at most three times
 /// in a row (C's `phonemes_repeat_count`), which is what keeps `~ ~ ~ ~ ~ ~`
@@ -7727,6 +7733,12 @@ fn lookup_symbol_name(
     // The table above is this port's own addition for the languages whose data
     // is silent; past it, silence is the right answer.
     if mode == SymbolName::Operator {
+        return (Vec::new(), false);
+    }
+    // In running text C ignores a character the language names only as `_<char>`
+    // (`LookupLetter`: "specified as _* so ignore it"), which is why French
+    // says nothing for `/` or `#` unless punctuation is announced.
+    if mode == SymbolName::Inline && has_underscore_name(dict, c, options.dict_condition) {
         return (Vec::new(), false);
     }
     // Otherwise use the dictionary character-name entry (`_%`, `_$`, …).

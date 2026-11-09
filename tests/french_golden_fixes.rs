@@ -60,6 +60,23 @@ fn listed_number_symbols_read_as_dictionary_words() {
 }
 
 #[test]
+fn symbols_named_only_with_an_underscore_are_silent_in_running_text() {
+    ipa_cases(&[
+        ("1/2", "ˈœ̃ dˈø"),
+        ("3/4", "tʁwˈa kˈatʁ"),
+        ("a / b", "a bˈe"),
+        ("km/h", "kilomˈɛtʁ ˈaʃ"),
+        ("12/05/2024", "dˈuz zeʁo sˈɛ̃k dø mil vɛ̃tkˈatʁ"),
+        ("a # b", "a bˈe"),
+        ("a = b", "a bˈe"),
+        ("a § b", "a bˈe"),
+        ("3+4=7", "tʁwˈa plˈys kˈatʁ sˈɛt"),
+        ("user@example.com", "yzˈe aʁobˈaz ɛɡzˈɑ̃pl kˈɔm"),
+        ("www.exemple.fr", "dubləvˌedubləvˌedubləvˈe ɛɡzˈɑ̃pl ˌɛfˈɛʁ"),
+    ]);
+}
+
+#[test]
 fn spelled_i_before_a_vowel_is_a_glide_without_stress() {
     ipa_cases(&[
         ("cia", "sˌejˈa"),
