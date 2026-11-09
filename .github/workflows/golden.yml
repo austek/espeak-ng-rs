@@ -74,6 +74,7 @@ jobs:
           --test switched_replace
           --test spellword_abort
           --test en_golden_fixes
+          --test roman_numerals
           --test dutch_nested_prefix
           --test dutch_article_apostrophe
           --test dutch_phrase_entries

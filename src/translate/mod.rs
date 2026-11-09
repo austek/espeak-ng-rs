@@ -6643,63 +6643,64 @@ fn letter_fallback(
     entry(out, letter.to_string())
 }
 
-/// The canonical Roman numeral for `n` (`4` → "IV"), used to validate parses.
-fn to_roman(mut n: u32) -> String {
-    const TABLE: [(u32, &str); 13] = [
-        (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),
-        (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
-    ];
-    let mut out = String::new();
-    for (v, sym) in TABLE {
-        while n >= v {
-            out.push_str(sym);
-            n -= v;
-        }
-    }
-    out
-}
-
-/// Parse a strict, canonical Roman numeral (`"XIV"` → `14`).  Rejects anything
-/// non-canonical (`"IIII"`, `"VX"`) by round-tripping through `to_roman`, so real
-/// words that happen to use Roman letters (`"DID"`, `"MIMIC"`) don't match.
-fn roman_value(s: &str) -> Option<u32> {
-    if s.is_empty() {
+/// C's `TranslateRoman` validity scan over a lower-case word: `ix`, `xxi` and
+/// `mcm`, but not `iiii`, `vx` or `ic`.  Returns the value when it lies within
+/// the language's `min_roman..=max_roman` (2..=49 by default).
+fn c_roman_value(word: &str) -> Option<u32> {
+    const LETTERS: &str = "ixcmvld";
+    const VALUES: [i32; 7] = [1, 10, 100, 1000, 5, 50, 500];
+    if word.chars().count() < 2 {
         return None;
     }
-    let digit = |c| match c {
-        'I' => Some(1),
-        'V' => Some(5),
-        'X' => Some(10),
-        'L' => Some(50),
-        'C' => Some(100),
-        'D' => Some(500),
-        'M' => Some(1000),
-        _ => None,
-    };
-    let mut total: i64 = 0;
-    let mut highest = 0;
-    for c in s.chars().rev() {
-        let v = digit(c)?;
-        if v < highest {
-            total -= v as i64;
+    let (mut acc, mut prev, mut subtract, mut repeat) = (0i32, 0i32, 0x7fffi32, 0);
+    for c in word.chars() {
+        let mut value = VALUES[LETTERS.find(c)?];
+        if value == prev {
+            repeat += 1;
+            if repeat >= 3 {
+                return None;
+            }
         } else {
-            total += v as i64;
-            highest = v;
+            repeat = 0;
         }
+        if prev > 1 && prev != 10 && prev != 100 && value >= prev {
+            return None;
+        }
+        if prev != 0 && prev < value {
+            if acc % 10 != 0 || prev * 10 < value {
+                return None;
+            }
+            subtract = prev;
+            value -= subtract;
+        } else if value >= subtract {
+            return None;
+        } else {
+            acc += prev;
+        }
+        prev = value;
     }
-    let n = u32::try_from(total).ok()?;
-    (n > 0 && to_roman(n) == s).then_some(n)
+    acc += prev;
+    (2..=49).contains(&acc).then_some(acc as u32)
 }
 
-/// Words after which an uppercase Roman numeral is (almost) certainly a number,
-/// read as a cardinal ("Chapter IV" → "four", "World War II" → "two").
-fn is_roman_context_keyword(lower: &str) -> bool {
-    matches!(
-        lower,
-        "chapter" | "part" | "section" | "book" | "volume" | "vol" | "act" | "scene"
-            | "appendix" | "article" | "war" | "grade" | "level" | "phase" | "type"
-            | "class" | "mark" | "figure" | "stage" | "episode" | "series"
-    )
+/// A Roman numeral read as "roman" plus its number (`vi` is "roman six"), for
+/// a language with `NUM_ROMAN` and no capitals-only rule.
+fn roman_number_phonemes(
+    word: &str,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    grammar: &NumberGrammar,
+) -> Option<Vec<u8>> {
+    let value = c_roman_value(word)?;
+    let number = translate_number_token(
+        &NumberToken::Cardinal(value.to_string()), dict, phdata, stress_opts, grammar,
+    )?;
+    let mut out = trim_lookup(&lookup_num_phonemes(dict, "_roman")).to_vec();
+    out.extend(number.phonemes.iter().copied().filter(|&b| b != 0));
+    out.push(0);
+    set_word_stress(&mut out, phdata, stress_opts, Some(0), -1, 0);
+    Some(out)
 }
 
 /// Whether the language treats `ordinal` as an ordinal: C accepts a suffix only
@@ -6748,33 +6749,6 @@ fn merge_digit_follow(tokens: &mut Vec<Token>, dict: &Dictionary) {
         out.push(token);
     }
     *tokens = out;
-}
-
-/// Convert an uppercase Roman numeral that immediately follows a recognised
-/// enumeration keyword into a cardinal number ("Chapter IV" → "Chapter 4").
-/// Keyword-gated to avoid misreading real all-caps words (MIX, MI, CID…) as
-/// numbers; regnal ordinals ("Louis XIV") are deliberately left alone (they are
-/// ambiguous — "Apollo XI" is *eleven*, not *the eleventh*).  English-only.
-fn apply_roman_numerals(tokens: &mut Vec<Token>, lang: &str) {
-    if primary_bcp47_subtag(lang) != "en" {
-        return;
-    }
-    for i in 0..tokens.len() {
-        let Token::Word(kw) = &tokens[i] else { continue };
-        if !is_roman_context_keyword(&kw.to_lowercase()) {
-            continue;
-        }
-        // The next token past a single space.
-        let j = if matches!(tokens.get(i + 1), Some(Token::Space | Token::WordJoin)) { i + 2 } else { i + 1 };
-        if let Some(Token::Word(w)) = tokens.get(j) {
-            // Uppercase only (lowercase roman collides with words like "i"/"mix").
-            if w.chars().all(|c| c.is_ascii_uppercase()) {
-                if let Some(n) = roman_value(w) {
-                    tokens[j] = Token::Number(NumberToken::Cardinal(n.to_string()));
-                }
-            }
-        }
-    }
 }
 
 /// A title/abbreviation that precedes a name, after which a period is part of
@@ -8219,6 +8193,13 @@ pub(crate) fn build_translate_entries(
                         .join(" ");
                     format!("{lower} {rest}")
                 };
+                let roman = (!wr.found_in_list
+                    && primary_bcp47_subtag(&options.lang) == "en"
+                    && !(expect.first_upper && !expect.all_upper)
+                    && !dict_lists_word(word, dict, options)
+                    && !matches!(tokens.get(token_ix.wrapping_sub(1)), Some(Token::Number(_))))
+                .then(|| roman_number_phonemes(&lower, dict, phdata, stress_opts, &options.number_grammar))
+                .flatten();
                 // C spells a word whose list entry carries `$abbrev` but gives no
                 // pronunciation ("the word has $abbrev flag, but no pronunciation
                 // specified.  Speak as individual letters") — English `usa` is
@@ -8231,6 +8212,11 @@ pub(crate) fn build_translate_entries(
                     {
                         wr.phonemes = spelled;
                     }
+                }
+                // An English word that is a valid Roman numeral and that the
+                // dictionary does not list (`vi`, `xii`) is read as one.
+                else if let Some(roman) = roman {
+                    wr.phonemes = roman;
                 }
                 // A word the dictionary doesn't pronounce and whose first vowel
                 // is too far in — "BBC" has none at all — is spelled letter by
@@ -9420,7 +9406,6 @@ impl Translator {
         let mut tokens = split_overlong_clauses(tokenize_opts(&text, &number_grammar));
         split_unrecognised_ordinals(&mut tokens, &dict, &number_grammar);
         merge_digit_follow(&mut tokens, &dict);
-        apply_roman_numerals(&mut tokens, lang);
         suppress_abbreviation_periods(&mut tokens, lang);
         apply_time_reading(&mut tokens, lang);
         apply_dash_reading(&mut tokens, lang);
@@ -11940,25 +11925,5 @@ mod tests {
         }
         assert_eq!(NumberGrammar::for_lang("en").decimal_separator, '.');
         assert_eq!(NumberGrammar::for_lang("en").group_separator, Some(','));
-    }
-
-    #[test]
-    fn roman_numeral_parsing() {
-        // Canonical Roman numerals parse; non-canonical / non-Roman reject.
-        for (s, n) in [("I", 1), ("IV", 4), ("IX", 9), ("XIV", 14), ("XL", 40),
-                       ("XCIX", 99), ("MCMLXXXIV", 1984), ("MMXXIV", 2024)] {
-            assert_eq!(roman_value(s), Some(n), "{s}");
-            assert_eq!(to_roman(n), s, "to_roman({n})");
-        }
-        // Real words / malformed numerals must NOT parse (round-trip guard).
-        for s in ["IIII", "VX", "IC", "MIX", "DID", "MIMIC", "CIVIC", "", "A", "mix"] {
-            // "MIX" *is* canonical (1009) but only converts after a keyword; the
-            // parser itself accepts it — the guard is `to_roman` round-tripping.
-            if s == "MIX" {
-                assert_eq!(roman_value(s), Some(1009));
-            } else {
-                assert_eq!(roman_value(s), None, "{s} should not be a valid numeral");
-            }
-        }
     }
 }
