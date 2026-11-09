@@ -7723,8 +7723,19 @@ fn lookup_symbol_name(
         return (Vec::new(), false);
     }
     // Otherwise use the dictionary character-name entry (`_%`, `_$`, …).
-    for key in [format!("_{c}"), c.to_string()] {
+    // Running text ignores a character that only has a `_<char>` name entry
+    // (C's `LookupLetter` with `next_byte == -1`): `_/` is spoken when the
+    // character is spelled, never in `a/b`.
+    let keys = if mode == SymbolName::Inline {
+        vec![c.to_string(), format!("_{c}")]
+    } else {
+        vec![format!("_{c}"), c.to_string()]
+    };
+    for key in keys {
         let wr = word_to_phonemes(&key, dict, phdata, stress_opts, options);
+        if mode == SymbolName::Inline && key.starts_with('_') && !wr.phonemes.iter().all(|&b| b == 0) {
+            return (Vec::new(), false);
+        }
         // A result of nothing but terminators is not a reading: it used to be
         // returned as one, which silenced the fallback below (`fi -5` lost its
         // "miinus" because `_−` came back as a lone NUL).
