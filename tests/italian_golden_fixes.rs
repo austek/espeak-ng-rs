@@ -1,16 +1,35 @@
 // Values from upstream espeak-ng master (f0fb11a8), `espeak-ng -q -x -v it`.
 
 fn check_phonemes(cases: &[(&str, &str)]) {
+    check_with("-x", cases);
+}
+
+fn check_ipa(cases: &[(&str, &str)]) {
+    check_with("--ipa", cases);
+}
+
+fn check_with(flag: &str, cases: &[(&str, &str)]) {
     let data = concat!(env!("CARGO_MANIFEST_DIR"), "/espeak-ng-data");
     for (text, want) in cases {
         let out = std::process::Command::new(env!("CARGO_BIN_EXE_espeak_cli"))
-            .args(["-q", "-x", "-v", "it", "--", text])
+            .args(["-q", flag, "-v", "it", "--", text])
             .env("ESPEAK_DATA_PATH", data)
             .output()
             .expect("run cli");
         let got = String::from_utf8_lossy(&out.stdout).trim().replace('\n', " ");
         assert_eq!(&got, want, "text {text:?}");
     }
+}
+
+#[test]
+fn lengthened_vowel_still_glides_into_a_vowel() {
+    check_phonemes(&[
+        ("spie", "sp'i:;e"),
+        ("siano", "s'i:;ano"),
+        ("stiano", "st'i:;ano"),
+        ("lucia", "lUtS'i:;a"),
+    ]);
+    check_ipa(&[("spie", "spˈiːe"), ("siano", "sˈiːano"), ("lucia", "lʊtʃˈiːa")]);
 }
 
 #[test]

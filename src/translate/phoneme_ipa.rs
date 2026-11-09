@@ -425,11 +425,17 @@ fn neighbours_at(
             _ => None,
         })
         .unwrap_or(1);
+    // C keeps a lengthen mark as a flag on the vowel, so no phoneme sees one as
+    // its neighbour (`;` after `i:` still follows the `i`).
+    let skip_mark = codes[i].code != PHON_LENGTHEN;
+    let sound = |k: &&usize| !skip_mark || codes[**k].code != PHON_LENGTHEN;
+    let prev_ix = real[..n].iter().rev().find(sound);
+    let mut after = real[n + 1..].iter().filter(sound);
     Neighbours {
-        prev: at(n.checked_sub(1).and_then(|k| real.get(k))),
+        prev: at(prev_ix),
         this: codes[i].code,
-        next: at(real.get(n + 1)),
-        next2: at(real.get(n + 2)),
+        next: at(after.next()),
+        next2: at(after.next()),
         stress,
         this_wordstart: starts[n],
         prev_wordstart: n.checked_sub(1).is_some_and(|k| starts[k]),

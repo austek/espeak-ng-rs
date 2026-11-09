@@ -10605,8 +10605,13 @@ fn double_lengthened_consonants(
 }
 
 fn apply_list_editing_instructions(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData) {
+    // C turns a lengthen mark into a flag on the vowel before it, so the
+    // neighbours of a phoneme never include one (`i:` still sees the next vowel).
     let is_sound = |c: &PhonemeCode| {
-        !c.is_boundary && c.code > 8 && c.code != crate::phoneme::PHON_END_WORD
+        !c.is_boundary
+            && c.code > 8
+            && c.code != crate::phoneme::PHON_END_WORD
+            && c.code != crate::phoneme::PHON_LENGTHEN
     };
     let real: Vec<usize> = codes.iter().enumerate().filter(|(_, c)| is_sound(c)).map(|(i, _)| i).collect();
     if real.is_empty() {
@@ -10683,7 +10688,10 @@ fn apply_list_editing_instructions(codes: &mut Vec<PhonemeCode>, phdata: &Phonem
     edits.sort_by(|a, b| b.0.cmp(&a.0).then(b.2.cmp(&a.2)));
     let mut inserted = vec![false; codes.len()];
     for (i, code, before) in edits {
-        let at = if before { i } else { i + 1 };
+        let mut at = if before { i } else { i + 1 };
+        while !before && codes.get(at).is_some_and(|c| c.code == crate::phoneme::PHON_LENGTHEN && !c.is_boundary) {
+            at += 1;
+        }
         codes.insert(at, PhonemeCode { code, is_boundary: false, clause_char: None , marker: None});
         inserted.insert(at, true);
     }
