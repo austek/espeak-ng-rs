@@ -5964,6 +5964,9 @@ fn split_abandoned_words(
             && native(word)
             && !dict_lists_word(word, dict, options)
             && rules_abort_word(word, dict, options)
+            // `TranslateWord3` spells an unpronounceable word before the
+            // rules get to abandon it.
+            && !is_unpronounceable(&lowercase_for_lang(word, &options.lang), dict, options)
     };
     if !tokens.iter().any(|t| matches!(t, Token::Word(w) if abandoned(w))) {
         return vec![None; tokens.len()];
@@ -6169,6 +6172,9 @@ fn spell_unpronounceable<'a>(
             wr = word_to_phonemes(&lower, dict, phdata, stress_opts, options);
         }
         if wr.phonemes.iter().all(|&b| b == 0) {
+            wr.phonemes = superscript_name(c, dict, phdata, stress_opts, options);
+        }
+        if wr.phonemes.iter().all(|&b| b == 0) {
             return None;
         }
         let name = if out.is_empty() {
@@ -6350,6 +6356,9 @@ fn spell_word_letters(
         let mut wr = word_to_phonemes(&format!("_{lower}"), dict, phdata, stress_opts, options);
         if wr.phonemes.iter().all(|&b| b == 0) || wr.dict_flags == 0 {
             wr = word_to_phonemes(&lower, dict, phdata, stress_opts, options);
+        }
+        if wr.phonemes.iter().all(|&b| b == 0) {
+            wr.phonemes = superscript_name(c, dict, phdata, stress_opts, options);
         }
         if wr.phonemes.iter().all(|&b| b == 0) {
             return None;
@@ -6550,6 +6559,27 @@ fn letter_name(
     set_word_stress(&mut accented, phdata, stress_opts, Some(0), -1, 0);
     accented.retain(|&b| b != 0);
     accented
+}
+
+/// The name of the base letter of a super- or subscript letter (`ª` is `a`),
+/// with a terminating NUL; empty when `c` is not one or the base has no name.
+fn superscript_name(
+    c: char,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+) -> Vec<u8> {
+    let mut name = c
+        .to_lowercase()
+        .next()
+        .and_then(derived_letter)
+        .map(|base| letter_name(base, dict, phdata, stress_opts, options))
+        .unwrap_or_default();
+    if !name.is_empty() {
+        name.push(0);
+    }
+    name
 }
 
 /// How `LetterFallback` says a letter the language cannot pronounce.
@@ -8206,6 +8236,7 @@ pub(crate) fn build_translate_entries(
                 // letter, then whatever remains is translated normally.
                 else if !wr.found_in_list
                     && !dict_knows_word(&lower, dict)
+                    && !dict_lists_word(word, dict, options)
                     && is_unpronounceable(&lower, dict, options)
                 {
                     if let Some((letters, rest)) =

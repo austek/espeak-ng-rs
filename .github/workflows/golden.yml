@@ -80,6 +80,7 @@ jobs:
           --test dutch_number_leading_space
           --test dutch_hyphen_compound
           --test dutch_pause_word_voicing
+          --test spelled_superscript
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
