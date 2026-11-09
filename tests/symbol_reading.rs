@@ -115,48 +115,30 @@ fn arithmetic_and_degree_symbols_read_in_other_languages() {
 
 #[test]
 fn non_english_currency_symbols_are_spoken() {
-    // The euro (and $/£) used to be dropped for non-English voices (`de 5€` →
-    // "fünf").  Now the symbol reads as the currency word after the amount,
-    // identical to writing "<amount> <word>".
+    // C reads the symbol's name where it is written and never pluralises it;
+    // expected strings are C espeak-ng master output.
     let cases: &[(&str, &str, &str)] = &[
-        ("de", "5€", "5 euro"),
-        ("de", "€5", "5 euro"),
-        ("fr", "5€", "5 euros"),
-        ("es", "5€", "5 euros"),
-        ("it", "5€", "5 euro"),
-        ("pt", "5€", "5 euros"),
-        ("nl", "5€", "5 euro"),
-        ("de", "5$", "5 dollar"),
-        ("fr", "5£", "5 livres"),
+        ("de", "5€", "fˈʏnf ˈɔøroː"),
+        ("de", "€5", "ˈɔøroː fˈʏnf"),
+        ("nl", "€5", "ˈøːroː vˈɛɪf"),
+        ("nl", "5€", "vˈɛɪf ˈøːroː"),
+        ("fr", "5€", "sˈɛ̃k øʁˈo"),
+        ("es", "5€", "θˈinko ˈeʊɾo"),
+        ("it", "5€", "tʃˈinkwe sˈimbolo dˈɛl ˈɛʊro"),
+        ("pt", "5€", "sˈiŋku ˈeʊɾʊ"),
+        ("de", "5$", "fˈʏnf dɔlˈɑː"),
+        ("fr", "5£", "sˈɛ̃k lˈivʁ"),
+        ("de", "1€", "ˈaɪns ˈɔøroː"),
+        ("es", "1€", "ˈuno ˈeʊɾo"),
+        ("en", "$5", "dˈɒlə fˈaɪv"),
+        ("en", "$12.99", "dˈɒlə twˈɛlv pɔɪnt nˈaɪn nˈaɪn"),
     ];
-    for (lang, sym, expanded) in cases {
+    for (lang, text, expected) in cases {
         let Some(t) = Translator::new(lang, None).ok() else {
             eprintln!("[SKIP] no {lang} data");
             continue;
         };
-        let got = t.text_to_ipa(sym).unwrap();
-        // The symbol added a spoken word (it is no longer dropped)…
-        assert_ne!(got, t.text_to_ipa("5").unwrap(), "{lang} {sym}: symbol dropped");
-        // …and reads the same as the written-out amount.
-        assert_eq!(got, t.text_to_ipa(expanded).unwrap(), "{lang} {sym} ≠ {expanded:?}");
-    }
-
-    // Amount of exactly one apocopates the "one" before the currency noun:
-    // "ein Euro" (not "eins"), "un euro" (not "uno").
-    let one: &[(&str, &str, &str)] = &[
-        ("de", "1€", "ein euro"),
-        ("de", "1$", "ein dollar"),
-        ("es", "1€", "un euro"),
-        ("it", "1€", "un euro"),
-    ];
-    for (lang, sym, expanded) in one {
-        if let Some(t) = Translator::new(lang, None).ok() {
-            assert_eq!(
-                t.text_to_ipa(sym).unwrap(),
-                t.text_to_ipa(expanded).unwrap(),
-                "{lang} {sym} should read as {expanded:?}"
-            );
-        }
+        assert_eq!(&t.text_to_ipa(text).unwrap(), expected, "{lang} {text}");
     }
 }
 

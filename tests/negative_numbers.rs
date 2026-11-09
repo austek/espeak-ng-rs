@@ -28,22 +28,18 @@ fn leading_minus_before_number_reads_minus() {
 }
 
 #[test]
-fn leading_minus_before_currency_reads_minus() {
+fn leading_minus_before_currency_is_silent_like_c() {
     let Some(t) = Translator::new("en", None).ok() else {
         eprintln!("[SKIP] no en data");
         return;
     };
     let ipa = |s: &str| t.text_to_ipa(s).unwrap();
 
-    // A minus before a currency amount is a negative amount ("-$5" = minus five
-    // dollars).  Previously the sign was dropped ("-$5" → "five dollars").
-    assert_eq!(ipa("-$5"), "mˈaɪnəs fˈaɪv dˈɒləz");
-    assert!(ipa("-€10").starts_with("mˈaɪnəs"), "{}", ipa("-€10"));
-    assert!(ipa("-£5").starts_with("mˈaɪnəs"), "{}", ipa("-£5"));
-    assert!(ipa("was -$5").contains("mˈaɪnəs fˈaɪv dˈɒləz"), "{}", ipa("was -$5"));
-    // The `+`/`$` positive form is unchanged.
-    assert_eq!(ipa("+$5"), "plˈʌs fˈaɪv dˈɒləz");
-    assert_eq!(ipa("$5"), "fˈaɪv dˈɒləz");
+    // C master drops the sign before a currency symbol ("-$5" = "dollar five").
+    assert_eq!(ipa("-$5"), "dˈɒlə fˈaɪv");
+    assert_eq!(ipa("-£5"), "pˈaʊnd fˈaɪv");
+    assert_eq!(ipa("was -$5"), "wɒz dˈɒlə fˈaɪv");
+    assert_eq!(ipa("$5"), "dˈɒlə fˈaɪv");
     // A hyphen after a word/number before a currency symbol is NOT a minus.
     for s in ["US-$5", "5-$3", "price-$5"] {
         assert!(!ipa(s).contains("mˈaɪnəs"), "{s:?} should not read a minus: {}", ipa(s));

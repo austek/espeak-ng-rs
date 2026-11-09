@@ -1996,8 +1996,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             )
         {
             // A unary minus written with an ASCII hyphen directly before a
-            // number ("-5") or a currency amount ("-$5") reads as the language's
-            // "minus" word.  Gated to a clause start or just-after-a-space — a
+            // number ("-5") reads as the language's "minus" word.  Gated to a clause start or just-after-a-space — a
             // hyphen following a word or number ("COVID-19", "5-10") is a
             // separator/range, not a sign, and is left to the punctuation path.
             // Keep the hyphen as written and mark it an *operator*: C reads a
@@ -5640,32 +5639,14 @@ fn is_spoken_symbol(c: char) -> bool {
                 | '‰' | '‱')
 }
 
-/// A currency symbol that prefixes an amount (`$5`, `€10`).  Matches the set
-/// `currency_words` reads, so a leading minus before one is a negative amount.
-fn is_currency_symbol(c: char) -> bool {
-    matches!(c, '$' | '€' | '£' | '¥' | '¢')
-}
-
-/// Whether the characters after a leading `-` begin a number, so the hyphen is a
-/// unary minus: a digit (`-5`), or a currency symbol then a digit — allowing one
-/// optional space (`-$5`, `-$ 5`).  Takes a clone of the tokenizer iterator
-/// positioned just past the `-`.
+/// Whether a digit directly follows a leading `-`, so the hyphen is a unary
+/// minus (`-5`).  A currency symbol in between (`-$5`) is not: C drops the sign.
+/// Takes a clone of the tokenizer iterator positioned just past the `-`.
 fn minus_precedes_number<I>(chars: &std::iter::Peekable<I>) -> bool
 where
     I: Iterator<Item = char> + Clone,
 {
-    let mut la = chars.clone();
-    match la.next() {
-        Some(d) if d.is_ascii_digit() => true,
-        Some(cur) if is_currency_symbol(cur) => {
-            let mut next = la.next();
-            if next == Some(' ') {
-                next = la.next();
-            }
-            next.map_or(false, |d| d.is_ascii_digit())
-        }
-        _ => false,
-    }
+    chars.clone().next().is_some_and(|d| d.is_ascii_digit())
 }
 
 /// Merge space-grouped thousands into a single number (`1 234 567` →
@@ -7280,168 +7261,6 @@ fn apply_fractions(tokens: &mut Vec<Token>, lang: &str) {
                         i += 3;
                         continue;
                     }
-                }
-            }
-        }
-        out.push(tokens[i].clone());
-        i += 1;
-    }
-    *tokens = out;
-}
-
-/// The singular/plural spoken words for a currency symbol in the given language,
-/// or `None` if that currency isn't spelled out for the language.  Invariable
-/// nouns (German "Euro", Italian "euro") repeat the same word for both.
-fn currency_words(c: char, lang: &str) -> Option<(&'static str, &'static str)> {
-    Some(match (primary_bcp47_subtag(lang), c) {
-        ("en", '$') => ("dollar", "dollars"),
-        ("en", '€') => ("euro", "euros"),
-        ("en", '£') => ("pound", "pounds"),
-        ("en", '¥') => ("yen", "yen"),
-        ("en", '¢') => ("cent", "cents"),
-        // Eurozone / continental readings (word follows the amount).
-        ("de", '€') => ("euro", "euro"),
-        ("de", '$') => ("dollar", "dollar"),
-        ("de", '£') => ("pfund", "pfund"),
-        ("fr", '€') => ("euro", "euros"),
-        ("fr", '$') => ("dollar", "dollars"),
-        ("fr", '£') => ("livre", "livres"),
-        ("es", '€') => ("euro", "euros"),
-        ("es", '$') => ("dólar", "dólares"),
-        ("es", '£') => ("libra", "libras"),
-        ("it", '€') => ("euro", "euro"),
-        ("it", '$') => ("dollaro", "dollari"),
-        ("it", '£') => ("sterlina", "sterline"),
-        ("pt", '€') => ("euro", "euros"),
-        ("pt", '$') => ("dólar", "dólares"),
-        ("pt", '£') => ("libra", "libras"),
-        ("nl", '€') => ("euro", "euro"),
-        ("nl", '$') => ("dollar", "dollar"),
-        ("nl", '£') => ("pond", "pond"),
-        _ => return None,
-    })
-}
-
-/// The apocopated "one" used before a currency noun when the amount is exactly
-/// one — German "ein Euro" (not "eins"), Spanish/Italian "un euro" (not "uno").
-/// `None` where the plain cardinal is already right (French "un", Portuguese
-/// "um", English "one").  `£` is feminine in es/it → "una".
-fn currency_one_word(lang: &str, c: char) -> Option<&'static str> {
-    match (primary_bcp47_subtag(lang), c) {
-        ("de", _) => Some("ein"),      // Euro/Dollar masc., Pfund neut. → "ein"
-        ("es", '£') | ("it", '£') => Some("una"), // libra/sterlina fem.
-        ("es", _) | ("it", _) => Some("un"),
-        _ => None,
-    }
-}
-
-/// A large-number scale word that can follow a currency amount (`$5 million`).
-/// English only — used to keep the scale before the currency word.
-fn is_scale_word(w: &str) -> bool {
-    matches!(
-        w,
-        "thousand" | "million" | "billion" | "trillion" | "quadrillion" | "quintillion"
-    )
-}
-
-/// Emit a currency `amount` as spoken tokens: `<n> <unit>` (pluralised unless the
-/// value is one), splitting a decimal amount into a whole part and a two-digit
-/// cents part (`$5.99` → "five dollars ninety nine cents").
-fn emit_currency_amount(
-    out: &mut Vec<Token>,
-    amount: &NumberToken,
-    sing: &str,
-    plur: &str,
-    split_cents: bool,
-    one_word: Option<&str>,
-) {
-    let push_unit = |out: &mut Vec<Token>, n_str: &str, sing: &str, plur: &str| {
-        let one = n_str.trim_start_matches('0') == "1";
-        out.push(Token::Number(NumberToken::Cardinal(n_str.to_string())));
-        out.push(Token::Word(if one { sing } else { plur }.to_string()));
-    };
-    match amount {
-        // `$5.99` → "five dollars ninety nine cents" (English cents split only;
-        // other languages read the decimal as-is + the currency word).
-        NumberToken::Decimal { integer, fractional } if split_cents => {
-            let mut cents: String = fractional.chars().take(2).collect();
-            while cents.len() < 2 {
-                cents.push('0');
-            }
-            let dollars_zero = integer.chars().all(|d| d == '0');
-            let cents_zero = cents == "00";
-            if !dollars_zero || cents_zero {
-                push_unit(out, integer, sing, plur);
-            }
-            if !cents_zero {
-                push_unit(out, &cents, "cent", "cents");
-            }
-        }
-        _ => {
-            let one = matches!(amount, NumberToken::Cardinal(s) if s == "1");
-            // "ein Euro" / "un euro": use the apocopated "one" before the noun
-            // instead of the counting cardinal ("eins"/"uno").
-            if let (true, Some(w)) = (one, one_word) {
-                out.push(Token::Word(w.to_string()));
-            } else {
-                out.push(Token::Number(amount.clone()));
-            }
-            out.push(Token::Word(if one { sing } else { plur }.to_string()));
-        }
-    }
-}
-
-/// Rewrite a currency amount so it is read `<number> <currency word>` — the
-/// symbol may precede the figure (`$5`, US style) or follow it (`5$`/`10€`,
-/// continental style), with an optional space either way.  Pluralised unless the
-/// amount is one; decimals split into whole + cents (see [`emit_currency_amount`]).
-/// A bare symbol with no adjacent number is left untouched (it still reads via
-/// the symbol-name path).  Cents are split only in English (`$5.99` → "…ninety
-/// nine cents"); other languages read the decimal amount as-is + the word.
-fn apply_currency(tokens: &mut Vec<Token>, lang: &str) {
-    if !tokens.iter().any(|t| matches!(t, Token::Punctuation(c) if currency_words(*c, lang).is_some())) {
-        return;
-    }
-    let split_cents = primary_bcp47_subtag(lang) == "en";
-    // The token after `i`, skipping one optional space.
-    let after = |i: usize| if matches!(tokens.get(i + 1), Some(Token::Space | Token::WordJoin)) { i + 2 } else { i + 1 };
-
-    let mut out = Vec::with_capacity(tokens.len());
-    let mut i = 0;
-    while i < tokens.len() {
-        // Symbol before number: `$5`, `€5`.
-        if let Token::Punctuation(c) = tokens[i] {
-            if let Some((sing, plur)) = currency_words(c, lang) {
-                let j = after(i);
-                if let Some(Token::Number(n)) = tokens.get(j) {
-                    // A scale word after the amount ("$5 million") belongs *before*
-                    // the currency: "five million dollars", not "five dollars
-                    // million".  The amount is read as-is (no cents split) + the
-                    // scale + the plural currency word.
-                    let k = after(j);
-                    if let Some(Token::Word(w)) = tokens.get(k) {
-                        if is_scale_word(&w.to_lowercase()) {
-                            out.push(Token::Number(n.clone()));
-                            out.push(Token::Word(w.clone()));
-                            out.push(Token::Word(plur.to_string()));
-                            i = k + 1;
-                            continue;
-                        }
-                    }
-                    emit_currency_amount(&mut out, n, sing, plur, split_cents, currency_one_word(lang, c));
-                    i = j + 1;
-                    continue;
-                }
-            }
-        }
-        // Number before symbol: `5$`, `10€`, `99¢`.
-        if let Token::Number(n) = &tokens[i] {
-            let j = after(i);
-            if let Some(Token::Punctuation(c)) = tokens.get(j) {
-                if let Some((sing, plur)) = currency_words(*c, lang) {
-                    emit_currency_amount(&mut out, n, sing, plur, split_cents, currency_one_word(lang, *c));
-                    i = j + 1;
-                    continue;
                 }
             }
         }
@@ -9349,7 +9168,6 @@ impl Translator {
         apply_dimensions(&mut tokens, lang);
         apply_number_abbrev(&mut tokens, lang);
         apply_space_grouping(&mut tokens, &self.options.number_grammar);
-        apply_currency(&mut tokens, lang);
         apply_fractions(&mut tokens, lang);
         apply_exponents(&mut tokens, lang);
         let spelled = split_abandoned_words(&mut tokens, &dict, &self.options);
@@ -11213,81 +11031,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn currency_symbol_reorders_and_pluralizes() {
-        let en = NumberGrammar::for_lang("en");
-        let rewrite = |s: &str, lang: &str| {
-            let mut t = tokenize_opts(s, &NumberGrammar::for_lang(lang));
-            apply_currency(&mut t, lang);
-            t
-        };
-        // `$5` → "five dollars" (reordered, pluralised).
-        assert_eq!(
-            rewrite("$5", "en"),
-            vec![Token::Number(NumberToken::Cardinal("5".into())), Token::Word("dollars".into())]
-        );
-        // Exactly one → singular.
-        assert_eq!(
-            rewrite("$1", "en"),
-            vec![Token::Number(NumberToken::Cardinal("1".into())), Token::Word("dollar".into())]
-        );
-        // Other symbols, optional space.
-        assert_eq!(
-            rewrite("€ 10", "en"),
-            vec![Token::Number(NumberToken::Cardinal("10".into())), Token::Word("euros".into())]
-        );
-        // Non-English currencies now read the word after the amount (no cents
-        // split): German `$5` → "fünf Dollar" tokens, not a bare symbol.
-        assert_eq!(
-            rewrite("$5", "de"),
-            vec![Token::Number(NumberToken::Cardinal("5".into())), Token::Word("dollar".into())]
-        );
-        // A currency the language has no word for is still left untouched.
-        assert!(rewrite("¥5", "de").iter().any(|t| matches!(t, Token::Punctuation('¥'))));
-        // A bare symbol with no amount is unchanged.
-        assert_eq!(rewrite("$", "en"), vec![Token::Punctuation('$')]);
-
-        // Decimal amounts split into dollars + cents.
-        let cents = |s: &str| -> Vec<String> {
-            rewrite(s, "en").iter().filter_map(|t| match t {
-                Token::Word(w) => Some(w.clone()),
-                Token::Number(NumberToken::Cardinal(n)) => Some(n.clone()),
-                _ => None,
-            }).collect()
-        };
-        assert_eq!(cents("$5.99"), vec!["5", "dollars", "99", "cents"]);
-        assert_eq!(cents("$1.01"), vec!["1", "dollar", "01", "cent"]); // singular cent
-        assert_eq!(cents("$1.00"), vec!["1", "dollar"]);              // whole → no cents
-        assert_eq!(cents("$0.99"), vec!["99", "cents"]);             // no dollars
-        assert_eq!(cents("$5.5"), vec!["5", "dollars", "50", "cents"]); // 0.5 → 50c
-
-        // Symbol *after* the number (continental style) and the cent symbol.
-        assert_eq!(
-            rewrite("10€", "en"),
-            vec![Token::Number(NumberToken::Cardinal("10".into())), Token::Word("euros".into())]
-        );
-        assert_eq!(cents("5$"), vec!["5", "dollars"]);
-        assert_eq!(cents("99¢"), vec!["99", "cents"]);
-        assert_eq!(cents("5.99€"), vec!["5", "euros", "99", "cents"]);
-
-        // A scale word after the amount goes *before* the currency word:
-        // `$5 million` → "five million dollars" (not "five dollars million").
-        assert_eq!(cents("$5 million"), vec!["5", "million", "dollars"]);
-        assert_eq!(cents("$1 million"), vec!["1", "million", "dollars"]); // plural
-        // A non-scale word after the amount is untouched (normal currency):
-        // "$5 each" → "five dollars each" (the word stays after the currency).
-        assert_eq!(cents("$5 each"), vec!["5", "dollars", "each"]);
-        // A decimal amount + scale is read as-is (not cents-split).
-        assert_eq!(
-            rewrite("$1.2 billion", "en"),
-            vec![
-                Token::Number(NumberToken::Decimal { integer: "1".into(), fractional: "2".into() }),
-                Token::Word("billion".into()),
-                Token::Word("dollars".into()),
-            ]
-        );
-        let _ = en;
-    }
 
     #[test]
     fn numeric_exponent_is_spoken() {
