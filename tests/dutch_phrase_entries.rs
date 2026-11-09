@@ -28,6 +28,8 @@ fn phrase_entries_are_stressed_as_one_word() {
         ("niet meer", "_n'it m,e:r"),
         ("wil je een of twee", "v#Il j@ _!'e:n Of tv#'e:"),
         ("hij heeft niet meer", "hEI he:ft _n'it m,e:r"),
+        ("e-mail", "_!'i:me:l"),
+        ("de e-mail", "d@ _!'i:me:l"),
     ];
     for (text, want) in cases {
         let Some(got) = mnemonics(text) else {

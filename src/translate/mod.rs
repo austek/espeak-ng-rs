@@ -7884,7 +7884,7 @@ fn follow_text(tokens: &[Token], from: usize, lang: &str) -> [u8; 32] {
     let mut text = String::new();
     for t in &tokens[from..] {
         match t {
-            Token::Space => {}
+            Token::Space | Token::WordJoin => {}
             Token::Word(w) => {
                 text.push_str(&lowercase_for_lang(w, lang));
                 text.push(' ');
