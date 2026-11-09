@@ -542,6 +542,11 @@ pub struct NumberGrammar {
     pub c_numbers: u32,
     /// C's `langopts.numbers2` bitmask for the language.
     pub c_numbers2: u32,
+    /// Number symbols (vulgar fractions) of the text that the language's list
+    /// names itself (`pt_list`: `¼ u~Nku'a*@-tU`); [`normalize_number_symbols`]
+    /// leaves them for the dictionary lookup.  Filled per translation by
+    /// [`with_dict_ordinal_suffixes`].
+    pub listed_symbols: Vec<char>,
 }
 
 /// Slavic scale-word (thousand/million/…) declension.  The scale word takes a
@@ -1012,6 +1017,7 @@ impl Default for NumberGrammar {
             break_numbers: BREAK_THOUSANDS,
             c_numbers: 1,
             c_numbers2: 0,
+            listed_symbols: Vec::new(),
         }
     }
 }
@@ -1326,6 +1332,11 @@ fn with_dict_ordinal_suffixes(grammar: &NumberGrammar, text: &str, dict: &Dictio
         .into_iter()
         .filter(|suffix| !lookup_num_phonemes(dict, &format!("_#{suffix}")).is_empty())
         .collect();
+    extended.listed_symbols = text
+        .chars()
+        .filter(|&c| is_vulgar_fraction(c))
+        .filter(|&c| dict_symbol_flags(dict, c, dict.dict_condition).is_some())
+        .collect();
     extended
 }
 
@@ -1517,7 +1528,17 @@ fn schwa_for_article_apostrophe<'a>(text: &'a str, lang: &str) -> std::borrow::C
     std::borrow::Cow::Owned(out)
 }
 
+fn is_vulgar_fraction(c: char) -> bool {
+    matches!(c, '½' | '¼' | '¾' | '\u{2150}'..='\u{215E}')
+}
+
+#[cfg(test)]
 fn normalize_number_symbols(text: &str) -> std::borrow::Cow<'_, str> {
+    normalize_number_symbols_except(text, &[])
+}
+
+/// [`normalize_number_symbols`] leaving the characters in `keep` untouched.
+fn normalize_number_symbols_except<'a>(text: &'a str, keep: &[char]) -> std::borrow::Cow<'a, str> {
     fn mapping(c: char) -> Option<&'static str> {
         Some(match c {
             // Superscript digits (⁰¹²³⁴⁵⁶⁷⁸⁹).
@@ -1546,18 +1567,21 @@ fn normalize_number_symbols(text: &str) -> std::borrow::Cow<'_, str> {
         })
     }
 
-    let changed = |c: char| mapping(c).is_some()
-        || native_digit_to_ascii(c).is_some()
-        || fullwidth_to_ascii(c).is_some()
-        || stylized_to_ascii(c).is_some()
-        || enclosed_number_value(c).is_some()
-        || compat::compatibility_expansion(c).is_some();
+    let changed = |c: char| !keep.contains(&c)
+        && (mapping(c).is_some()
+            || native_digit_to_ascii(c).is_some()
+            || fullwidth_to_ascii(c).is_some()
+            || stylized_to_ascii(c).is_some()
+            || enclosed_number_value(c).is_some()
+            || compat::compatibility_expansion(c).is_some());
     if !text.chars().any(changed) {
         return std::borrow::Cow::Borrowed(text);
     }
     let mut out = String::with_capacity(text.len() + 8);
     for c in text.chars() {
-        if let Some(s) = mapping(c) {
+        if keep.contains(&c) {
+            out.push(c);
+        } else if let Some(s) = mapping(c) {
             out.push_str(s);
         } else if let Some(d) = native_digit_to_ascii(c) {
             // Consecutive native digits stay adjacent so they form one number.
@@ -1831,7 +1855,7 @@ fn split_overlong_clauses(tokens: Vec<Token>) -> Vec<Token> {
 }
 
 pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
-    let text = normalize_number_symbols(text);
+    let text = normalize_number_symbols_except(text, &grammar.listed_symbols);
     let text = text.as_ref();
     let mut tokens = Vec::new();
     let mut chars = text.chars().peekable();
