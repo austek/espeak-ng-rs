@@ -10429,9 +10429,53 @@ fn apply_list_editing_instructions(codes: &mut Vec<PhonemeCode>, phdata: &Phonem
     }
     // Apply back to front so earlier indices stay valid.
     edits.sort_by(|a, b| b.0.cmp(&a.0).then(b.2.cmp(&a.2)));
+    let mut inserted = vec![false; codes.len()];
     for (i, code, before) in edits {
         let at = if before { i } else { i + 1 };
         codes.insert(at, PhonemeCode { code, is_boundary: false, clause_char: None , marker: None});
+        inserted.insert(at, true);
+    }
+    change_inserted_phonemes(codes, &inserted, phdata);
+}
+
+/// C interprets an inserted phoneme like any other in the list loop
+/// (`MakePhonemeList`), so its own `ChangePhoneme` applies: the English
+/// linking `r-` becomes plain `r` unless it follows `@` or `3`.
+fn change_inserted_phonemes(codes: &mut [PhonemeCode], inserted: &[bool], phdata: &PhonemeData) {
+    let is_sound = |c: &PhonemeCode| {
+        !c.is_boundary && c.code > 8 && c.code != crate::phoneme::PHON_END_WORD
+    };
+    let real: Vec<usize> = codes.iter().enumerate().filter(|(_, c)| is_sound(c)).map(|(i, _)| i).collect();
+    let starts = word_starts(codes, &real);
+    for (n, &i) in real.iter().enumerate().filter(|(_, &i)| inserted[i]) {
+        let Some(ph) = phdata.get(codes[i].code).filter(|p| p.program != 0) else { continue };
+        let at = |k: usize| real.get(k).map(|&j| codes[j].code).unwrap_or(0);
+        let next_wordstart = real.get(n + 1).is_some_and(|&k| {
+            codes[i + 1..k]
+                .iter()
+                .any(|c| c.is_boundary || c.code == crate::phoneme::PHON_END_WORD)
+        });
+        let nb = crate::synthesize::bytecode::Neighbours {
+            prev: n.checked_sub(1).map_or(0, at),
+            this: codes[i].code,
+            next: at(n + 1),
+            next2: at(n + 2),
+            this_wordstart: starts[n],
+            prev_wordstart: n.checked_sub(1).is_some_and(|k| starts[k]),
+            next_wordstart,
+            next2_wordstart: next_wordstart,
+            ..Default::default()
+        };
+        let fx = crate::synthesize::bytecode::interpret_phoneme_ctl(
+            ph.program,
+            &phdata.phonindex,
+            &nb,
+            |c| phdata.get(c).cloned(),
+            true,
+        );
+        if let Some(c) = fx.change_phoneme_code.filter(|&c| c > 1) {
+            codes[i].code = c;
+        }
     }
 }
 

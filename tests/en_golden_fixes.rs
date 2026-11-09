@@ -23,3 +23,25 @@ fn magic_e_rule_silences_the_next_e() {
         ("poseag", "pˈəʊsaɡ"),
     ]);
 }
+
+fn check_phonemes(cases: &[(&str, &str)]) {
+    let data = concat!(env!("CARGO_MANIFEST_DIR"), "/espeak-ng-data");
+    for (text, want) in cases {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_espeak_cli"))
+            .args(["-q", "-x", "-v", "en", "--", text])
+            .env("ESPEAK_DATA_PATH", data)
+            .output()
+            .expect("run cli");
+        let got = String::from_utf8_lossy(&out.stdout).trim().replace('\n', " ");
+        assert_eq!(&got, want, "text {text:?}");
+    }
+}
+
+#[test]
+fn linking_r_before_a_vowel_is_changed_to_plain_r() {
+    check_phonemes(&[
+        ("meirath", "m'e@raT"),
+        ("whereas", "w'e@raz"),
+        ("purist", "pj'U@rIst"),
+    ]);
+}
