@@ -71,6 +71,7 @@ jobs:
           --test dutch_first_suffix_match
           --test absent_letters
           --test switched_letter_names
+          --test switched_replace
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

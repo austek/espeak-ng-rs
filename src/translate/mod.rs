@@ -433,6 +433,10 @@ pub struct LangOptions {
     /// word the rules can't read, or that a `$unpron` rule marks, is spelled),
     /// and any other value is a letter code to discount when counting.
     pub unpronouncable: u32,
+    /// This translator re-reads a word another language handed over.  C applied
+    /// the *first* language's `.replace` table while reading the clause, so the
+    /// table of the language that reads the word is not applied again.
+    pub switched: bool,
 }
 
 const BREAK_THOUSANDS: u32 = 0x4924_9248;
@@ -1032,6 +1036,7 @@ impl Default for LangOptions {
             ipa_separator: None,
             max_initial_consonants: 3,
             unpronouncable: 0,
+            switched: false,
         }
     }
 }
@@ -4723,7 +4728,11 @@ fn word_to_phonemes_inner(
     // katakana and every voiced kana produce no phonemes.  Other languages use
     // it for their own normalisation.  No-op (None, no alloc) without a
     // `.replace` section; runs here so it also covers TEXTMODE re-expansion.
-    let normalized = if expect.no_replace { None } else { dict.apply_replacements(word) };
+    let normalized = if expect.no_replace || lang_opts.switched {
+        None
+    } else {
+        dict.apply_replacements(word)
+    };
     let word = normalized.as_deref().unwrap_or(word);
 
     // Korean: break each Hangul syllable into its jamo (the ko rules match the
@@ -9084,7 +9093,8 @@ impl Translator {
                 let word = entry.word_lower.as_deref().unwrap_or("");
                 if !word.is_empty() {
                     if !switch_cache.contains_key(&target) {
-                        if let Ok(tr) = Translator::new(&target, Some(&self.data_dir)) {
+                        if let Ok(mut tr) = Translator::new(&target, Some(&self.data_dir)) {
+                            tr.options.switched = true;
                             switch_cache.insert(target.clone(), tr);
                         }
                     }
