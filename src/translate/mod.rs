@@ -8687,31 +8687,6 @@ fn apply_tone_sandhi(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang:
     }
 }
 
-/// C's `count_pitch_vowels` puts the tonic of a clause with no stressed syllable
-/// on its last syllable, and every `phVOWEL` is one there — a non-syllabic
-/// vowel (`@-`) included. When the clause's last vowel is such a vowel, give it
-/// primary stress. Returns whether it did.
-fn promote_trailing_nonsyllabic_vowel(entries: &mut [TranslateEntry], phdata: &PhonemeData) -> bool {
-    let is_vowel = |c: u8| phdata.get(c).is_some_and(|p| p.typ == crate::phoneme::PH_VOWEL);
-    let last_vowel = entries.iter().enumerate().rev().find_map(|(ei, e)| {
-        if e.kind != TranslateEntryKind::Word {
-            return None;
-        }
-        e.phonemes.iter().rposition(|&c| is_vowel(c)).map(|pi| (ei, pi))
-    });
-    let Some((ei, pi)) = last_vowel else {
-        return false;
-    };
-    let nonsyllabic = phdata
-        .get(entries[ei].phonemes[pi])
-        .is_some_and(|p| p.phflags & crate::phoneme::PH_NONSYLLABIC != 0);
-    if !nonsyllabic {
-        return false;
-    }
-    entries[ei].phonemes.insert(pi, PHON_STRESS_P);
-    true
-}
-
 pub(crate) fn promote_translate_entries(
     entries: &mut [TranslateEntry],
     phdata: &PhonemeData,
@@ -8776,44 +8751,6 @@ pub(crate) fn promote_translate_entries(
                     is_last_word,
                     following_all_unstressed,
                 ),
-            }
-        }
-
-        let has_primary = entries
-            .iter()
-            .filter(|e| e.kind == TranslateEntryKind::Word)
-            .any(|e| {
-                e.phonemes
-                    .iter()
-                    .any(|&c| c == PHON_STRESS_P_CODE || c == PHON_STRESS_P2_CODE)
-            });
-
-        if !has_primary {
-            let last_secondary = entries
-                .iter()
-                .enumerate()
-                .rev()
-                .find(|(_, e)| {
-                    e.kind == TranslateEntryKind::Word
-                        && !e.phonemes.is_empty()
-                        && e.phonemes.iter().any(|&c| c == 4 || c == 5)
-                })
-                .map(|(i, _)| i);
-
-            if let Some(idx) = last_secondary {
-                change_word_stress(&mut entries[idx].phonemes, phdata, 4);
-            } else if !promote_trailing_nonsyllabic_vowel(entries, phdata) {
-                let last_word = entries
-                    .iter()
-                    .enumerate()
-                    .rev()
-                    .find(|(_, e)| {
-                        e.kind == TranslateEntryKind::Word && !e.phonemes.is_empty()
-                    })
-                    .map(|(i, _)| i);
-                if let Some(idx) = last_word {
-                    change_word_stress(&mut entries[idx].phonemes, phdata, 4);
-                }
             }
         }
 
@@ -9972,6 +9909,7 @@ impl Translator {
         if self.options.word_gap == 0 {
             insert_word_gaps(&mut out, &phdata, stress_opts.vowel_pause, stress_opts.word_gap);
         }
+        promote_clause_tonics(&mut out, &phdata, &self.options.lang, stress_opts.stress_flags & 0x02 != 0);
 
         // Boundary coordinates back into indices.  A token's codes run from its
         // own first code to the *next* token's, so the separator's boundary and
@@ -10521,6 +10459,83 @@ pub(crate) fn stress_levels(
 
 /// `stress_levels` marker for a code that is not a vowel.
 pub(crate) const NO_STRESS_LEVEL: u8 = u8::MAX;
+
+/// C's `count_pitch_vowels`: a clause with no primary stress puts its tonic on
+/// the last syllable of highest stress.  It runs at the intonation stage, after
+/// the phoneme programs, so the vowel keeps the quality they gave its old
+/// (unstressed) level — Portuguese `ser` is `sˈɨɹ`, not `sˈeɹ`.
+fn promote_clause_tonics(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData, lang: &str, no_dim: bool) {
+    let mut own = own_language_mask(codes, lang);
+    let mut start = 0;
+    while start < codes.len() {
+        let mut end = codes[start..]
+            .iter()
+            .position(|c| c.is_boundary && c.code == 0)
+            .map_or(codes.len(), |p| start + p);
+        let clause = &codes[start..end];
+        if let Some(p) = tonic_position(clause, &own[start..end], phdata, no_dim) {
+            let (first, vowel) = promote_vowel(codes, start + p);
+            let vowel_own = own[vowel];
+            own.splice(first..vowel, [vowel_own]);
+            end = end + 1 - (vowel - first);
+        }
+        start = end + 1;
+    }
+}
+
+/// Which codes belong to the clause's own phoneme table, i.e. are outside any
+/// `phonSWITCH` region of another language.
+fn own_language_mask(codes: &[PhonemeCode], lang: &str) -> Vec<bool> {
+    let mut own = true;
+    codes
+        .iter()
+        .map(|c| {
+            if let Some(CodeMarker::LangSwitch(target)) = &c.marker {
+                own = target == lang;
+            }
+            own
+        })
+        .collect()
+}
+
+/// The vowel the tonic falls on, if the clause has no primary stress: the last
+/// one of highest stress.  Stress levels are those of C's phoneme list, where
+/// every second vowel of a run of unstressed ones is already diminished
+/// (`MakePhonemeList`) unless the language sets `S_NO_DIM`.
+fn tonic_position(clause: &[PhonemeCode], own: &[bool], phdata: &PhonemeData, no_dim: bool) -> Option<usize> {
+    let (level, _) = stress_levels(clause, phdata);
+    let mut run = 0u32;
+    let mut best: Option<(u8, usize)> = None;
+    for (i, &l) in level.iter().enumerate().filter(|&(i, &l)| l != NO_STRESS_LEVEL && own[i]) {
+        let l = if l > 1 {
+            run = 0;
+            l
+        } else {
+            run += 1;
+            match (run > 1 && run % 2 == 0, no_dim) {
+                (true, true) => { run = 1; l }
+                (true, false) => 0,
+                _ => l,
+            }
+        };
+        if l >= 4 {
+            return None;
+        }
+        if best.is_none_or(|(m, _)| l >= m) {
+            best = Some((l, i));
+        }
+    }
+    best.map(|(_, i)| i)
+}
+
+/// Puts a primary-stress mark before `vowel`, replacing the marks already
+/// there; returns the replaced range `(first, vowel)`.
+fn promote_vowel(codes: &mut Vec<PhonemeCode>, vowel: usize) -> (usize, usize) {
+    let is_stress = |c: &PhonemeCode| matches!(c.code, 2..=7 | PHON_STRESS_TONIC) && !c.is_boundary;
+    let first = (0..vowel).rev().take_while(|&i| is_stress(&codes[i])).last().unwrap_or(vowel);
+    codes.splice(first..vowel, [PhonemeCode { code: PHON_STRESS_P, ..Default::default() }]);
+    (first, vowel)
+}
 
 /// C's `MakePhonemeList`: a consonant followed by the lengthener (`:`) is
 /// lengthened **by doubling it** when it is a fricative, voiced fricative, nasal
