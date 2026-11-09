@@ -94,6 +94,7 @@ jobs:
           --test dotted_ordinals
           --test german_ordinals
           --test pt_prev_stress_demotes_primary
+          --test pt_spelling_rule_symbol
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

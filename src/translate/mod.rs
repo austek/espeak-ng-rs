@@ -4543,6 +4543,18 @@ pub fn word_to_phonemes(
     emoji_parts_fallback(r, word, dict, phdata, stress_opts, lang_opts, PosExpect::default())
 }
 
+/// What follows a letter that is spelled out: C's `LookupLetter` ends the
+/// buffer with `RULE_SPELLING` (rule symbol `W`) when more letters of the word
+/// follow, which is how pt `_) g (_W` tells an acronym's inner letters from
+/// its last.
+fn letter_expect(more_letters_follow: bool) -> PosExpect {
+    let mut expect = PosExpect::default();
+    if more_letters_follow {
+        expect.next_word[0] = crate::dictionary::RULE_SPELLING;
+    }
+    expect
+}
+
 /// Speak an emoji sequence that has no dictionary entry of its own as its
 /// **parts**: the base emoji's name followed by each modifier's name.
 ///
@@ -6227,9 +6239,10 @@ fn spell_unpronounceable<'a>(
             break;
         }
         let lower = c.to_lowercase().to_string();
-        let mut wr = word_to_phonemes(&format!("_{lower}"), dict, phdata, stress_opts, options);
+        let expect = letter_expect(rest.len() > c.len_utf8());
+        let mut wr = word_to_phonemes_pos(&format!("_{lower}"), dict, phdata, stress_opts, options, expect);
         if wr.phonemes.iter().all(|&b| b == 0) || wr.dict_flags == 0 {
-            wr = word_to_phonemes(&lower, dict, phdata, stress_opts, options);
+            wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
         }
         if wr.phonemes.iter().all(|&b| b == 0) {
             wr.phonemes = superscript_name(c, dict, phdata, stress_opts, options);
@@ -6408,14 +6421,16 @@ fn spell_word_letters(
 ) -> Option<Vec<u8>> {
     let mut out: Vec<u8> = Vec::new();
     let replaced = dict.apply_replacements(word);
-    for c in replaced.as_deref().unwrap_or(word).chars() {
+    let chars: Vec<char> = replaced.as_deref().unwrap_or(word).chars().collect();
+    for (ix, &c) in chars.iter().enumerate() {
         if !c.is_alphanumeric() {
             continue;
         }
         let lower = c.to_lowercase().to_string();
-        let mut wr = word_to_phonemes(&format!("_{lower}"), dict, phdata, stress_opts, options);
+        let expect = letter_expect(ix + 1 < chars.len());
+        let mut wr = word_to_phonemes_pos(&format!("_{lower}"), dict, phdata, stress_opts, options, expect);
         if wr.phonemes.iter().all(|&b| b == 0) || wr.dict_flags == 0 {
-            wr = word_to_phonemes(&lower, dict, phdata, stress_opts, options);
+            wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
         }
         if wr.phonemes.iter().all(|&b| b == 0) {
             wr.phonemes = superscript_name(c, dict, phdata, stress_opts, options);

@@ -19,7 +19,7 @@ use super::{
     RULE_LETTERGP, RULE_LETTERGP2, RULE_NOTVOWEL, RULE_DIGIT, RULE_NONALPHA,
     RULE_DOUBLE, RULE_DOLLAR, RULE_SYLLABLE, RULE_NOVOWELS, RULE_SKIPCHARS,
     RULE_INC_SCORE, RULE_DEC_SCORE, RULE_DEL_FWD, RULE_ENDING, RULE_NO_SUFFIX,
-    RULE_STRESSED, RULE_CAPITAL, RULE_IFVERB, RULE_SPELLING,
+    RULE_STRESSED, RULE_CAPITAL, RULE_IFVERB,
     RULE_SPACE, RULE_LAST_RULE,
     DOLLAR_UNPR, DOLLAR_NOPREFIX, DOLLAR_LIST,
     BITNUM_FLAG_ALT,
@@ -723,9 +723,6 @@ pub fn match_rule(
                                 post_ptr -= 1;
                                 add_points = 1;
                             }
-                        }
-                        RULE_SPELLING => {
-                            // language-specific; just advance past
                         }
                         _ => {
                             // literal char match in post-context
