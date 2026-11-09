@@ -3266,6 +3266,14 @@ fn lookup_num_phonemes(dict: &Dictionary, key: &str) -> Vec<u8> {
 
 const PHON_END_WORD: u8 = 15;
 
+/// Whether the `.` at `ix` sits directly between two numbers.
+fn point_between_numbers(tokens: &[Token], ix: usize) -> bool {
+    ix > 0
+        && matches!(tokens[ix - 1], Token::Number(_))
+        && matches!(tokens.get(ix + 1), Some(Token::Number(_)))
+}
+
+
 /// Byte-oriented pronunciation builder that understands END_WORD separators.
 #[derive(Debug, Clone, Default)]
 struct Pronunciation {
@@ -3811,7 +3819,7 @@ fn number_token_to_phonemes(
                 cardinal_pronunciation(integer, dict, grammar)?
             };
             let decimal_point = lookup_num_phonemes(dict, "_dpt");
-            if !decimal_point.is_empty() {
+            if !decimal_point.is_empty() && !integer.is_empty() {
                 pronunciation.push_lookup_word(&decimal_point);
             }
             if grammar.fraction_suffix
@@ -4321,6 +4329,57 @@ fn translate_number_token(
     stress_opts: &StressOpts,
     grammar: &NumberGrammar,
 ) -> Option<WordResult> {
+    translate_number_token_with_tail(token, dict, phdata, stress_opts, grammar, None)
+}
+
+/// A point's raw phonemes that C's `TranslateNumber_1` appends to the number
+/// before it, ahead of word stress.  `fused` joins them to the last digit word
+/// (the decimal point of a continued decimal) instead of starting a new word.
+struct NumberTail {
+    raw: Vec<u8>,
+    fused: bool,
+}
+
+impl NumberTail {
+    fn append_to(&self, phonemes: &mut Vec<u8>) {
+        if phonemes.last() == Some(&0) {
+            phonemes.pop();
+        }
+        if self.fused && phonemes.last() == Some(&PHON_END_WORD) {
+            phonemes.pop();
+        }
+        phonemes.extend(&self.raw);
+        phonemes.push(0);
+    }
+}
+
+/// The tail the number at `ix` takes from what follows it: the `_.` entry for a
+/// non-decimal point before another number, the `_dpt` entry for a continued
+/// decimal (`1.2.3`).
+fn number_tail(tokens: &[Token], ix: usize, dict: &Dictionary) -> Option<NumberTail> {
+    let raw_of = |key: &str| {
+        let raw: Vec<u8> = lookup_num_phonemes(dict, key).into_iter().take_while(|&b| b != 0).collect();
+        (!raw.is_empty()).then_some(raw)
+    };
+    match tokens.get(ix + 1)? {
+        Token::Punctuation('.') if point_between_numbers(tokens, ix + 1) => {
+            raw_of("_.").map(|raw| NumberTail { raw, fused: false })
+        }
+        Token::Number(NumberToken::Decimal { integer, .. }) if integer.is_empty() => {
+            raw_of("_dpt").map(|raw| NumberTail { raw, fused: true })
+        }
+        _ => None,
+    }
+}
+
+fn translate_number_token_with_tail(
+    token: &NumberToken,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    grammar: &NumberGrammar,
+    tail: Option<NumberTail>,
+) -> Option<WordResult> {
     match token {
         NumberToken::Ordinal(ordinal) => try_ordinal_number(ordinal, dict, phdata, stress_opts, grammar)
             // The number words come from `_1`…`_20`/`_100` list entries, so C's
@@ -4362,7 +4421,20 @@ fn translate_number_token(
             if leading_break {
                 phonemes.insert(0, PHON_END_WORD);
             }
-            set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, control);
+            // A `%` in a point's entry marks it unstressed (French `_.`): C
+            // leaves the whole number unstressed then.  A fused decimal point
+            // is added after the digits' stress, which it does not take part in.
+            let mut stress = true;
+            if let Some(tail) = tail.as_ref().filter(|t| !t.fused) {
+                stress = !tail.raw.contains(&PHON_STRESS_U);
+                tail.append_to(&mut phonemes);
+            }
+            if stress {
+                set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, control);
+            }
+            if let Some(tail) = tail.as_ref().filter(|t| t.fused) {
+                tail.append_to(&mut phonemes);
+            }
             Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0 })
         }
     }
@@ -8144,12 +8216,13 @@ pub(crate) fn build_translate_entries(
                         continue;
                     }
                 }
-                let wr = translate_number_token(
+                let wr = translate_number_token_with_tail(
                     token,
                     dict,
                     phdata,
                     stress_opts,
                     &options.number_grammar,
+                    number_tail(tokens, token_ix, dict),
                 )
                 .unwrap_or_else(|| {
                     let surface = token.surface();
@@ -8215,6 +8288,18 @@ pub(crate) fn build_translate_entries(
                         found_in_list: name_from_dict,
                     });
                 }
+            }
+            // A point between two numbers that is not their decimal separator
+            // (`de 3.14`) is not a word: C appends the language's `_.` entry to
+            // the number before it (see `number_tail`), so a language without
+            // that entry reads it as silence.
+            Token::Punctuation('.') if point_between_numbers(tokens, token_ix) => {
+                entries.push(TranslateEntry {
+                    phonemes: Vec::new(), dict_flags: 0,
+                    kind: TranslateEntryKind::Other, word_lower: None,
+                    no_word_gap: false, word_group: None,
+                    found_in_list: false,
+                });
             }
             Token::Operator(c) | Token::Punctuation(c)
                 if matches!(token, Token::Operator(_))

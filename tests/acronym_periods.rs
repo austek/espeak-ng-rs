@@ -65,6 +65,6 @@ fn period_between_digits_in_comma_decimal_locale() {
     let Ok(t) = Translator::new_default("de") else { eprintln!("[SKIP] no de dict"); return };
     let ipa = t.text_to_ipa("3.14").unwrap();
     assert!(!ipa.contains('\n'), "de 3.14 must not break: {ipa:?}");
-    assert!(ipa.contains("pˈʊŋkt"), "de 3.14 reads '.' as punkt: {ipa:?}");
+    assert!(ipa.contains(" pʊŋkt "), "de 3.14 reads '.' as unstressed punkt: {ipa:?}");
     assert!(ipa.contains("fˈɪɾtseːn"), "de 3.14 reads 14 as vierzehn: {ipa:?}");
 }

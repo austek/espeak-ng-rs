@@ -85,6 +85,10 @@ jobs:
           --test pt_listed_fractions
           --test pt_unstressed_word_tonic
           --test italian_golden_fixes
+          --test symbol_reading
+          --test negative_numbers
+          --test number_point
+          --test acronym_periods
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
