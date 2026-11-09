@@ -6456,6 +6456,7 @@ fn letter_word_phonemes(
 ) -> WordResult {
     let listed = lookup_with_follow(dict, lower, &LookupCtx::default(), &[]).filter(|r| {
         r.flags1.found()
+            && r.flags1.stress_bits() != 0
             && !r.flags1.textmode()
             && !r.flags2.contains(crate::dictionary::FLAG_ACCENT)
             && r.phonemes.first().is_some_and(|&b| b != 0 && b != crate::phoneme::PHON_SWITCH)
@@ -7734,7 +7735,9 @@ fn lookup_symbol_name(
     // In running text C ignores a character the language names only as `_<char>`
     // (`LookupLetter`: "specified as _* so ignore it"), which is why French
     // says nothing for `/` or `#` unless punctuation is announced.
-    if mode == SymbolName::Inline && has_underscore_name(dict, c, options.dict_condition) {
+    if mode == SymbolName::Inline
+        && primary_bcp47_subtag(&options.lang) != "en"
+        && !matches!(c, '$' | '€' | '£' | '¥' | '¢') && has_underscore_name(dict, c, options.dict_condition) {
         return (Vec::new(), false);
     }
     // Otherwise use the dictionary character-name entry (`_%`, `_$`, …).
