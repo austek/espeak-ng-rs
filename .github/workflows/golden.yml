@@ -93,6 +93,7 @@ jobs:
           --test vulgar_fractions
           --test dotted_ordinals
           --test german_ordinals
+          --test pt_prev_stress_demotes_primary
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

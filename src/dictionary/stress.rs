@@ -784,13 +784,14 @@ pub fn set_word_stress(
     // `END_WORD` separators — is exempt: the citation stresses baked into its
     // parts must not fix the whole word's stress (Turkish "on"+"bir" is stressed
     // on the last syllable).
+    let from_flags = stressed_syllable > 0;
     if stressed_syllable == 0 && detected_primary > 0 {
         stressed_syllable = detected_primary;
     }
-    // After get_vowel_stress, stressed_syllable is set via primary_posn,
-    // but here we override from dflags
-    // Re-apply dict-specified stressed syllable
-    if stressed_syllable > 0 {
+    // Re-apply a dictionary-specified stressed syllable.  A position the
+    // phonemes spelled out keeps what `get_vowel_stress` left: a final `=`
+    // demotes an earlier primary mark to secondary (pt `leopardo`).
+    if from_flags {
         let sc = stressed_syllable.min(vowel_count - 1);
         vowel_stress[sc as usize] = STRESS_IS_PRIMARY;
         max_stress = STRESS_IS_PRIMARY as i32;
