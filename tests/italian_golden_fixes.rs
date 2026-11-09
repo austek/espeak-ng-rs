@@ -57,6 +57,18 @@ fn syllabic_marker_after_a_word_break_takes_no_syllable() {
 }
 
 #[test]
+fn decimal_fraction_is_read_as_one_number() {
+    check_phonemes(&[
+        ("3,14", "t@-*'e v'i;@-*gola kw2at:'oRditSI"),
+        ("2,50", "d'ue v'i;@-*gola tSinkw'anta"),
+        ("1,234", "'uno v'i;@-*goladUetS'Ento t@-*'e:ntakw'at:@-*o"),
+        ("3,05", "t@-*'e v'i;@-*gola dz'E*o tS'inkwe"),
+        ("7,009", "s'Et:e v'i;@-*gola n'Ovemill'ezimI"),
+        ("0,001", "dz'E*o v'i;@-*gola_| 'unomill'ezimI"),
+    ]);
+}
+
+#[test]
 fn end_stress_is_followed_by_the_alternate_vowel() {
     check_phonemes(&[("del", "d'el"), ("dal", "d'al")]);
 }

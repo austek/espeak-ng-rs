@@ -470,6 +470,10 @@ pub struct NumberGrammar {
     /// longer limit).  Leading zeros are still spoken one at a time, and a
     /// fraction longer than the limit falls back to digit-by-digit.  `0` = off.
     pub fraction_digits_as_number: u8,
+    /// Read a fraction of any length as one number unless it starts with a zero
+    /// (which falls back to single digits) — upstream `NUM_DFRACTION_1`
+    /// (Italian: "3,14" is "tre virgola **quattordici**").
+    pub fraction_whole_number: bool,
     /// Read a decimal fraction as a *fraction*: numerator + a "tenths / hundredths
     /// / thousandths" suffix, instead of digit-by-digit.  Upstream
     /// `NUM_DFRACTION_5` (ru, hu, ka), driven by the `_0Z<n>` / `_0Z<n>s`
@@ -936,6 +940,7 @@ impl NumberGrammar {
             | "tt" | "vi" => 5,
             _ => 0,
         };
+        grammar.fraction_whole_number = primary_bcp47_subtag(lang) == "it";
         // C `NUM_HUNDRED_AND` for the languages whose arm above doesn't set it:
         // a conjunction joins hundreds→remainder ("mi'a WA wahid", "sto I edno").
         // `NUM_SINGLE_AND` (Bulgarian, Hebrew) restricts it to a remainder that
@@ -999,6 +1004,7 @@ impl Default for NumberGrammar {
             thousands: ThousandsGrammar::default(),
             tone_numbers: false,
             fraction_digits_as_number: 0,
+            fraction_whole_number: false,
             fraction_suffix: false,
             fraction_feminine: false,
             group_separator: None,
@@ -3808,7 +3814,7 @@ fn number_token_to_phonemes(
             {
                 return Some(pronunciation.finish());
             }
-            if grammar.fraction_digits_as_number > 0
+            if (grammar.fraction_digits_as_number > 0 || grammar.fraction_whole_number)
                 && push_fraction_as_number(&mut pronunciation, fractional, dict, grammar)
             {
                 return Some(pronunciation.finish());
@@ -3917,6 +3923,38 @@ fn push_fraction_as_number(
 ) -> bool {
     if fractional.is_empty() || !fractional.bytes().all(|b| b.is_ascii_digit()) {
         return false;
+    }
+    if grammar.fraction_whole_number {
+        // C reads the fraction with `atoi`, so a longer one overflows into digits.
+        if fractional.len() > 9 {
+            return false;
+        }
+        let Ok(value) = fractional.parse::<u64>() else { return false };
+        // Leading zeros name the scale ("millesimi") from `_0Z<n>`; without that
+        // entry the digits are spoken one by one.
+        let scale = if fractional.starts_with('0') {
+            let scale = lookup_num_phonemes(dict, &format!("_0Z{}", fractional.len()));
+            if scale.is_empty() {
+                return false;
+            }
+            scale
+        } else {
+            Vec::new()
+        };
+        let Some(number) = cardinal_pronunciation(&value.to_string(), dict, grammar) else {
+            return false;
+        };
+        // C appends a fraction of 100 or more straight onto the decimal-point
+        // word; a smaller one starts a word of its own.
+        if value >= 100 {
+            pronunciation.append_lookup_suffix(&number.finish());
+        } else if scale.is_empty() {
+            pronunciation.push_lookup_word(&number.finish());
+        } else {
+            pronunciation.push_pronunciation(&number);
+            pronunciation.append_lookup_suffix(&scale);
+        }
+        return true;
     }
     let zeros = fractional.bytes().take_while(|&b| b == b'0').count();
     let rest = &fractional[zeros..];
