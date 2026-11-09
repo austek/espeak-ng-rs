@@ -74,6 +74,12 @@ jobs:
           --test switched_replace
           --test spellword_abort
           --test en_golden_fixes
+          --test dutch_nested_prefix
+          --test dutch_article_apostrophe
+          --test dutch_phrase_entries
+          --test dutch_number_leading_space
+          --test dutch_hyphen_compound
+          --test dutch_pause_word_voicing
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

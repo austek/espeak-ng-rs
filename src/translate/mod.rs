@@ -9437,6 +9437,9 @@ impl Translator {
         let mut owners: Vec<usize> = Vec::new();
         let tracking = track.is_some();
         let mut owner_now = 0usize;
+        // C's `prepause_timeout`: after a `$pause` word, the next two words
+        // may not pause again.  Reset at each clause.
+        let mut prepause_timeout = 0u8;
 
         for (token_ix, (token, entry)) in tokens.iter().zip(entries.iter()).enumerate() {
             if tracking {
@@ -9728,6 +9731,7 @@ impl Translator {
                     if !entry.phonemes.is_empty() {
                         use crate::dictionary::{FLAG_PAUSE1, FLAG_PREPAUSE};
                         let mut pre_pause = 0;
+                        prepause_timeout = prepause_timeout.saturating_sub(1);
                         let is_word = |t: &Token| {
                             matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_))
                         };
@@ -9750,8 +9754,9 @@ impl Translator {
                                 .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
                                 .filter(|t| is_word(t))
                                 .count();
-                            if before >= 2 && after >= 1 {
+                            if before >= 2 && after >= 1 && prepause_timeout == 0 {
                                 pre_pause = 4;
+                                prepause_timeout = 3;
                             }
                         }
                         // The pause goes *before* the word separator, so it
@@ -9845,6 +9850,7 @@ impl Translator {
                     }
                 }
                 Token::ClauseBoundary(punct) => {
+                    prepause_timeout = 0;
                     if entry.phonemes.is_empty() {
                         codes.push(PhonemeCode {
                             code:         0,

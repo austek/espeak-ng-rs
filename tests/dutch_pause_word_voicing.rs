@@ -25,6 +25,15 @@ fn consonant_before_a_pause_word_stays_voiced() {
         ("een hond en twee katten", "_|@n h'Ond_:_: _|En tv#'e: k'At@n"),
         ("een bed en twee", "_|@n b'Ed_:_: _|En tv#'e:"),
         ("hond en twee", "h'Ont _|En tv#'e:"),
+        // After a `$pause` word the next two words may not pause again.
+        (
+            "Dit brood of dat brood zijn goed.",
+            "dIt br'o:d_:_: _|Of dAt br'o:t zEIn Q'ut",
+        ),
+        (
+            "Ik hou van wijn en bier en brood.",
+            "_|Ik h'VU vAn v#'EIn_:_: _|En b'ir _|En br'o:t",
+        ),
     ];
     for (text, want) in cases {
         let Some(got) = mnemonics(text) else {
