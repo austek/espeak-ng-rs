@@ -6275,6 +6275,33 @@ fn spell_word_letters(
     Some(out)
 }
 
+/// The dictionary key of the name `TranslateLetter` announces for a script
+/// (`alphabets[].name`); Greek is `AL_DONT_NAME`.
+fn alphabet_name_key(script: Script) -> Option<&'static str> {
+    Some(match script {
+        Script::Armenian => "_hy",
+        Script::Hebrew => "_he",
+        Script::Arabic => "_ar",
+        Script::Devanagari => "_hi",
+        Script::Bengali => "_bn",
+        Script::Gurmukhi => "_gur",
+        Script::Gujarati => "_gu",
+        Script::Oriya => "_or",
+        Script::Tamil => "_ta",
+        Script::Telugu => "_te",
+        Script::Kannada => "_kn",
+        Script::Malayalam => "_ml",
+        Script::Sinhala => "_si",
+        Script::Thai => "_th",
+        Script::Myanmar => "_my",
+        Script::Georgian => "_ka",
+        Script::Ethiopic => "_eth",
+        Script::Kana => "_ja",
+        Script::Han => "_zh",
+        _ => return None,
+    })
+}
+
 /// Spell a word the current voice can't read: one letter name per character,
 /// looked up in this language's own dictionary (`х` → `x'a:` in English).
 ///
@@ -6296,21 +6323,32 @@ fn spell_foreign_word(
         }
         // Letter names are listed lower-case (`_х`), so a capital spells the
         // same as its lower-case form.
-        let wr = word_to_phonemes(
-            &c.to_lowercase().to_string(), dict, phdata, stress_opts, options,
-        );
+        let lower = c.to_lowercase().to_string();
+        let mut wr = word_to_phonemes(&format!("_{lower}"), dict, phdata, stress_opts, options);
+        if wr.phonemes.iter().all(|&b| b == 0) || !wr.found_in_list {
+            wr = word_to_phonemes(&lower, dict, phdata, stress_opts, options);
+        }
         // A name has to come from the *dictionary* (`_х` → "kha").  Letter-to-
         // sound rules will happily produce phonemes for any character, which is
         // not a name — if even one letter has none, the language can't spell
         // this word and the caller falls back to switching voice.
-        if wr.phonemes.is_empty() || wr.dict_flags == 0 {
+        if wr.phonemes.is_empty() || !wr.found_in_list {
             return None;
         }
+        // `TranslateLetter` says the alphabet's name (`_he`) ahead of every
+        // letter it spells from another script.
+        let alphabet = char_script(c)
+            .and_then(alphabet_name_key)
+            .and_then(|key| raw_list_entry(key, dict, phdata, stress_opts, options))
+            .map(|(ph, _)| ph);
         // Each spelled letter is its own word (`x'a: 'o: 'Er …`) — unless the
         // name already ends in a pause, as the Greek letter names do
         // (`'alf@_b'i:t@_`), where upstream runs them together.
-        if !out.is_empty() && !out.last().is_some_and(|&c| is_pause_code(c)) {
+        if !out.is_empty() && (alphabet.is_some() || !out.last().is_some_and(|&c| is_pause_code(c))) {
             out.push(crate::phoneme::PHON_END_WORD);
+        }
+        if let Some(name) = alphabet {
+            out.extend(name);
         }
         // Strip any 0 terminator: it ends the *whole* sequence for the IPA
         // renderer, which would truncate the word after its first letter.
@@ -7907,6 +7945,25 @@ pub(crate) fn build_translate_entries(
                 }) {
                     let mut phonemes = vec![crate::phoneme::PHON_SWITCH];
                     phonemes.extend_from_slice(target.as_bytes());
+                    // A lone letter goes through `TranslateLetter`, which names
+                    // the alphabet first; a following word in the same script
+                    // is switched along with it instead, without the name.
+                    let next_in_script = |from: usize| {
+                        tokens[from..].iter().find_map(|t| match t {
+                            Token::Word(w) => Some(w.chars().next().and_then(char_script) == foreign),
+                            _ => None,
+                        })
+                    };
+                    let lone_letter = word_script.chars().count() == 1;
+                    let alphabet = foreign
+                        .filter(|_| lone_letter && next_in_script(token_ix + 1) != Some(true))
+                        .and_then(alphabet_name_key)
+                        .and_then(|key| raw_list_entry(key, dict, phdata, stress_opts, options));
+                    // The name rides behind a NUL, past the target `switch_target` reads.
+                    if let Some((name, _)) = alphabet {
+                        phonemes.extend([0, crate::phoneme::PHON_PAUSE]);
+                        phonemes.extend(name);
+                    }
                     entries.push(TranslateEntry {
                         phonemes,
                         dict_flags: 0,
@@ -9269,6 +9326,14 @@ impl Translator {
                         codes.iter().any(|c| !c.is_boundary && c.marker.is_none())
                     });
                     if let Some(sw) = sw {
+                        let name = entry.phonemes.iter().position(|&b| b == 0).map_or(&[][..], |z| &entry.phonemes[z + 1..]);
+                        if !name.is_empty() && open_switch.take().is_some() {
+                            codes.push(PhonemeCode {
+                                marker: Some(CodeMarker::LangSwitch(self.options.lang.clone())),
+                                ..Default::default()
+                            });
+                        }
+                        codes.extend(name.iter().map(|&b| PhonemeCode { code: b, ..Default::default() }));
                         if open_switch.as_deref() != Some(target.as_str()) {
                             codes.push(PhonemeCode {
                                 marker: Some(CodeMarker::LangSwitch(target.clone())),

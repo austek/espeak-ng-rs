@@ -38,6 +38,19 @@ fn check_phonemes(cases: &[(&str, &str)]) {
 }
 
 #[test]
+fn letters_of_other_alphabets_are_announced_by_alphabet_name() {
+    check(&[
+        ("ר", "hˈiːbɹuːrˈeʃ"),
+        ("שלום", "hˈiːbɹuːʃin hˈiːbɹuːlˈamed hˈiːbɹuːvˈav hˈiːbɹuːmˈem"),
+        ("ز", "ˈaɹəbɪk(ar)zˈaːj(en)"),
+        ("ა", "dʒˈɔːdʒən(ka)ˈa(en)"),
+        ("ক", "bɛŋɡˈɑːli(bn)kˈɔ(en)"),
+        ("مرحبا", "(ar)mrħbˈaː(en)"),
+    ]);
+    check_phonemes(&[("ق", "_:'ar@bIk(ar)q'a.:f(en)")]);
+}
+
+#[test]
 fn linking_r_before_a_vowel_is_changed_to_plain_r() {
     check_phonemes(&[
         ("meirath", "m'e@raT"),
