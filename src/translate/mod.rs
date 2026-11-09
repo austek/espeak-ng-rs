@@ -1489,6 +1489,42 @@ fn normalize_apostrophes(text: &str) -> std::borrow::Cow<'_, str> {
     )
 }
 
+/// Dutch and Afrikaans write the article `een` as `'n` and `het` as `'t`.  C's
+/// `TranslateChar` turns the apostrophe of a standalone `'n`/`'t` into a schwa,
+/// so the dictionary's `ən`/`ət` entries read it; Afrikaans `'n` drops the `n`.
+fn schwa_for_article_apostrophe<'a>(text: &'a str, lang: &str) -> std::borrow::Cow<'a, str> {
+    let afrikaans = match primary_bcp47_subtag(lang) {
+        "nl" => false,
+        "af" => true,
+        _ => return std::borrow::Cow::Borrowed(text),
+    };
+    let chars: Vec<char> = text.chars().collect();
+    let standalone = |i: usize| {
+        let next = chars.get(i + 1).copied();
+        let after = chars.get(i + 2).copied();
+        chars[i] == '\''
+            && !(i > 0 && chars[i - 1].is_alphabetic())
+            && matches!(next, Some('n' | 't'))
+            && after.is_none_or(|a| a.is_whitespace() || matches!(a, '.' | ',' | '?' | '!' | ';' | ':' | '…'))
+    };
+    if !(0..chars.len()).any(standalone) {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    let mut out = String::with_capacity(text.len() + 2);
+    let mut skip_n = false;
+    for (i, &c) in chars.iter().enumerate() {
+        if skip_n {
+            skip_n = false;
+        } else if standalone(i) {
+            out.push('\u{0259}');
+            skip_n = afrikaans && chars[i + 1] == 'n';
+        } else {
+            out.push(c);
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 fn normalize_number_symbols(text: &str) -> std::borrow::Cow<'_, str> {
     fn mapping(c: char) -> Option<&'static str> {
         Some(match c {
@@ -9260,6 +9296,7 @@ impl Translator {
         };
 
         let text = normalize_apostrophes(text);
+        let text = schwa_for_article_apostrophe(&text, lang);
         let number_grammar = with_dict_ordinal_suffixes(&self.options.number_grammar, &text, &dict);
         let mut tokens = split_overlong_clauses(tokenize_opts(&text, &number_grammar));
         split_unrecognised_ordinals(&mut tokens, &dict, &number_grammar);
