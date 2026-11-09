@@ -14,6 +14,11 @@ fn check_phonemes(cases: &[(&str, &str)]) {
 }
 
 #[test]
+fn end_stress_is_followed_by_the_alternate_vowel() {
+    check_phonemes(&[("del", "d'el"), ("dal", "d'al")]);
+}
+
+#[test]
 fn word_entry_flags_win_over_the_stem_flags() {
     check_phonemes(&[
         ("privilegia", "p@-*ivil'edZa"),

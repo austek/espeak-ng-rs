@@ -8704,6 +8704,7 @@ pub(crate) fn promote_translate_entries(
 
     fn promote_clause(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang: &str) {
         let n = entries.len();
+        let alt_attributes = StressOpts::for_lang(lang).alt_attributes;
         #[allow(clippy::needless_range_loop)]
         for i in 0..n {
             if entries[i].kind != TranslateEntryKind::Word {
@@ -8756,6 +8757,14 @@ pub(crate) fn promote_translate_entries(
                     is_last_word,
                     following_all_unstressed,
                 ),
+            }
+            // C runs `ApplySpecialAttribute2` after the end-of-clause stress
+            // change, so `del` (`$strend $alt2`) reads `d'el`, not `d'El`.
+            if alt_attributes
+                && dict_flags & (crate::dictionary::FLAG_ALT_TRANS | crate::dictionary::FLAG_ALT2_TRANS) != 0
+            {
+                let alt2 = dict_flags & crate::dictionary::FLAG_ALT2_TRANS != 0;
+                apply_special_attribute2(&mut entries[i].phonemes, phdata, alt2);
             }
         }
 
