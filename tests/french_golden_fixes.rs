@@ -45,6 +45,21 @@ fn abbrev_entries_spell_letters_with_stress() {
 }
 
 #[test]
+fn listed_number_symbols_read_as_dictionary_words() {
+    ipa_cases(&[
+        ("½", "œ̃dəmˈi"),
+        ("¼", "œ̃kˈaʁ"),
+        ("¾", "tʁwakˈaʁ"),
+        ("²", "pyisˈɑ̃s dˈø"),
+        ("³", "pyisɑ̃s tʁwˈa"),
+        ("½ tasse", "œ̃dəmˈi tˈas"),
+        ("x²", "ˈiks pyisˈɑ̃s dˈø"),
+        ("10 m²", "dˈis ˈɛm pyisˈɑ̃s dˈø"),
+        ("2²", "dˈø pyisˈɑ̃s dˈø"),
+    ]);
+}
+
+#[test]
 fn spelled_i_before_a_vowel_is_a_glide_without_stress() {
     ipa_cases(&[
         ("cia", "sˌejˈa"),

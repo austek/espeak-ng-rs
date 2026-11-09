@@ -1330,17 +1330,23 @@ fn glued_number_suffixes(text: &str) -> Vec<String> {
 }
 
 /// `grammar` extended with the glued suffixes of `text` that the dictionary
-/// defines as ordinal markers (`_#<suffix>`), which is how C decides.
+/// defines as ordinal markers (`_#<suffix>`), which is how C decides, and with
+/// the number symbols (`²`, `½`) it lists as words of its own.
 fn with_dict_ordinal_suffixes(grammar: &NumberGrammar, text: &str, dict: &Dictionary) -> NumberGrammar {
     let mut extended = grammar.clone();
+    let mut symbols: Vec<char> = text
+        .chars()
+        .filter(|c| !c.is_ascii() && normalize_number_symbols_except(&c.to_string(), &[]) != c.to_string())
+        .collect();
+    symbols.sort_unstable();
+    symbols.dedup();
+    extended.listed_symbols = symbols
+        .into_iter()
+        .filter(|c| lookup(dict, &c.to_string(), &LookupCtx::default()).is_some_and(|r| r.flags1.found()))
+        .collect();
     extended.ordinals.dict_suffixes = glued_number_suffixes(text)
         .into_iter()
         .filter(|suffix| !lookup_num_phonemes(dict, &format!("_#{suffix}")).is_empty())
-        .collect();
-    extended.listed_symbols = text
-        .chars()
-        .filter(|&c| is_vulgar_fraction(c))
-        .filter(|&c| dict_symbol_flags(dict, c, dict.dict_condition).is_some())
         .collect();
     extended
 }
@@ -1531,10 +1537,6 @@ fn schwa_for_article_apostrophe<'a>(text: &'a str, lang: &str) -> std::borrow::C
         }
     }
     std::borrow::Cow::Owned(out)
-}
-
-fn is_vulgar_fraction(c: char) -> bool {
-    matches!(c, '½' | '¼' | '¾' | '\u{2150}'..='\u{215E}')
 }
 
 #[cfg(test)]
