@@ -527,6 +527,8 @@ pub struct Neighbours {
     /// word" and `isFinalVowel` is exact; when it didn't, the conditions fall
     /// back to looking within the two-phoneme window.
     pub vowels_tracked: bool,
+    /// An earlier phoneme of this word carries stress >= 4 (C's `isAfterStress`).
+    pub after_stress: bool,
 }
 
 /// `next_stress`/`wordstress` value meaning "the caller doesn't track this".
@@ -552,6 +554,7 @@ impl Default for Neighbours {
             prev_vowel: 0,
             prev_vowel_stress: STRESS_UNKNOWN,
             vowels_tracked: false,
+            after_stress: false,
             this_wordstart: false,
             prev_wordstart: false,
             next_wordstart: false,
@@ -1029,7 +1032,7 @@ where
         COND_IS_FLAG => (ph.phflags & (1u32 << data)) != 0,
         COND_IS_OTHER => match data {
             0..=4 => stress_condition(nb, data, which, false, &lookup),
-            OTHER_IS_AFTER_STRESS => false, // needs history outside our window
+            OTHER_IS_AFTER_STRESS => which == 1 && nb.after_stress,
             OTHER_IS_NOT_VOWEL => ph.typ != PH_VOWEL,
             OTHER_IS_FINAL_VOWEL => {
                 // C scans to the end of the *word*: the last vowel in it is

@@ -10800,6 +10800,26 @@ fn change_inserted_phonemes(codes: &mut [PhonemeCode], inserted: &[bool], phdata
     }
 }
 
+fn after_stress(
+    i: usize,
+    n: usize,
+    real: &[usize],
+    level: &[u8],
+    crosses: &dyn Fn(usize, usize) -> bool,
+) -> bool {
+    let mut from = i;
+    for &at in real[..n].iter().rev() {
+        if crosses(at, from) {
+            return false;
+        }
+        if level[at] != NO_STRESS_LEVEL && level[at] >= 4 {
+            return true;
+        }
+        from = at;
+    }
+    false
+}
+
 fn resolve_virtual_phonemes_in_codes(
     codes: &mut Vec<PhonemeCode>,
     phdata: &PhonemeData,
@@ -10943,6 +10963,7 @@ fn resolve_virtual_phonemes_in_codes(
             prev_vowel,
             prev_vowel_stress,
             vowels_tracked: true,
+            after_stress: after_stress(i, n, &real, &level, &crosses),
         };
         let extract = crate::synthesize::bytecode::interpret_phoneme_ctl(
             ph.program,
