@@ -4803,6 +4803,9 @@ fn word_to_phonemes_inner(
         expect_noun: expect.noun,
         expect_past: expect.past,
         dict_condition: lang_opts.dict_condition,
+        // A stem left by a removed prefix is looked up as C does with `SUFX_P`,
+        // which skips `$only` and `$onlys` entries.
+        end_flags: if rule_word_flags & FLAG_PREFIX_REMOVED != 0 { SUFX_P } else { 0 },
         ..Default::default()
     };
 

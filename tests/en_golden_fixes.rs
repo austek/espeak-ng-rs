@@ -79,6 +79,11 @@ fn suffix_stem_keeps_the_word_flags_for_w_alt_rules() {
 }
 
 #[test]
+fn prefix_stem_skips_only_entries() {
+    check(&[("output", "ˈaʊtpʊt"), ("the output", "ðɪ ˈaʊtpʊt")]);
+}
+
+#[test]
 fn abbrev_flag_survives_a_suffix_stem_lookup() {
     check(&[("os", "ˌəʊˈɛs"), ("OS", "ˌəʊˈɛs")]);
 }
