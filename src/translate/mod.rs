@@ -5955,6 +5955,7 @@ fn split_abandoned_words(
             && word.chars().count() > 1
             && native(word)
             && !dict_lists_word(word, dict, options)
+            && !is_unpronounceable(&lowercase_for_lang(word, &options.lang), dict, options)
             && rules_abort_word(word, dict, options)
             // `TranslateWord3` spells an unpronounceable word before the
             // rules get to abandon it.

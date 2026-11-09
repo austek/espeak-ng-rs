@@ -64,6 +64,16 @@ fn mismatched_ordinal_suffix_is_still_an_ordinal() {
 }
 
 #[test]
+fn ordinal_indicator_letters_are_spelled_as_one_word() {
+    check(&[
+        ("Nº", "ˌɛnˈəʊ"),
+        ("Nª", "ˌɛnˈeɪ"),
+        ("xº", "ˌɛksˈəʊ"),
+        ("Nxº", "ˌɛnˌɛksˈəʊ"),
+    ]);
+}
+
+#[test]
 fn abbrev_flag_survives_a_suffix_stem_lookup() {
     check(&[("os", "ˌəʊˈɛs"), ("OS", "ˌəʊˈɛs")]);
 }
