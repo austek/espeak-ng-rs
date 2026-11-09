@@ -77,6 +77,41 @@ fn symbols_named_only_with_an_underscore_are_silent_in_running_text() {
 }
 
 #[test]
+fn number_dot_word_reads_the_point_unstressed() {
+    ipa_cases(&[
+        ("1.er", "œ̃ pwɛ̃ ˈe"),
+        ("2.e", "dø pwɛ̃ ˈə"),
+        ("3.e", "tʁwa pwɛ̃ ˈə"),
+        ("1.x", "œ̃ pwɛ̃ ˈiks"),
+        ("1.ab", "œ̃ pwɛ̃ ˈab"),
+        ("5.ème", "sɛ̃k pwɛ̃ jˈɛm"),
+        ("2.er", "dø pwɛ̃ ˈe"),
+        ("1. er", "ˈœ̃ ˈe"),
+    ]);
+}
+
+#[test]
+fn clause_without_a_primary_stress_puts_the_tonic_on_the_last_undiminished_syllable() {
+    ipa_cases(&[
+        ("et ou", "ˈe u"),
+        ("et/ou", "ˈe u"),
+        ("de du", "dˈə- dy-"),
+        ("je ne", "ʒˈə- nə-"),
+        ("de de de", "də- də- dˈə-"),
+        ("de de de de", "də- də- dˈə- də-"),
+        ("de de de de de", "də- də- də- də- dˈə-"),
+        ("de du, de", "dˈə- dy-\ndˈə-"),
+        ("tu je", "tˈy ʒə-"),
+        ("je tu", "ʒə- tˈy"),
+    ]);
+}
+
+#[test]
+fn word_equal_to_its_prefix_rule_keeps_the_prefix_unstressed() {
+    ipa_cases(&[("cyber", "sˈibɛʁ")]);
+}
+
+#[test]
 fn spelled_i_before_a_vowel_is_a_glide_without_stress() {
     ipa_cases(&[
         ("cia", "sˌejˈa"),

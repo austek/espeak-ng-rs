@@ -3162,11 +3162,7 @@ fn remove_standard_prefix(word: &str, end_type: u32) -> Option<(String, u32)> {
     if start_after > word.len() {
         return None;
     }
-    let stem = word[start_after..].to_string();
-    if stem.is_empty() {
-        return None;
-    }
-    Some((stem, FLAG_PREFIX_REMOVED))
+    Some((word[start_after..].to_string(), FLAG_PREFIX_REMOVED))
 }
 
 fn remove_standard_suffix(word: &str, end_type: u32, dict: &Dictionary) -> Option<(String, u32, u32)> {
