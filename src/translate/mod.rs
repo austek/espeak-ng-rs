@@ -5821,6 +5821,8 @@ fn rules_know_word(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bo
     if word.is_empty() || dict.rules().is_empty() {
         return false;
     }
+    // C reads the clause in lower case, so a capital never reaches the rules.
+    let word = lowercase_for_lang(word, &lang_opts.lang);
     let mut buf = Vec::with_capacity(word.len() + 3);
     buf.push(b' ');
     buf.extend_from_slice(word.as_bytes());
@@ -9088,11 +9090,19 @@ impl Translator {
                     }
                     // A `_<char>` key is a character *name* to look up, not
                     // text to translate (`_@` tokenises as two symbols).
+                    // A one-letter word is spelled, not read: C marks it
+                    // `FLAG_TRANSLATOR2` and says the letter's name.
+                    let lone = |text: &str| {
+                        let mut it = text.chars();
+                        it.next().filter(|_| it.next().is_none())
+                    };
                     let char_name = word
                         .strip_prefix('_')
-                        .and_then(|rest| {
-                            let mut it = rest.chars();
-                            it.next().filter(|_| it.next().is_none())
+                        .and_then(lone)
+                        .or_else(|| {
+                            lone(word)
+                                .filter(|c| c.is_alphabetic())
+                                .and_then(|c| c.to_lowercase().next())
                         });
                     // `translate_to_codes_inner` with switching disabled: a
                     // switched word may not switch again.
