@@ -67,6 +67,8 @@ jobs:
           --test dutch_number_word_break
           --test dutch_nonsyllabic_tonic
           --test dutch_short_stem_vowel_doubling
+          --test dutch_prefix_confirmation
+          --test dutch_first_suffix_match
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
