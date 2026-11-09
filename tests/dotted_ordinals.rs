@@ -1,52 +1,40 @@
 // tests/dotted_ordinals.rs
 //
-// Romance abbreviated ordinals are commonly written with a dot before the
-// masculine/feminine indicator ("1.º", "2.ª" — the RAE-recommended Spanish
-// form; also pt/it).  The dot used to break ordinal detection, so "3.º" read
-// the cardinal "tres" instead of "tercero".  The dotted form now reads the same
-// ordinal as the un-dotted "3º", and a bare "3." (no indicator) is untouched.
+// A dot between a number and the º/ª indicator ("1.º", "2.ª") is not an
+// ordinal marker in C: the dot is the language's `_.` entry appended to the
+// cardinal, and the indicator is read as the letter.  Expected strings are
+// C espeak-ng master output.
 
 use espeak_ng::Translator;
 
-#[test]
-fn spanish_dotted_ordinal_matches_undotted() {
-    let Some(t) = Translator::new("es", None).ok() else {
-        eprintln!("[SKIP] no es data");
-        return;
-    };
-    let ipa = |s: &str| t.text_to_ipa(s).unwrap();
-    for (dotted, plain) in [("1.º", "1º"), ("2.ª", "2ª"), ("3.º", "3º"), ("10.º", "10º")] {
-        assert_eq!(ipa(dotted), ipa(plain), "{dotted} should read like {plain}");
-    }
-    assert_eq!(ipa("3.º"), "tɛɾθˈɛɾo", "es 3.º = tercero");
-    // In a sentence the ordinal is read (not the bare cardinal + a pause).
-    assert!(ipa("el 3.º gato").contains("tɛɾθˈɛɾo"), "{}", ipa("el 3.º gato"));
-}
-
-#[test]
-fn portuguese_and_italian_dotted_ordinals() {
-    for (lang, s, sub) in [("pt", "1.º", "pɹˌimˈeɪɾʊ"), ("it", "2.º", "sekˈondo")] {
-        let Some(t) = Translator::new(lang, None).ok() else {
+fn check(cases: &[(&str, &str, &str)]) {
+    for (lang, text, expected) in cases {
+        let Ok(t) = Translator::new_default(lang) else {
             eprintln!("[SKIP] no {lang} data");
             continue;
         };
-        let got = t.text_to_ipa(s).unwrap();
-        assert!(got.contains(sub), "{lang} {s} should be an ordinal ({sub}): {got}");
+        assert_eq!(&t.text_to_ipa(text).unwrap(), expected, "{lang} {text}");
     }
 }
 
 #[test]
-fn bare_dot_and_german_ordinal_are_unaffected() {
-    // A bare "3." (no º/ª) stays a cardinal in Spanish, and a decimal is untouched.
-    if let Some(es) = Translator::new("es", None).ok() {
-        assert_eq!(es.text_to_ipa("3.").unwrap(), "tɾˈes", "bare es 3. stays cardinal");
-        assert!(es.text_to_ipa("3.5").unwrap().contains("θˈinko"), "es decimal unaffected");
-    }
-    // German uses the dot itself as the ordinal marker — "3." and "3.º" must
-    // both still read "dritte" (the dot-before-indicator skip is gated off for
-    // dot_marks_ordinal languages).
-    if let Some(de) = Translator::new("de", None).ok() {
-        assert_eq!(de.text_to_ipa("3.").unwrap(), "dɾˈɪtə", "de 3. = dritte");
-        assert_eq!(de.text_to_ipa("3.º").unwrap(), "dɾˈɪtə", "de 3.º stays dritte (not empty)");
-    }
+fn dot_before_the_indicator_reads_cardinal_point_letter() {
+    check(&[
+        ("es", "3.º", "tɾˈes punto ˈo"),
+        ("it", "3.º", "trˈe pʊnto ˈɔː"),
+        ("de", "3.º", "dɾˈaɪ pʊŋkt ˈoː"),
+        ("de", "3.ª", "dɾˈaɪ pʊŋkt ˈɑː"),
+        ("en", "3.º", "θɹˈiː dɒt ˈəʊ"),
+    ]);
+}
+
+#[test]
+fn bare_dot_stays_a_cardinal() {
+    check(&[
+        ("es", "3.", "tɾˈes"),
+        ("de", "3.", "dɾˈaɪ"),
+        ("nl", "3.", "drˈi"),
+        ("nl", "Hij is 3.", "hɛɪ ɪs drˈi"),
+        ("nl", "Kerkstraat 12.", "kˈɛrkstraː tʋˈaːlf"),
+    ]);
 }

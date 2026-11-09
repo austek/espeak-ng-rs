@@ -19,18 +19,25 @@ fn compound_ordinals_are_one_word() {
     // A compound ordinal must not split into "zwanzig erste" (two words with the
     // units read as a separate ordinal).  The old bug produced "erste"/"zweite"
     // etc. as a trailing word — guard against that stress pattern.
-    for (input, tail_of_20s) in [("21.", "tsvˈantsɪçstə"), ("22.", "tsvˈantsɪçstə")] {
+    // The dot marks an ordinal only before a lower-case word; at the end of the
+    // text C drops it and reads the cardinal.
+    for (input, tail_of_20s) in [("21. mal", "tsvˈantsɪçstə mˈɑːl"), ("22. mal", "tsvˈantsɪçstə mˈɑːl")] {
         let got = ipa(input);
         assert!(got.ends_with(tail_of_20s), "{input} should end like '…zwanzigste': {got}");
         assert!(!got.contains("ˈeːɾstə"), "{input} must not read a separate 'erste': {got}");
     }
     // 21. reads as one compound cardinal + suffix (matches '20.' ending).
-    assert_eq!(ipa("21."), format!("ˈaɪn ʊnt{}", ipa("20.")));
+    assert_eq!(ipa("21. mal"), format!("ˈaɪn ʊnt{}", ipa("20. mal")));
     // Round and small ordinals are unchanged.
-    assert_eq!(ipa("1."), "ˈeːɾstə");
-    assert_eq!(ipa("3."), "dɾˈɪtə");
-    assert_eq!(ipa("20."), "tsvˈantsɪçstə");
-    assert_eq!(ipa("100."), "ˈaɪnhˈʊndɜtstə");
+    assert_eq!(ipa("1. mal"), "ˈeːɾstə mˈɑːl");
+    assert_eq!(ipa("3. mal"), "dɾˈɪtə mˈɑːl");
+    assert_eq!(ipa("20. mal"), "tsvˈantsɪçstə mˈɑːl");
+    assert_eq!(ipa("100. mal"), "ˈaɪnhˈʊndɜtstə mˈɑːl");
+    // Sentence-final and clause-final dots leave the cardinal.
+    assert_eq!(ipa("3."), "dɾˈaɪ");
+    assert_eq!(ipa("Er ist 3."), "ɛɾ ɪst dɾˈaɪ");
+    assert_eq!(ipa("21."), "ˈaɪn ʊnttsvˈantsɪç");
+    assert_eq!(ipa("3.,"), "dɾˈaɪ");
     // A German date reads naturally.  C declines the ordinal before a
     // capitalised word ("der 21. Mai" is cardinal), so the date is lower-case.
     assert!(ipa("der 21. mai").contains("ʊnttsvˈantsɪçstə"), "{}", ipa("der 21. mai"));

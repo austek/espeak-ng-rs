@@ -1285,17 +1285,16 @@ fn is_ordinal_suffix(suffix: &str, digits: &str, grammar: &NumberGrammar) -> boo
 /// Whether the dot after a number marks it as an ordinal, given the text `rest`
 /// that follows the dot (C `CheckDotOrdinal`): the dot must be followed by a
 /// space and a word that does not start with a capital — German nouns are
-/// capitalised, so "am 3. Mai" is not an ordinal — or by the end of the clause.
-/// A dot at the very end of the text keeps marking an ordinal.
+/// capitalised, so "am 3. Mai" is not an ordinal.  A dot that ends the clause
+/// (end of text, or before a comma) is dropped by C before the number is read,
+/// so the number stays a cardinal.
 fn dot_marks_ordinal_before(mut rest: impl Iterator<Item = char>) -> bool {
-    let Some(first) = rest.next() else { return true };
-    if matches!(first, 'º' | 'ª') {
-        return true;
+    match rest.next() {
+        Some(first) if first.is_whitespace() => {
+            rest.next().is_some_and(|next| next.is_alphabetic() && !next.is_uppercase())
+        }
+        _ => false,
     }
-    if first.is_alphanumeric() {
-        return false;
-    }
-    rest.next().map_or(true, |next| next.is_alphabetic() && !next.is_uppercase())
 }
 
 /// The letters glued to a number anywhere in `text`, lower-cased.
@@ -2060,22 +2059,6 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // are left for the next token so the number is still spoken instead of
             // being swallowed into a bogus ordinal.
             let mut lookahead = chars.clone();
-            // A Romance abbreviated ordinal may write a dot before the
-            // masculine/feminine indicator ("1.º", "2.ª" — the RAE-recommended
-            // Spanish form; also pt/it).  Skip that dot so the indicator is
-            // still recognised; a bare "3." (no indicator) is left to the
-            // cardinal/`dot_marks_ordinal` paths below.
-            // Not for `dot_marks_ordinal` languages (German "3." is its own
-            // ordinal; keep the dot for that path).
-            let mut dot_before_indicator = false;
-            if !grammar.ordinals.dot_marks_ordinal && lookahead.peek() == Some(&'.') {
-                let mut probe = lookahead.clone();
-                probe.next(); // the '.'
-                if matches!(probe.peek(), Some('º') | Some('ª')) {
-                    lookahead.next(); // consume the '.' in the lookahead only
-                    dot_before_indicator = true;
-                }
-            }
             let mut suffix = String::new();
             while let Some(&next) = lookahead.peek() {
                 if next.is_alphabetic() || next == 'º' || next == 'ª' {
@@ -2087,9 +2070,6 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             }
             let suffix_lc = suffix.to_lowercase();
             if !suffix.is_empty() && is_ordinal_suffix(&suffix_lc, &digits, grammar) {
-                if dot_before_indicator {
-                    chars.next(); // consume the skipped '.'
-                }
                 for _ in 0..suffix.chars().count() {
                     chars.next(); // now consume the suffix from the real iterator
                 }
@@ -3270,11 +3250,12 @@ fn lookup_num_phonemes(dict: &Dictionary, key: &str) -> Vec<u8> {
 
 const PHON_END_WORD: u8 = 15;
 
-/// Whether the `.` at `ix` sits directly between two numbers.
-fn point_between_numbers(tokens: &[Token], ix: usize) -> bool {
+/// Whether the `.` at `ix` joins a number to the number or word right after it
+/// (`3.14`, `3.x`); a dot before a space never reaches the number in C.
+fn point_after_number(tokens: &[Token], ix: usize) -> bool {
     ix > 0
         && matches!(tokens[ix - 1], Token::Number(_))
-        && matches!(tokens.get(ix + 1), Some(Token::Number(_)))
+        && matches!(tokens.get(ix + 1), Some(Token::Number(_) | Token::Word(_)))
 }
 
 
@@ -4366,7 +4347,7 @@ fn number_tail(tokens: &[Token], ix: usize, dict: &Dictionary) -> Option<NumberT
         (!raw.is_empty()).then_some(raw)
     };
     match tokens.get(ix + 1)? {
-        Token::Punctuation('.') if point_between_numbers(tokens, ix + 1) => {
+        Token::Punctuation('.') if point_after_number(tokens, ix + 1) => {
             raw_of("_.").map(|raw| NumberTail { raw, fused: false })
         }
         Token::Number(NumberToken::Decimal { integer, .. }) if integer.is_empty() => {
@@ -8306,7 +8287,7 @@ pub(crate) fn build_translate_entries(
             // (`de 3.14`) is not a word: C appends the language's `_.` entry to
             // the number before it (see `number_tail`), so a language without
             // that entry reads it as silence.
-            Token::Punctuation('.') if point_between_numbers(tokens, token_ix) => {
+            Token::Punctuation('.') if point_after_number(tokens, token_ix) => {
                 entries.push(TranslateEntry {
                     phonemes: Vec::new(), dict_flags: 0,
                     kind: TranslateEntryKind::Other, word_lower: None,
@@ -11721,11 +11702,13 @@ mod tests {
         // whole cardinal ("einundzwanzigste"), not tens-ord + units-ord (which
         // gave the wrong two-word "zwanzig erste").
         run_ipa_table("de", "de_dict", &[
-            ("1.",  "ˈeːɾstə"),
-            ("3.",  "dɾˈɪtə"),
-            ("20.", "tsvˈantsɪçstə"),
+            ("1. mal",  "ˈeːɾstə mˈɑːl"),
+            ("3. mal",  "dɾˈɪtə mˈɑːl"),
+            ("20. mal", "tsvˈantsɪçstə mˈɑːl"),
             // "einundzwanzigste" — the unit "1" apocopates to "ein" (not "eins").
-            ("21.", "ˈaɪn ʊnttsvˈantsɪçstə"),
+            ("21. mal", "ˈaɪn ʊnttsvˈantsɪçstə mˈɑːl"),
+            // Before the end of the clause C drops the dot: a cardinal.
+            ("3.", "dɾˈaɪ"),
         ]);
     }
 

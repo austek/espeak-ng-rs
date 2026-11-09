@@ -53,8 +53,9 @@ fn period_between_words_reads_as_dot() {
     let ipa = t.text_to_ipa("cat.Dog").unwrap();
     assert!(!ipa.contains('\n'), "cat.Dog must not break: {ipa:?}");
     assert_eq!(ipa, "kˈat dˈɒt dˈɒɡ");
-    // digit.word too ("5.and" → "five dot and").
-    assert_eq!(t.text_to_ipa("5.and").unwrap(), "fˈaɪv dˈɒt and");
+    // digit.word too: the point is the `_.` entry appended to the number,
+    // unstressed ("5.and" → "five dot and").
+    assert_eq!(t.text_to_ipa("5.and").unwrap(), "fˈaɪv dɒt and");
 }
 
 #[test]

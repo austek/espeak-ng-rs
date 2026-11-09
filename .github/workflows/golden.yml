@@ -89,6 +89,10 @@ jobs:
           --test negative_numbers
           --test number_point
           --test acronym_periods
+          --test dotted_abbreviations
+          --test vulgar_fractions
+          --test dotted_ordinals
+          --test german_ordinals
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
