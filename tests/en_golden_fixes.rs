@@ -53,6 +53,17 @@ fn superscript_two_and_three_read_as_digits() {
 }
 
 #[test]
+fn mismatched_ordinal_suffix_is_still_an_ordinal() {
+    check(&[
+        ("2st", "sˈɛkst"),
+        ("3nd", "θˈɜːɹənd"),
+        ("22st", "twˈɛnti sˈɛkst"),
+        ("4rd", "fˈɔːd"),
+        ("1st", "fˈɜːst"),
+    ]);
+}
+
+#[test]
 fn abbrev_flag_survives_a_suffix_stem_lookup() {
     check(&[("os", "ˌəʊˈɛs"), ("OS", "ˌəʊˈɛs")]);
 }

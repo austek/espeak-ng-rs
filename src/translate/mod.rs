@@ -1265,23 +1265,15 @@ pub fn tokenize(text: &str) -> Vec<Token> {
 /// Dutch `e`).  Anything else after a number (a plural `s`, a unit `km`) is
 /// *not* an ordinal.
 ///
-/// The English suffix must **match** the number (`1st`, `2nd`, `3rd`, `11th`,
-/// `21st`): a mismatched one like `2st`/`1nd`/`3th` is not an ordinal, so the
-/// number is spoken and the stray letters kept as a separate word rather than
-/// producing a mangled ordinal ("2st" → "secst"; upstream #96).
+/// Any `st`/`nd`/`rd`/`th` is one, whether or not it fits the number: upstream
+/// reads `2st` as "secst" (the `_2o` ordinal plus the `_#st` suffix word).
 fn is_ordinal_suffix(suffix: &str, digits: &str, grammar: &NumberGrammar) -> bool {
-    if matches!(suffix, "st" | "nd" | "rd" | "th") {
-        if suffix == english_ordinal_suffix(digits) {
-            return true;
-        }
-        // Not the right English suffix — but it may still be a French written
-        // ordinal (`2nd` = second), handled below; otherwise it's not ordinal.
-    } else if matches!(suffix, "º" | "ª") {
-        return true; // Iberian gender markers, independent of the number
+    let _ = digits;
+    if matches!(suffix, "st" | "nd" | "rd" | "th" | "º" | "ª") {
+        return true; // a language without a `_#` entry splits it off again later
     }
     grammar.ordinals.indicator.as_deref() == Some(suffix)
-        || (!matches!(suffix, "st" | "nd" | "rd" | "th")
-            && grammar.ordinals.dict_suffixes.iter().any(|s| s == suffix))
+        || grammar.ordinals.dict_suffixes.iter().any(|s| s == suffix)
 }
 
 /// Whether the dot after a number marks it as an ordinal, given the text `rest`
@@ -11409,18 +11401,15 @@ mod tests {
             tokenize_opts("21st", &en).as_slice(),
             [Token::Number(NumberToken::Ordinal(o))] if o.digits == "21"
         ));
-        // A st/nd/rd/th suffix that does NOT match the number is not an ordinal
-        // (upstream #96: "2st" must not become "secst") — the number is a
-        // cardinal and the stray letters a separate word.
-        for (input, num, letters) in [("2st", "2", "st"), ("1nd", "1", "nd"),
-                                      ("3th", "3", "th"), ("11st", "11", "st")] {
-            assert_eq!(
-                tokenize_opts(input, &en),
-                vec![
-                    Token::Number(NumberToken::Cardinal(num.into())),
-                    Token::Word(letters.into()),
-                ],
-                "{input} should be cardinal + word",
+        // A st/nd/rd/th suffix that does not match the number is still an
+        // ordinal, as in upstream ("2st" is "secst").
+        for (input, num) in [("2st", "2"), ("1nd", "1"), ("3th", "3"), ("11st", "11")] {
+            assert!(
+                matches!(
+                    tokenize_opts(input, &en).as_slice(),
+                    [Token::Number(NumberToken::Ordinal(o))] if o.digits == num
+                ),
+                "{input} should be an ordinal",
             );
         }
         // …but the correct suffix for the same tens still parses (11th, 111th).
