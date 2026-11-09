@@ -72,6 +72,7 @@ jobs:
           --test absent_letters
           --test switched_letter_names
           --test switched_replace
+          --test spellword_abort
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

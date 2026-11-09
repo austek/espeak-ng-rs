@@ -5344,6 +5344,9 @@ pub(crate) struct TranslateEntry {
     /// Mandarin's third-tone sandhi *joins* the pair it applies to: 你好 reads
     /// as `ni35X'Au214_|` — one gap, at the end — not as two separate words.
     pub(crate) no_word_gap: bool,
+    /// The letters of one abandoned word share this id (the index of the first),
+    /// so that clause-final stress sees them as the word they came from.
+    pub(crate) word_group: Option<usize>,
 }
 
 /// Parse the content of a `[[ … ]]` inline-phoneme span into phoneme codes.
@@ -5816,6 +5819,101 @@ fn dict_knows_word(word: &str, dict: &Dictionary) -> bool {
     matches!(lookup(dict, &word.to_lowercase(), &ctx), Some(r) if r.flags1.found())
 }
 
+/// Whether the rules abandon `word` at a letter they do not cover (C's
+/// `FLAG_SPELLWORD`).
+fn rules_abort_word(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
+    if dict.rules().is_empty() {
+        return false;
+    }
+    let word = lowercase_for_lang(word, &lang_opts.lang);
+    let word = dict.apply_replacements(&word).unwrap_or(word);
+    let word = decompose_hangul(&word).unwrap_or(word);
+    let mut buf = Vec::with_capacity(word.len() + 3);
+    buf.push(b' ');
+    buf.extend_from_slice(word.as_bytes());
+    buf.extend_from_slice(&[b' ', 0]);
+    let (mut vowels, mut stressed) = (0i32, 0i32);
+    crate::dictionary::rules::translate_rules(
+        dict,
+        &buf,
+        1,
+        0,
+        0,
+        &dict.letter_bits,
+        lang_opts.dict_condition,
+        &mut vowels,
+        &mut stressed,
+    )
+    .aborted
+}
+
+/// Whether the dictionary list pronounces `word` (`Mª`, `kg`), seen with the
+/// capitalisation the word was written in.
+fn dict_lists_word(word: &str, dict: &Dictionary, options: &LangOptions) -> bool {
+    let letters = || word.chars().filter(|c| c.is_alphabetic());
+    let mut word_flags = 0;
+    if word.chars().next().is_some_and(char::is_uppercase) {
+        word_flags |= crate::dictionary::FLAG_FIRST_UPPER;
+    }
+    if letters().next().is_some() && letters().all(char::is_uppercase) {
+        word_flags |= crate::dictionary::FLAG_ALL_UPPER;
+    }
+    let ctx = LookupCtx { word_flags, dict_condition: options.dict_condition, ..Default::default() };
+    let lower = lowercase_for_lang(word, &options.lang);
+    matches!(lookup(dict, &lower, &ctx), Some(r) if r.flags1.found())
+}
+
+/// C's `TranslateClause` redoes an abandoned word as separate one-letter words:
+/// the rules in `dict` cannot read `ʃab`, so it becomes `ʃ`, `a`, `b`.  Returns,
+/// for each resulting token, the index of the first letter of the word it came
+/// from (`None` for every other token).
+fn split_abandoned_words(
+    tokens: &mut Vec<Token>,
+    dict: &Dictionary,
+    options: &LangOptions,
+) -> Vec<Option<usize>> {
+    let native = |word: &str| {
+        word.chars()
+            .find_map(char_script)
+            .is_none_or(|sc| native_scripts(&options.lang).contains(&sc))
+            && foreign_script_voice(word, &options.lang).is_none()
+    };
+    let abandoned = |word: &str| {
+        !word.is_ascii()
+            && word.chars().count() > 1
+            && native(word)
+            && !dict_lists_word(word, dict, options)
+            && rules_abort_word(word, dict, options)
+    };
+    if !tokens.iter().any(|t| matches!(t, Token::Word(w) if abandoned(w))) {
+        return vec![None; tokens.len()];
+    }
+    let mut out = Vec::with_capacity(tokens.len() + 4);
+    let mut letters_at = Vec::with_capacity(tokens.len() + 4);
+    for token in tokens.drain(..) {
+        match token {
+            Token::Word(word) if abandoned(&word) => {
+                let first = out.len();
+                let letters = word.chars().filter(|c| !matches!(*c as u32, 0x300..=0x36f));
+                for (i, letter) in letters.enumerate() {
+                    if i > 0 {
+                        out.push(Token::Space);
+                        letters_at.push(Some(first));
+                    }
+                    out.push(Token::Word(letter.to_string()));
+                    letters_at.push(Some(first));
+                }
+            }
+            other => {
+                out.push(other);
+                letters_at.push(None);
+            }
+        }
+    }
+    *tokens = out;
+    letters_at
+}
+
 /// Whether the language's **own letter rules** can read this word.
 ///
 /// C never switches translator by script — its `alphabets[]` table nominates a
@@ -6282,8 +6380,10 @@ fn letter_name(
 ) -> Vec<u8> {
     let key = letter.to_string();
     let spoken = |wr: &WordResult| wr.phonemes.iter().any(|&b| b != 0);
+    // C stresses a letter name afresh (`SetWordStress` with no flags), so a
+    // function word's `$u` does not make `a` unstressed.
     let word = |text: &str| {
-        let expect = PosExpect { no_replace: true, ..PosExpect::default() };
+        let expect = PosExpect { no_replace: true, defer_stress: true, ..PosExpect::default() };
         word_to_phonemes_inner(text, dict, phdata, stress_opts, options, 0, expect)
     };
     let mut wr = word(&format!("_{key}"));
@@ -6291,7 +6391,15 @@ fn letter_name(
         wr = word(&key);
     }
     if spoken(&wr) {
-        return wr.phonemes.into_iter().filter(|&b| b != 0).collect();
+        let mut name = wr.phonemes;
+        if name.first() != Some(&crate::phoneme::PHON_SWITCH) {
+            if name.last() != Some(&0) {
+                name.push(0);
+            }
+            set_word_stress(&mut name, phdata, stress_opts, Some(0), -1, 0);
+        }
+        name.retain(|&b| b != 0);
+        return name;
     }
     let mut accented = accented_letter_phonemes(letter, dict, phdata, stress_opts, options);
     if accented.is_empty() {
@@ -7635,6 +7743,7 @@ pub(crate) fn build_translate_entries(
     stress_opts: &StressOpts,
     options: &LangOptions,
     english_has: &dyn Fn(char) -> bool,
+    spelled: &[Option<usize>],
 ) -> Vec<TranslateEntry> {
     let mut entries: Vec<TranslateEntry> = Vec::with_capacity(tokens.len());
     // `$max3` bookkeeping: which symbol is repeating, and how many times so far.
@@ -7683,6 +7792,20 @@ pub(crate) fn build_translate_entries(
                 .enumerate()
                 .take_while(|(_, t)| !matches!(t, Token::ClauseBoundary(_)))
                 .any(|(k, _)| word_like[i + 1 + k]);
+        }
+    }
+    // The letters of an abandoned word keep the clause position of the word:
+    // C translates each with the flags of the word they came from.
+    let mut last_letter = std::collections::HashMap::new();
+    for (i, word) in spelled.iter().enumerate() {
+        if let Some(first) = word {
+            last_letter.insert(*first, i);
+        }
+    }
+    for (i, word) in spelled.iter().enumerate() {
+        if let Some(first) = word {
+            at_start[i] = at_start[*first];
+            at_end[i] = at_end[last_letter[first]];
         }
     }
 
@@ -7769,7 +7892,7 @@ pub(crate) fn build_translate_entries(
                                 dict_flags: 0,
                                 kind:       TranslateEntryKind::Word,
                                 word_lower: Some(word.to_lowercase()),
-                        no_word_gap: false,
+                        no_word_gap: false, word_group: None,
                                 found_in_list: false,
                             });
                             prev_word = None;
@@ -7789,7 +7912,7 @@ pub(crate) fn build_translate_entries(
                         dict_flags: 0,
                         kind:       TranslateEntryKind::Word, // retagged to LangSwitch below
                         word_lower: Some(word.clone()),
-                        no_word_gap: false,
+                        no_word_gap: false, word_group: None,
                         found_in_list: false,
                     });
                     prev_word = None;
@@ -7810,7 +7933,11 @@ pub(crate) fn build_translate_entries(
                     ..pos_expect_after(prev_word.as_deref())
                 };
                 let mut wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
-                if !wr.found_in_list && wr.phonemes.iter().all(|&b| b == 0) {
+                // The indicator of an ordinal that was read as a number (`3.º`)
+                // is already spoken in the number.
+                let ordinal_indicator = token_ix > 0
+                    && matches!(tokens[token_ix - 1], Token::Number(NumberToken::Ordinal(_)));
+                if !wr.found_in_list && wr.phonemes.iter().all(|&b| b == 0) && !ordinal_indicator {
                     let mut chars = lower.chars();
                     let lone = chars.next().filter(|c| c.is_alphabetic() && chars.next().is_none());
                     let reading = lone.and_then(|c| {
@@ -7824,6 +7951,7 @@ pub(crate) fn build_translate_entries(
                             kind: TranslateEntryKind::Word,
                             word_lower: Some(reading.word),
                             no_word_gap: false,
+                            word_group: spelled.get(token_ix).copied().flatten(),
                             found_in_list: false,
                         });
                         continue;
@@ -7914,7 +8042,8 @@ pub(crate) fn build_translate_entries(
                     found_in_list: wr.found_in_list,
                     kind:       TranslateEntryKind::Word,
                     word_lower: Some(lower),
-                        no_word_gap: false
+                    no_word_gap: false,
+                    word_group: spelled.get(token_ix).copied().flatten(),
                 });
             }
             Token::Number(token) => {
@@ -7950,7 +8079,7 @@ pub(crate) fn build_translate_entries(
                             dict_flags: last_flags,
                             kind:       TranslateEntryKind::Word,
                             word_lower: Some(word),
-                        no_word_gap: false,
+                        no_word_gap: false, word_group: None,
                             found_in_list: false,
                         });
                         continue;
@@ -7973,7 +8102,7 @@ pub(crate) fn build_translate_entries(
                     found_in_list: wr.found_in_list,
                     kind:       TranslateEntryKind::Word,
                     word_lower: Some(token.surface().to_string().to_lowercase()),
-                        no_word_gap: false
+                        no_word_gap: false, word_group: None
                 });
             }
             Token::InlinePhonemes(content) => {
@@ -7982,7 +8111,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: 0,
                     kind:       TranslateEntryKind::Word,
                     word_lower: None,
-                        no_word_gap: false,
+                        no_word_gap: false, word_group: None,
                     found_in_list: false,
                 });
             }
@@ -8009,7 +8138,7 @@ pub(crate) fn build_translate_entries(
                         dict_flags: 0,
                         kind:       TranslateEntryKind::ClauseBoundary,
                         word_lower: None,
-                        no_word_gap: false,
+                        no_word_gap: false, word_group: None,
                         found_in_list: false,
                     });
                 } else {
@@ -8018,7 +8147,7 @@ pub(crate) fn build_translate_entries(
                         dict_flags: 0,
                         kind:       TranslateEntryKind::Word,
                         word_lower: None,
-                        no_word_gap: false,
+                        no_word_gap: false, word_group: None,
                         // A dictionary pronunciation is a *translation given*
                         // (C's `SFLAG_DICTIONARY`), which suppresses the
                         // stress-conditioned phoneme changes; a name that came
@@ -8071,7 +8200,7 @@ pub(crate) fn build_translate_entries(
                     entries.push(TranslateEntry {
                         phonemes, dict_flags: 0,
                         kind: TranslateEntryKind::Other, word_lower: None,
-                        no_word_gap: false,
+                        no_word_gap: false, word_group: None,
                         found_in_list: false,
                     });
                 } else {
@@ -8091,7 +8220,7 @@ pub(crate) fn build_translate_entries(
                         } else {
                             format!("_{c}")
                         }),
-                        no_word_gap: false,
+                        no_word_gap: false, word_group: None,
                         // Phonemes from the dictionary are a *translation
                         // given*, so the stress-conditioned changes don't apply
                         // (`pl @` is `m'awpa` where the typed word "małpa",
@@ -8107,7 +8236,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: 0,
                     kind:       TranslateEntryKind::Other,
                     word_lower: None,
-                        no_word_gap: false,
+                        no_word_gap: false, word_group: None,
                     found_in_list: false,
                 });
             }
@@ -8395,9 +8524,12 @@ pub(crate) fn promote_translate_entries(
                 continue;
             }
 
-            let is_last_word = entries[i + 1..]
-                .iter()
-                .all(|e| e.kind != TranslateEntryKind::Word);
+            // The letters of one abandoned word all count as its last word.
+            let own_group = entries[i].word_group;
+            let is_last_word = entries[i + 1..].iter().all(|e| {
+                e.kind != TranslateEntryKind::Word
+                    || (own_group.is_some() && e.word_group == own_group)
+            });
             let following_all_unstressed = entries[i + 1..]
                 .iter()
                 .filter(|e| e.kind == TranslateEntryKind::Word)
@@ -9035,7 +9167,8 @@ impl Translator {
         apply_currency(&mut tokens, lang);
         apply_fractions(&mut tokens, lang);
         apply_exponents(&mut tokens, lang);
-        let english: std::cell::OnceCell<Option<Translator>> = std::cell::OnceCell::new();
+        let spelled = split_abandoned_words(&mut tokens, &dict, &self.options);
+        let english:std::cell::OnceCell<Option<Translator>> = std::cell::OnceCell::new();
         let english_has = |c: char| {
             english
                 .get_or_init(|| Translator::new("en", Some(&self.data_dir)).ok())
@@ -9049,6 +9182,7 @@ impl Translator {
             &stress_opts,
             &self.options,
             &english_has,
+            &spelled,
         );
         promote_translate_entries(&mut entries, &phdata, lang);
         if primary_bcp47_subtag(lang) == "en" {

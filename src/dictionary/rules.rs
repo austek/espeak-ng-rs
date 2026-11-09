@@ -147,6 +147,33 @@ pub fn is_alpha(c: u32) -> bool {
     (c as u8).is_ascii_alphabetic() || (c >= 0xc0 && c < 0x2c0)
 }
 
+/// C's `IsAlpha`: `iswalpha` plus the in-word marks of the Indic, Hebrew and
+/// Arabic scripts.
+pub fn is_alpha_c(c: u32) -> bool {
+    let Some(ch) = char::from_u32(c) else { return false };
+    if ch.is_alphabetic() {
+        return true;
+    }
+    match c {
+        0x901..=0xdf7 => (c & 0x7f) < 0x64 || matches!(c, 0xa70 | 0xa71 | 0xd7a..=0xd7f),
+        0x5b0..=0x5c2 | 0x605 | 0x670 | 0x64b..=0x65e | 0x300..=0x36f => true,
+        _ => false,
+    }
+}
+
+/// Whether an unmatched letter abandons its word (C's `FLAG_SPELLWORD`).
+///
+/// C tests the byte after the letter as a signed `char`, so only an ASCII
+/// character counts as "another letter follows" for a word's first letter.
+fn abandons_word(wc: u32, next: Option<&u8>, any_alpha: u32) -> bool {
+    // Every shipped rules file covers the ASCII letters it uses, so an ASCII
+    // letter without a rule only comes from a deliberately partial rule set.
+    wc >= 0x80
+        && is_alpha_c(wc)
+        && !(0x300..=0x36f).contains(&wc)
+        && (any_alpha > 1 || next.is_some_and(|b| *b > b' ' && *b < 0x80))
+}
+
 pub fn is_digit(c: u32) -> bool {
     (c >= b'0' as u32 && c <= b'9' as u32) || (c >= 0x660 && c <= 0x669) // Arabic-Indic
 }
@@ -988,6 +1015,9 @@ pub struct RulesResult {
     pub suffix_start: usize,
     /// True when the matched rule sets the spell-word flag.
     pub spellword: bool,
+    /// An unrecognised letter abandoned the word (C's `FLAG_SPELLWORD`): the
+    /// caller reads its letters one by one.  `phonemes` is empty.
+    pub aborted: bool,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1072,6 +1102,8 @@ pub fn translate_rules_ext(
     let mut out_suffix_start = 0usize;
     let mut out_stem_ph_len = 0usize; // length of stem phonemes when suffix rule fired
     let mut spellword = false;
+    let mut aborted = false;
+    let mut any_alpha = 0u32;
 
     // word_buf is indexed with word_start pointing to the first char.
     // We scan until we hit a space or null.
@@ -1087,6 +1119,9 @@ pub fn translate_rules_ext(
         if c == 0 || c == b' ' { break; }
 
         let (wc, wc_bytes) = utf8_decode(word_buf, pos);
+        if is_alpha_c(wc) {
+            any_alpha += 1;
+        }
 
         // ── groups3 lookup (multi-byte / non-Latin scripts) ───────────────
         //
@@ -1098,6 +1133,10 @@ pub fn translate_rules_ext(
         //   c2 = (wc - letter_bits_offset) + 1  (1-indexed)
         // so  groups3[c2 - 1] = groups3[wc - letter_bits_offset].
         let mut found = false;
+        // C's `found`: a script group or a two-letter chain exists for the
+        // letter.  Such a letter that matches no rule is passed over silently
+        // (Russian `ь` before a consonant); only the others abandon the word.
+        let mut group_exists = false;
         let mut match1 = MatchRecord::empty_best();
         let mut next_pos1 = pos + 1;
 
@@ -1131,6 +1170,7 @@ pub fn translate_rules_ext(
                     match1 = match_rule(dict, &ctx, g3_rules, g3_abs, &mut np);
                     next_pos1 = np;
                     found = match1.points > 0 || np > pos;
+                    group_exists = true;
                 }
             }
         }
@@ -1146,6 +1186,7 @@ pub fn translate_rules_ext(
             for g in g1..g_end {
                 if dict.groups.groups2[g].key == key {
                     found = true;
+                    group_exists = true;
                     let entry = &dict.groups.groups2[g];
                     let g2_rules = &dict.data[entry.offset..];
                     let ctx2 = make_ctx(word_buf, pos, word_start, 2, word_flags, dict_flags,
@@ -1221,16 +1262,33 @@ pub fn translate_rules_ext(
 
                 if match1.points == 0 && is_alpha(wc) {
                     // An unrecognised letter: note it (the caller may spell the
-                    // word) but keep scanning, which is what C does — Russian
-                    // reads the Serbian `његов` as `'egVf`, skipping the `њ` its
-                    // rules don't cover.  Abandoning the word here dropped the
-                    // whole thing, and under a *switching* voice left the bare
-                    // `phonSWITCH` marker behind (upstream #2555).
+                    // word).  Unless the word is abandoned here, scanning goes
+                    // on after the letter.
                     spellword = true;
-                    pos += wc_bytes + 1;
-                    continue;
+                    if !abandons_word(wc, buf.get(pos + wc_bytes + 1), any_alpha) {
+                        pos += wc_bytes + 1;
+                        continue;
+                    }
                 }
             }
+        }
+
+        // An unrecognised letter inside a word abandons it, for the caller to
+        // spell letter by letter.  C looks at the byte after the letter as a
+        // signed `char`, so only an ASCII character keeps a leading unknown
+        // letter from being skipped: Russian reads the Serbian `његов` as
+        // `'egVf`, passing over the `њ` its rules don't cover.
+        if match1.points == 0
+            && !group_exists
+            && abandons_word(wc, buf.get(pos + wc_bytes + 1), any_alpha)
+        {
+            out_phonemes.clear();
+            out_end_phonemes.clear();
+            out_end_type = 0;
+            out_suffix_start = 0;
+            spellword = true;
+            aborted = true;
+            break;
         }
 
         if match1.points > 0 {
@@ -1264,6 +1322,7 @@ pub fn translate_rules_ext(
                         end_type: out_end_type,
                         suffix_start: out_suffix_start,
                         spellword,
+                        aborted,
                     };
                 }
                 // Update vowel/stress counts from appended phonemes
@@ -1344,6 +1403,7 @@ pub fn translate_rules_ext(
         end_type: out_end_type,
         suffix_start: out_suffix_start,
         spellword,
+        aborted,
     }
 }
 
