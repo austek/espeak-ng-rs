@@ -38,6 +38,16 @@ fn check_phonemes(cases: &[(&str, &str)]) {
 }
 
 #[test]
+fn start_of_word_rules_decide_whether_a_word_is_spelled() {
+    check(&[
+        ("st", "sˈənt"),
+        ("BBC", "bˌiːbˌiːsˈiː"),
+        ("brown", "bɹˈaʊn"),
+        ("strength", "stɹˈɛŋθ"),
+    ]);
+}
+
+#[test]
 fn letters_of_other_alphabets_are_announced_by_alphabet_name() {
     check(&[
         ("ר", "hˈiːbɹuːrˈeʃ"),

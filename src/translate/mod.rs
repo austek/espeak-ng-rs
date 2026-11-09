@@ -5970,6 +5970,29 @@ fn foreign_script_voice(word: &str, lang: &str) -> Option<&'static str> {
     script_uses_words(script).then(|| script_voice(script))
 }
 
+/// C's `Unpronouncable2`: no start-of-word rule matches the word, or the one
+/// that does is marked `$unpron`.
+fn rules_reject_word_start(rest: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
+    let word = rest.split(' ').next().unwrap_or("");
+    let mut buf = Vec::with_capacity(word.len() + 3);
+    buf.push(b' ');
+    buf.extend_from_slice(word.as_bytes());
+    buf.extend_from_slice(b" \0");
+    let (mut vowels, mut stressed) = (0i32, 0i32);
+    let r = crate::dictionary::rules::translate_rules(
+        dict,
+        &buf,
+        1,
+        crate::dictionary::FLAG_UNPRON_TEST,
+        0,
+        &dict.letter_bits,
+        lang_opts.dict_condition,
+        &mut vowels,
+        &mut stressed,
+    );
+    r.end_type == 0 || r.end_type & crate::dictionary::SUFX_UNPRON != 0
+}
+
 /// C's `Unpronouncable`: is the first vowel too far into the word?
 ///
 /// A word with more than `max_initial_consonants` consonants before its first
@@ -6027,8 +6050,8 @@ fn is_unpronounceable(rest: &str, dict: &Dictionary, lang_opts: &LangOptions) ->
     // all?", which agrees with upstream on the words that matter ("BBC" and
     // "FBI" are spelled; "brown", "street" and German "schnell" are not) without
     // depending on every anchored rule matching exactly.
-    if lang_opts.unpronouncable == 2 {
-        return vowel_posn == 9;
+    if lang_opts.unpronouncable == 2 && vowel_posn > 2 {
+        return rules_reject_word_start(rest, dict, lang_opts);
     }
 
     if lang_opts.unpronouncable > 3 && first as u32 == lang_opts.unpronouncable {
@@ -8030,7 +8053,10 @@ pub(crate) fn build_translate_entries(
                 // A word the dictionary doesn't pronounce and whose first vowel
                 // is too far in — "BBC" has none at all — is spelled letter by
                 // letter, then whatever remains is translated normally.
-                else if !wr.found_in_list && is_unpronounceable(&lower, dict, options) {
+                else if !wr.found_in_list
+                    && !dict_knows_word(&lower, dict)
+                    && is_unpronounceable(&lower, dict, options)
+                {
                     if let Some((letters, rest)) =
                         spell_unpronounceable(&lower, dict, phdata, stress_opts, options)
                     {

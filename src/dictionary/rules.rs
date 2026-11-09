@@ -1297,6 +1297,10 @@ pub fn translate_rules_ext(
         }
 
         if match1.points > 0 {
+            // Only asking whether *any* rule reads the start of the word.
+            if word_flags & FLAG_UNPRON_TEST != 0 {
+                return RulesResult { end_type: match1.end_type | 1, ..RulesResult::default() };
+            }
             // `FLAG_NO_PREFIX`: a prefix match is ignored and its phonemes are
             // appended like those of any other rule.
             let want_ending = want_ending
