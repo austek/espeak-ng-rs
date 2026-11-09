@@ -2213,6 +2213,16 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     word.push(next);
                     chars.next();
                     prev_char = next;
+                } else if next == '.'
+                    && word.rsplit('.').next().is_some_and(|last| last.chars().count() == 1)
+                    && word.chars().last().is_some_and(char::is_alphabetic)
+                    && chars.clone().nth(1).is_some_and(|after| after.is_alphabetic())
+                {
+                    // A '.' between single letters (`e.g`, `U.S.A`, `a.u.b`)
+                    // keeps the letters in one word, as C does.
+                    word.push('.');
+                    chars.next();
+                    prev_char = '.';
                 } else if next == '-' {
                     // A hyphen between two letters is a word break, not part of
                     // the word (espeak `TranslateClause`: `well-known` → "well
@@ -8083,7 +8093,15 @@ pub(crate) fn build_translate_entries(
                 // pronunciation ("the word has $abbrev flag, but no pronunciation
                 // specified.  Speak as individual letters") — English `usa` is
                 // `j,u:,Es'eI`.
-                if !wr.found_in_list
+                if !wr.found_in_list && lower.contains('.') {
+                    // Single letters joined by dots (`e.g`, `U.S.A`) are one
+                    // word that no list names; it is spelled out.
+                    if let Some(spelled) = spell_word_letters(
+                        &lower.replace('.', ""), dict, phdata, stress_opts, options,
+                    ) {
+                        wr.phonemes = spelled;
+                    }
+                } else if !wr.found_in_list
                     && wr.dict_flags & crate::dictionary::FLAG_ABBREV != 0
                 {
                     if let Some(spelled) =
