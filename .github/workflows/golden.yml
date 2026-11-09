@@ -73,6 +73,7 @@ jobs:
           --test switched_letter_names
           --test switched_replace
           --test spellword_abort
+          --test en_golden_fixes
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

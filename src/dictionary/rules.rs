@@ -253,7 +253,7 @@ pub struct MatchRecord {
     pub phonemes_offset: usize,
     /// Suffix/ending type if the rule fires `RULE_ENDING`.
     pub end_type: u32,
-    /// Byte offset of a forward 'e' to delete (`RULE_DEL_FWD`), or `usize::MAX`.
+    /// Index into the word of the forward 'e' to silence (`RULE_DEL_FWD`), or `usize::MAX`.
     pub del_fwd: usize,
 }
 
@@ -694,7 +694,7 @@ pub fn match_rule(
                             let search_end = post_ptr;
                             for k in search_start..search_end {
                                 if k < word.len() && word[k] == b'e' {
-                                    match_.del_fwd = rules_abs_offset + k; // approximate
+                                    match_.del_fwd = k;
                                     break;
                                 }
                             }
@@ -1113,7 +1113,12 @@ pub fn translate_rules_ext(
     let diereses = matches!(dict.lang.split('-').next().unwrap_or(""), "af" | "nl" | "lt" | "lv");
     let mut buf = word_buf_in.to_vec();
 
+    let mut pending_del_fwd = MatchRecord::NONE;
     while pos < buf.len() {
+        if pending_del_fwd != MatchRecord::NONE {
+            buf[pending_del_fwd] = REPLACED_E;
+            pending_del_fwd = MatchRecord::NONE;
+        }
         let word_buf: &[u8] = &buf;
         let c = word_buf[pos];
         if c == 0 || c == b' ' { break; }
@@ -1377,6 +1382,7 @@ pub fn translate_rules_ext(
                 // first (`enen`, stem `op`).
                 break;
             }
+            pending_del_fwd = match1.del_fwd;
         }
 
         // Advance position.
