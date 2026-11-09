@@ -1942,13 +1942,8 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             }
             tokens.push(Token::ClauseBoundary(c));
         } else if matches!(c, '.' | ',' | '!' | '?' | ';' | ':') {
-            // A '.' sitting tightly between single letters is an acronym
-            // separator ("U.S.A.", "e.g.", "i.e."), not a sentence end — espeak
-            // does not break there.  Drop it: the letters are already separate
-            // word tokens and get spelled.  Only fires when the '.' immediately
-            // follows a one-letter word and is immediately followed by a letter,
-            // so trailing periods ("U.S.A." + space/end) and decimals are
-            // untouched.
+            // A '.' between a single letter and a longer word (`p.ex`) is
+            // dropped; the two words are spoken separately.
             if c == '.'
                 && matches!(chars.peek(), Some(n) if n.is_alphabetic())
                 && matches!(tokens.last(), Some(Token::Word(w)) if is_single_letter_word(w))
@@ -2191,6 +2186,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     && word.rsplit('.').next().is_some_and(|last| last.chars().count() == 1)
                     && word.chars().last().is_some_and(char::is_alphabetic)
                     && chars.clone().nth(1).is_some_and(|after| after.is_alphabetic())
+                    && !chars.clone().nth(2).is_some_and(|after| after.is_alphabetic())
                 {
                     // A '.' between single letters (`e.g`, `U.S.A`, `a.u.b`)
                     // keeps the letters in one word, as C does.

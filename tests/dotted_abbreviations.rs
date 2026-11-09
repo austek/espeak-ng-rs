@@ -28,6 +28,11 @@ fn dotted_letters_are_spelled_as_one_word() {
 }
 
 #[test]
+fn a_letter_before_a_longer_word_stays_two_words() {
+    check(&[("fr", "p.ex. ceci", "pˈe ˈɛks səsˈi")]);
+}
+
+#[test]
 fn dictionary_entry_for_the_dotted_word_wins() {
     check(&[("en", "i.e.", "ˈaɪiː")]);
 }
