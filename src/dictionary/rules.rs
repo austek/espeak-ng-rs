@@ -1313,11 +1313,10 @@ pub fn translate_rules_ext(
                 // `be-` verbs work: previously the scan continued, a later
                 // suffix overwrote `end_type`, and the prefix rule's phonemes
                 // stayed in `end_phonemes` — so "beachten" read `b'@b@` instead
-                // of `b@'axt@n`.  Suffix matches keep scanning, which is what the
-                // rest of this port's suffix handling is built around.
-                if match1.end_type & SUFX_P != 0 {
-                    break;
-                }
+                // of `b@'axt@n`.  A suffix returns at the first match too: the
+                // later `en` of `openen` (stem `open`) must not replace the
+                // first (`enen`, stem `op`).
+                break;
             }
         }
 
