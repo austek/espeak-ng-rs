@@ -4406,6 +4406,9 @@ pub struct PosExpect {
     /// The lowercased words after this one in its clause, single-spaced with a
     /// trailing space and NUL-padded, for multi-word list entries (`(de een)`).
     pub follow: [u8; 32],
+    /// A hyphen joins this word to the next, so it does not end a word in C's
+    /// phoneme list and the word-final changes (devoicing) do not apply.
+    pub hyphen_after: bool,
     /// Return the phonemes unstressed: the caller is a prefix branch that
     /// stresses prefix and stem together, as C's `TranslateWord3` does.
     pub defer_stress: bool,
@@ -5002,7 +5005,7 @@ fn word_to_phonemes_inner(
                 apply_special_attribute2(&mut phonemes, phdata, alt2);
             }
             // Word-final devoicing (e.g. German Auslautverhärtung)
-            if stress_opts.word_final_devoicing {
+            if stress_opts.word_final_devoicing && !expect.hyphen_after {
                 apply_word_final_devoicing(&mut phonemes, phdata);
             }
             return WordResult {
@@ -5376,7 +5379,7 @@ fn word_to_phonemes_inner(
             }
         }
         // Word-final devoicing (e.g. German Auslautverhärtung)
-        if stress_opts.word_final_devoicing {
+        if stress_opts.word_final_devoicing && !expect.hyphen_after {
             apply_word_final_devoicing(&mut phonemes, phdata);
         }
         // Tone phonemes belong to their syllable's vowel, not to the end of the
@@ -8128,6 +8131,7 @@ pub(crate) fn build_translate_entries(
                         && letters.clone().all(char::is_uppercase),
                     next_word,
                     follow: follow_text(tokens, token_ix + 1, &options.lang),
+                    hyphen_after: matches!(tokens.get(token_ix + 1), Some(Token::WordJoin)),
                     ..pos_expect_after(prev_word.as_deref())
                 };
                 let mut wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
@@ -8153,6 +8157,14 @@ pub(crate) fn build_translate_entries(
                             found_in_list: false,
                         });
                         continue;
+                    }
+                }
+                // C drops the opening pause of a word that follows a hyphen.
+                if token_ix > 0 && matches!(tokens[token_ix - 1], Token::WordJoin) {
+                    if wr.phonemes.first().is_some_and(|&c| {
+                        phdata.get(c).is_some_and(|p| p.typ == crate::phoneme::PH_PAUSE)
+                    }) {
+                        wr.phonemes.remove(0);
                     }
                 }
                 skip_words = wr.skip_words;
