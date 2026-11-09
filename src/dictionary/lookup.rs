@@ -340,6 +340,16 @@ pub fn lookup(
     word: &str,
     ctx: &LookupCtx,
 ) -> Option<LookupResult> {
+    lookup_with_follow(dict, word, ctx, &[])
+}
+
+/// [`lookup`] with the text after the word, so multi-word entries can match.
+pub fn lookup_with_follow(
+    dict: &Dictionary,
+    word: &str,
+    ctx: &LookupCtx,
+    follow: &[u8],
+) -> Option<LookupResult> {
     // Extract the word bytes up to any space or nul
     let word_bytes: Vec<u8> = word.bytes()
         .take_while(|&b| b != 0 && b != b' ')
@@ -349,7 +359,7 @@ pub fn lookup(
         return None;
     }
 
-    lookup_dict2(dict, &word_bytes, ctx)
+    lookup_dict2_follow(dict, &word_bytes, ctx, follow)
 }
 
 #[cfg(test)]

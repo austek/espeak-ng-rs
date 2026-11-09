@@ -202,7 +202,7 @@ fn resolve_voice_lang(selector: &str, data_dir: &Path) -> Option<String> {
 use crate::error::{Error, Result};
 use crate::phoneme::load::PhonemeData;
 use crate::dictionary::file::Dictionary;
-use crate::dictionary::lookup::{lookup, lookup_dict2_follow, LookupCtx};
+use crate::dictionary::lookup::{lookup, lookup_dict2_follow, lookup_with_follow, LookupCtx};
 use crate::dictionary::rules::is_letter_wc;
 use crate::dictionary::rules::translate_rules_phdata;
 use crate::dictionary::{
@@ -3017,6 +3017,9 @@ pub struct WordResult {
     /// of its own prefix run (C accumulates every peeled prefix in one
     /// `prefix_phonemes` before stressing the innermost stem).
     pub prefix: Option<PeeledPrefix>,
+    /// Following words a multi-word list entry (`(de een)`) covers (C's
+    /// `flag - 80`); the caller leaves them out.
+    pub skip_words: usize,
 }
 
 /// The peeled-prefix run at the front of a deferred [`WordResult`].
@@ -4212,7 +4215,7 @@ fn try_ordinal_number(
         pronunciation.push_c_words(&numbers.num3(year, false, false));
         let mut phonemes = pronunciation.finish();
         set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, STRESS_UNBOUNDED);
-        return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None });
+        return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0 });
     }
     let groups = split_scale_groups(digits, dict);
     // C makes every group of a long number a word of its own: the higher ones are
@@ -4224,7 +4227,7 @@ fn try_ordinal_number(
         pronunciation.word_ends.push(pronunciation.bytes.len());
         pronunciation.word_breaks.push(last.value < 100);
         let phonemes = stress_each_word(pronunciation, phdata, stress_opts, STRESS_UNBOUNDED);
-        return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None });
+        return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0 });
     }
     // For a zero value there is no non-zero group; fall back to the *last* group
     // (the units, scale-less) so "0th" renders "zeroth" instead of dropping the
@@ -4257,7 +4260,7 @@ fn try_ordinal_number(
         phonemes.insert(0, PHON_END_WORD);
     }
     set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, STRESS_UNBOUNDED);
-    Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None })
+    Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0 })
 }
 
 /// Whether C's `LookupNum3` leaves an end-of-word marker in front of the
@@ -4313,7 +4316,7 @@ fn translate_number_token(
             .map(|wr| WordResult { found_in_list: true, ..wr }),
         NumberToken::Cardinal(digits) if reads_digit_by_digit(digits, grammar) => {
             let phonemes = spelled_digit_groups(digits, dict, phdata, stress_opts, grammar);
-            Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None })
+            Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0 })
         }
         _ => {
             // Over-long runs are bounded like C's word buffer; composed number words are not.
@@ -4329,7 +4332,7 @@ fn translate_number_token(
             };
             if let Some(pronunciation) = grouped {
                 let phonemes = stress_each_word(pronunciation, phdata, stress_opts, control);
-                return Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None });
+                return Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0 });
             }
             let leading_break = match token {
                 NumberToken::Cardinal(digits) => {
@@ -4345,7 +4348,7 @@ fn translate_number_token(
                 phonemes.insert(0, PHON_END_WORD);
             }
             set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, control);
-            Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None })
+            Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0 })
         }
     }
 }
@@ -4400,6 +4403,9 @@ pub struct PosExpect {
     /// buffer.  The port translates a word at a time, so the next word's opening
     /// is carried here and appended to the rules buffer.
     pub next_word: [u8; 8],
+    /// The lowercased words after this one in its clause, single-spaced with a
+    /// trailing space and NUL-padded, for multi-word list entries (`(de een)`).
+    pub follow: [u8; 32],
     /// Return the phonemes unstressed: the caller is a prefix branch that
     /// stresses prefix and stem together, as C's `TranslateWord3` does.
     pub defer_stress: bool,
@@ -4517,7 +4523,7 @@ fn emoji_parts_fallback(
     if phonemes.is_empty() {
         return result;
     }
-    WordResult { phonemes, dict_flags, found_in_list, prefix: None }
+    WordResult { phonemes, dict_flags, found_in_list, prefix: None, skip_words: 0 }
 }
 
 /// Like [`word_to_phonemes`] but with a part-of-speech expectation, so a
@@ -4806,7 +4812,8 @@ fn word_to_phonemes_inner(
     };
 
     // Try dictionary first
-    let dict_result = lookup(dict, word, &ctx);
+    let follow = expect.follow.split(|&b| b == 0).next().unwrap_or(&[]);
+    let dict_result = lookup_with_follow(dict, word, &ctx, follow);
 
     // Extract flags from dict even if no phonemes (FLAGS-only entries).
     // Note: FLAGS-only entries have FLAG_FOUND_ATTRIBUTES (bit 30) but NOT FLAG_FOUND (bit 31).
@@ -4833,7 +4840,7 @@ fn word_to_phonemes_inner(
                 phonemes.push(0);
                 let dict_flags = result.flags1.0;
                 set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags), -1, 0);
-                return WordResult { phonemes, dict_flags, found_in_list: false, prefix: None };
+                return WordResult { phonemes, dict_flags, found_in_list: false, prefix: None, skip_words: 0 };
             }
         }
     }
@@ -4953,7 +4960,7 @@ fn word_to_phonemes_inner(
                     phonemes.extend_from_slice(ph);
                 }
                 if !phonemes.is_empty() || dropped_switch {
-                    return WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None };
+                    return WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0 };
                 }
             }
             let dict_flags = result.flags1.0;
@@ -4970,11 +4977,17 @@ fn word_to_phonemes_inner(
             // stress placement must not touch the embedded language bytes; the
             // caller re-translates the word with the target language.
             if result.phonemes[0] == crate::phoneme::PHON_SWITCH {
-                return WordResult { phonemes: result.phonemes.clone(), dict_flags, found_in_list: true, prefix: None };
+                return WordResult {
+                    phonemes: result.phonemes.clone(),
+                    dict_flags,
+                    found_in_list: true,
+                    prefix: None,
+                    skip_words: result.skipwords,
+                };
             }
             let mut phonemes = result.phonemes.clone();
             if expect.defer_stress {
-                return WordResult { phonemes, dict_flags, found_in_list: true, prefix: None };
+                return WordResult { phonemes, dict_flags, found_in_list: true, prefix: None, skip_words: 0 };
             }
             // Apply stress placement
             set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags as u32), -1, 0);
@@ -4992,7 +5005,13 @@ fn word_to_phonemes_inner(
             if stress_opts.word_final_devoicing {
                 apply_word_final_devoicing(&mut phonemes, phdata);
             }
-            return WordResult { phonemes, dict_flags, found_in_list: true, prefix: None };
+            return WordResult {
+                phonemes,
+                dict_flags,
+                found_in_list: true,
+                prefix: None,
+                skip_words: result.skipwords,
+            };
         }
     }
 
@@ -5119,7 +5138,7 @@ fn word_to_phonemes_inner(
             if !phonemes.is_empty() {
                 phonemes.push(0);
                 set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags_from_lookup), -1, 0);
-                return WordResult { phonemes, dict_flags: dict_flags_from_lookup, found_in_list: false, prefix: None };
+                return WordResult { phonemes, dict_flags: dict_flags_from_lookup, found_in_list: false, prefix: None, skip_words: 0 };
             }
         }
     }
@@ -5345,6 +5364,7 @@ fn word_to_phonemes_inner(
                 dict_flags: stress_dict_flags,
                 found_in_list: false,
                 prefix: peeled,
+                skip_words: 0,
             };
         }
         if !stress_done {
@@ -5371,11 +5391,11 @@ fn word_to_phonemes_inner(
         reorder_tone_phonemes(&mut phonemes, phdata);
         // Pronounced by the rules: only the *flags* came from the list, so
         // this is not `FLAG_FOUND` and the stress-conditioned changes still apply.
-        return WordResult { phonemes, dict_flags: stress_dict_flags, found_in_list: false, prefix: None };
+        return WordResult { phonemes, dict_flags: stress_dict_flags, found_in_list: false, prefix: None, skip_words: 0 };
     }
 
     // Could not translate (unknown word)
-    WordResult { phonemes: Vec::new(), dict_flags: dict_flags_from_lookup, found_in_list: false, prefix: None }
+    WordResult { phonemes: Vec::new(), dict_flags: dict_flags_from_lookup, found_in_list: false, prefix: None, skip_words: 0 }
 }
 
 // ---------------------------------------------------------------------------
@@ -7861,6 +7881,30 @@ fn next_word_opening(tokens: &[Token], from: usize, lang: &str) -> [u8; 8] {
     out
 }
 
+/// The words that follow `from` as a multi-word list entry sees them: lower
+/// case, single-spaced, ending in a space, cut off at 31 bytes.  Anything but
+/// words and spaces ends the run.
+fn follow_text(tokens: &[Token], from: usize, lang: &str) -> [u8; 32] {
+    let mut text = String::new();
+    for t in &tokens[from..] {
+        match t {
+            Token::Space => {}
+            Token::Word(w) => {
+                text.push_str(&lowercase_for_lang(w, lang));
+                text.push(' ');
+            }
+            _ => break,
+        }
+        if text.len() >= 31 {
+            break;
+        }
+    }
+    let n = (0..=text.len().min(31)).rev().find(|&k| text.is_char_boundary(k)).unwrap_or(0);
+    let mut out = [0u8; 32];
+    out[..n].copy_from_slice(&text.as_bytes()[..n]);
+    out
+}
+
 pub(crate) fn build_translate_entries(
     tokens: &[Token],
     dict: &Dictionary,
@@ -7957,8 +8001,24 @@ pub(crate) fn build_translate_entries(
         (lower, upper)
     };
 
+    // Words a multi-word list entry already pronounced with its first word.
+    let mut skip_words = 0usize;
     for (token_ix, token) in tokens.iter().enumerate() {
         match token {
+            // Later passes pair entries with word tokens one to one, so a word
+            // the entry swallowed keeps an empty entry of its own.
+            Token::Word(_) if skip_words > 0 => {
+                skip_words -= 1;
+                entries.push(TranslateEntry {
+                    phonemes: Vec::new(),
+                    dict_flags: 0,
+                    found_in_list: false,
+                    kind: TranslateEntryKind::Word,
+                    word_lower: None,
+                    no_word_gap: false,
+                    word_group: spelled.get(token_ix).copied().flatten(),
+                });
+            }
             Token::Word(word) => {
                 // A word in a script the voice can't read (Cyrillic/Greek inside a
                 // Latin clause) switches to a voice for that script — the same
@@ -8074,6 +8134,7 @@ pub(crate) fn build_translate_entries(
                     all_upper: letters.clone().next().is_some()
                         && letters.clone().all(char::is_uppercase),
                     next_word,
+                    follow: follow_text(tokens, token_ix + 1, &options.lang),
                     ..pos_expect_after(prev_word.as_deref())
                 };
                 let mut wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
@@ -8101,6 +8162,18 @@ pub(crate) fn build_translate_entries(
                         continue;
                     }
                 }
+                skip_words = wr.skip_words;
+                let lower = if skip_words == 0 {
+                    lower
+                } else {
+                    let rest = follow_text(tokens, token_ix + 1, &options.lang);
+                    let rest = String::from_utf8_lossy(rest.split(|&b| b == 0).next().unwrap_or(&[]))
+                        .split_whitespace()
+                        .take(skip_words)
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    format!("{lower} {rest}")
+                };
                 // C spells a word whose list entry carries `$abbrev` but gives no
                 // pronunciation ("the word has $abbrev flag, but no pronunciation
                 // specified.  Speak as individual letters") — English `usa` is
