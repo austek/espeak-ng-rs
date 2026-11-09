@@ -5281,7 +5281,12 @@ fn word_to_phonemes_inner(
                         // flags decide the word's stress and its alternate vowel
                         // quality even though the pronunciation comes from the
                         // rules.  Italian `somma` reads `s'omma` because of it.
-                        stress_dict_flags |= stem_lookup.flags1.0;
+                        // As for a stem with phonemes, only a word whose own
+                        // entry has no flags takes them: `privilegia $3` keeps
+                        // its `e` although the stem `privilegi` is `$alt`.
+                        if stress_dict_flags == 0 {
+                            stress_dict_flags = stem_lookup.flags1.0;
+                        }
                     }
                 }
 

@@ -84,6 +84,7 @@ jobs:
           --test spelled_superscript
           --test pt_listed_fractions
           --test pt_unstressed_word_tonic
+          --test italian_golden_fixes
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
