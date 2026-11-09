@@ -5180,7 +5180,10 @@ fn word_to_phonemes_inner(
                 if let Some(stem_lookup) = stem_lookup {
                     if !stem_lookup.phonemes.is_empty() {
                         combined.extend_from_slice(&stem_lookup.phonemes);
-                        stress_dict_flags = stem_lookup.flags1.0;
+                        // C takes the stem's flags only when the word's own entry has none.
+                        if stress_dict_flags == 0 {
+                            stress_dict_flags = stem_lookup.flags1.0;
+                        }
                         used_stem = true;
                     } else {
                         // A *flags-only* entry for the stem still applies, as it

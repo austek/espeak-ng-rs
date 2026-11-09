@@ -48,6 +48,11 @@ fn start_of_word_rules_decide_whether_a_word_is_spelled() {
 }
 
 #[test]
+fn abbrev_flag_survives_a_suffix_stem_lookup() {
+    check(&[("os", "ˌəʊˈɛs"), ("OS", "ˌəʊˈɛs")]);
+}
+
+#[test]
 fn letters_of_other_alphabets_are_announced_by_alphabet_name() {
     check(&[
         ("ר", "hˈiːbɹuːrˈeʃ"),
