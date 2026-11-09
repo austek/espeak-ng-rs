@@ -6286,7 +6286,7 @@ fn spell_unpronounceable<'a>(
         let expect = letter_expect(rest.len() > c.len_utf8());
         let mut wr = word_to_phonemes_pos(&format!("_{lower}"), dict, phdata, stress_opts, options, expect);
         if wr.phonemes.iter().all(|&b| b == 0) || wr.dict_flags == 0 {
-            wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
+            wr = letter_word_phonemes(&lower, dict, phdata, stress_opts, options, expect);
         }
         if wr.phonemes.iter().all(|&b| b == 0) {
             wr.phonemes = superscript_name(c, dict, phdata, stress_opts, options);
@@ -6444,6 +6444,33 @@ fn accented_letter_phonemes(
     out
 }
 
+/// A letter's name taken from the entry for the letter as a word, as `LookupLetter` does.
+///
+/// The stress is placed with no dictionary flags, so `$u+` on French `a` does
+/// not keep the spelled letter unstressed.
+fn letter_word_phonemes(
+    lower: &str,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+    expect: PosExpect,
+) -> WordResult {
+    let listed = lookup_with_follow(dict, lower, &LookupCtx::default(), &[]).filter(|r| {
+        r.flags1.found()
+            && !r.flags1.textmode()
+            && !r.flags2.contains(crate::dictionary::FLAG_ACCENT)
+            && r.phonemes.first().is_some_and(|&b| b != 0 && b != crate::phoneme::PHON_SWITCH)
+    });
+    let Some(r) = listed else {
+        return word_to_phonemes_pos(lower, dict, phdata, stress_opts, options, expect);
+    };
+    let mut phonemes: Vec<u8> = r.phonemes.iter().copied().take_while(|&b| b != 0).collect();
+    phonemes.push(0);
+    set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
+    WordResult { phonemes, dict_flags: r.flags1.0, found_in_list: true, prefix: None, skip_words: 0 }
+}
+
 /// `langopts.accents & 1`: Afrikaans, Croatian, Bosnian, Serbian and Swedish
 /// say the accent name before the letter name.
 fn accents_say_first(lang: &str) -> bool {
@@ -6474,7 +6501,7 @@ fn spell_word_letters(
         let expect = letter_expect(ix + 1 < chars.len());
         let mut wr = word_to_phonemes_pos(&format!("_{lower}"), dict, phdata, stress_opts, options, expect);
         if wr.phonemes.iter().all(|&b| b == 0) || wr.dict_flags == 0 {
-            wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
+            wr = letter_word_phonemes(&lower, dict, phdata, stress_opts, options, expect);
         }
         if wr.phonemes.iter().all(|&b| b == 0) {
             wr.phonemes = superscript_name(c, dict, phdata, stress_opts, options);
