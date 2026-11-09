@@ -6751,28 +6751,9 @@ fn merge_digit_follow(tokens: &mut Vec<Token>, dict: &Dictionary) {
     *tokens = out;
 }
 
-/// A title/abbreviation that precedes a name, after which a period is part of
-/// the abbreviation rather than a sentence end ("Dr. Smith", "St. Louis").
-/// Lowercased; English-only.  Deliberately limited to titles that almost always
-/// precede a name — an ambiguous or trailing abbreviation ("etc.", "Jr.") keeps
-/// its clause break so a real sentence end is never swallowed.
-fn is_period_abbreviation(lower: &str) -> bool {
-    matches!(
-        lower,
-        "dr" | "mr" | "mrs" | "ms" | "mx" | "prof" | "rev" | "fr" | "st"
-            | "gen" | "col" | "sgt" | "capt" | "lt" | "maj" | "cmdr" | "adm"
-            | "gov" | "sen" | "rep" | "pres" | "hon" | "sir" | "messrs"
-            | "mme" | "mlle"
-    )
-}
-
-/// Downgrade a clause-ending period that immediately follows a title
-/// abbreviation to a plain word break, so "Dr. Smith" reads without a sentence
-/// pause (upstream #2340).  A period after any other word (a real sentence end,
-/// "the end. Next.") is untouched.  Adjacency is implicit: a space before the
-/// period would make the previous token a `Space`, not the abbreviation `Word`.
-/// English-only.
-fn suppress_abbreviation_periods(tokens: &mut [Token], lang: &str) {
+/// Downgrade a clause-ending period that is not followed by a capitalised
+/// word to a plain word break, and a comma between two numbers to a space.
+fn suppress_abbreviation_periods(tokens: &mut [Token]) {
     // A period only ends a sentence when a capitalised word (or nothing)
     // follows — "one. two" is not a break, "one. Two" is.  Upstream's `-x`
     // shows exactly this: `w'0n t'u:` on one line versus `w'0n` / `t'u:` on
@@ -6807,39 +6788,6 @@ fn suppress_abbreviation_periods(tokens: &mut [Token], lang: &str) {
         }
     }
 
-    if primary_bcp47_subtag(lang) != "en" {
-        return;
-    }
-    for i in 1..tokens.len() {
-        if matches!(tokens[i], Token::ClauseBoundary('.')) {
-            if let Token::Word(w) = &tokens[i - 1] {
-                if is_period_abbreviation(&w.to_lowercase()) {
-                    tokens[i] = Token::Space;
-                }
-            }
-        }
-    }
-}
-
-/// Expand a common, unambiguous English abbreviation whose letters would
-/// otherwise read as an unpronounceable cluster ("vs"→"vz", "govt"→"govt") or a
-/// wrong word.  Only entries that are *not* real words and have a single obvious
-/// expansion are listed (so `St`=saint/street and `No`=number/no are excluded).
-fn expand_abbreviation(lower: &str) -> Option<&'static str> {
-    Some(match lower {
-        "vs" => "versus",
-        "govt" => "government",
-        "blvd" => "boulevard",
-        "sgt" => "sergeant",
-        "capt" => "captain",
-        "lt" => "lieutenant",
-        "rd" => "road",
-        "inc" => "incorporated",
-        "prof" => "professor",
-        "approx" => "approximately",
-        "misc" => "miscellaneous",
-        _ => return None,
-    })
 }
 
 /// Read a `H:MM` (or `H:MM:SS`) time.  The colon is a time separator, not a
@@ -7020,20 +6968,6 @@ fn apply_dimensions(tokens: &mut [Token], lang: &str) {
         };
         if is_num(prev) && is_num(next) {
             tokens[i] = Token::Word("by".to_string());
-        }
-    }
-}
-
-/// Replace recognised abbreviations with their full word (English-only).
-fn apply_abbreviations(tokens: &mut [Token], lang: &str) {
-    if primary_bcp47_subtag(lang) != "en" {
-        return;
-    }
-    for tok in tokens.iter_mut() {
-        if let Token::Word(w) = tok {
-            if let Some(expanded) = expand_abbreviation(&w.to_lowercase()) {
-                *w = expanded.to_string();
-            }
         }
     }
 }
@@ -9406,13 +9340,12 @@ impl Translator {
         let mut tokens = split_overlong_clauses(tokenize_opts(&text, &number_grammar));
         split_unrecognised_ordinals(&mut tokens, &dict, &number_grammar);
         merge_digit_follow(&mut tokens, &dict);
-        suppress_abbreviation_periods(&mut tokens, lang);
+        suppress_abbreviation_periods(&mut tokens);
         apply_time_reading(&mut tokens, lang);
         apply_dash_reading(&mut tokens, lang);
         apply_decades(&mut tokens, lang);
         apply_units(&mut tokens, lang);
         apply_temperature(&mut tokens, lang);
-        apply_abbreviations(&mut tokens, lang);
         apply_dimensions(&mut tokens, lang);
         apply_number_abbrev(&mut tokens, lang);
         apply_space_grouping(&mut tokens, &self.options.number_grammar);

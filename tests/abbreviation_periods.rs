@@ -1,28 +1,24 @@
 // tests/abbreviation_periods.rs
 //
-// A period after a title abbreviation ("Dr.", "Mr.", "St.") is part of the
-// abbreviation, not a sentence end — it must not insert a clause pause
-// (upstream #2340).  A period after any other word is a real sentence boundary
-// and is left alone.  A clause boundary shows up as a newline in the IPA.
+// A period before a capitalised word ends the clause, titles included, as in
+// upstream master; before a lower-case word it does not.  A clause boundary
+// shows up as a newline in the IPA.
 
 use espeak_ng::Translator;
 
 #[test]
-fn title_abbreviation_period_is_not_a_clause_break() {
+fn title_abbreviation_period_before_a_capital_is_a_clause_break() {
     let Some(t) = Translator::new("en", None).ok() else {
         eprintln!("[SKIP] no en data");
         return;
     };
     let ipa = |s: &str| t.text_to_ipa(s).unwrap();
 
-    // No clause break (no newline) after a title abbreviation.
-    for s in ["Dr. Smith", "Mr. Jones", "Mrs. Brown", "Prof. Lee", "St. Louis", "Gen. Grant"] {
-        assert!(!ipa(s).contains('\n'), "{s:?} should not pause after the title: {:?}", ipa(s));
-    }
-    // Two titles in a row, still no pauses.
-    assert!(!ipa("Mr. and Mrs. Smith").contains('\n'), "{}", ipa("Mr. and Mrs. Smith"));
-    // The word after the title is still spoken.
-    assert!(ipa("Dr. Smith").contains("smˈɪθ"), "{}", ipa("Dr. Smith"));
+    // Upstream master ends the clause after "Dr." when a capital follows.
+    assert_eq!(ipa("Dr. Smith"), "dˈɒktə\nsmˈɪθ");
+    assert_eq!(ipa("Mrs. Brown"), "mˈɪsɪz\nbɹˈaʊn");
+    // A lower-case word after the period keeps one clause.
+    assert_eq!(ipa("Dr. smith"), "dˈɒktə smˈɪθ");
 }
 
 #[test]

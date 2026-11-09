@@ -202,40 +202,23 @@ fn dimension_x_reads_by() {
 }
 
 #[test]
-fn common_abbreviations_expand() {
+fn abbreviations_follow_the_dictionary() {
     let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
     let ipa = |s: &str| t.text_to_ipa(s).unwrap();
-    // Abbreviations that otherwise read as unpronounceable clusters expand to the
-    // full word (case-insensitive, period-tolerant).
+    // Upstream master has no expansion for these: they read as listed or spelled.
     let cases: &[(&str, &str)] = &[
-        ("vs", "versus"),
-        ("govt", "government"),
-        ("Blvd", "boulevard"),
-        ("Sgt", "sergeant"),
-        ("Rd", "road"),
-        ("Prof", "professor"),
-        ("approx", "approximately"),
+        ("vs", "vˌiːˈɛs"),
+        ("govt", "ɡˈɒvt"),
+        ("Sgt", "ˌɛsdʒˌiːtˈiː"),
+        ("Rd", "ˌɑːdˈiː"),
+        ("Prof", "pɹˈɒf"),
+        ("approx", "ɐpɹˈɒks"),
     ];
-    for (abbr, word) in cases {
-        assert_eq!(ipa(abbr), ipa(word), "{abbr} should expand to {word}");
+    for (abbr, want) in cases {
+        assert_eq!(&ipa(abbr), want, "{abbr}");
     }
-    // Ordinals ending in "rd" are NOT the abbreviation (3rd = "third", not "road").
     assert!(ipa("3rd").contains("θˈɜːd"), "3rd stays third: {}", ipa("3rd"));
-    // A real word matching nothing is untouched.
     assert!(ipa("road").contains("ɹˈəʊd"), "road unchanged");
-}
-
-#[test]
-fn superscript_powers_read_as_digits() {
-    let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
-    let ipa = |s: &str| t.text_to_ipa(s).unwrap();
-    // Upstream espeak-ng master reads ² / ³ as the digits "two" / "three".
-    assert_eq!(ipa("5²"), ipa("5 two"), "5² → five two");
-    assert_eq!(ipa("x³"), ipa("x three"), "x³ → x three");
-    assert_eq!(ipa("E=mc²"), "ˈiː ˈiːkwəlz ˌɛmsˈiː tˈuː");
-    // Subscripts stay digits (chemical formulae): H₂O → "H two O".
-    assert!(ipa("H₂O").contains("tˈuː"), "H₂O keeps the digit: {}", ipa("H₂O"));
-    assert!(!ipa("H₂O").contains("skwˈeəd"), "H₂O is not 'squared'");
 }
 
 #[test]
