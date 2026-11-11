@@ -10336,7 +10336,7 @@ impl Translator {
         if self.options.word_gap == 0 {
             insert_word_gaps(&mut out, &phdata, stress_opts.vowel_pause, stress_opts.word_gap);
         }
-        promote_clause_tonics(&mut out, &phdata, &self.options.lang, stress_opts.stress_flags & 0x02 != 0);
+        promote_clause_tonics(&mut out, &phdata, &self.options.lang, stress_opts.stress_flags);
 
         // Boundary coordinates back into indices.  A token's codes run from its
         // own first code to the *next* token's, so the separator's boundary and
@@ -10957,7 +10957,8 @@ pub(crate) const NO_STRESS_LEVEL: u8 = u8::MAX;
 /// the last syllable of highest stress.  It runs at the intonation stage, after
 /// the phoneme programs, so the vowel keeps the quality they gave its old
 /// (unstressed) level — Portuguese `ser` is `sˈɨɹ`, not `sˈeɹ`.
-fn promote_clause_tonics(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData, lang: &str, no_dim: bool) {
+fn promote_clause_tonics(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData, lang: &str, stress_flags: u32) {
+    let (no_dim, adjacent_dim) = (stress_flags & 0x02 != 0, stress_flags & 0x08 != 0);
     let mut own = own_language_mask(codes, lang);
     let mut start = 0;
     while start < codes.len() {
@@ -10966,7 +10967,7 @@ fn promote_clause_tonics(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData, lan
             .position(|c| c.is_boundary && c.code == 0)
             .map_or(codes.len(), |p| start + p);
         let clause = &codes[start..end];
-        if let Some(p) = tonic_position(clause, &own[start..end], phdata, no_dim) {
+        if let Some(p) = tonic_position(clause, &own[start..end], phdata, no_dim, adjacent_dim) {
             let (first, vowel) = promote_vowel(codes, start + p);
             let vowel_own = own[vowel];
             own.splice(first..vowel, [vowel_own]);
@@ -10995,8 +10996,14 @@ fn own_language_mask(codes: &[PhonemeCode], lang: &str) -> Vec<bool> {
 /// one of highest stress.  Stress levels are those of C's phoneme list, where
 /// every second vowel of a run of unstressed ones is already diminished
 /// (`MakePhonemeList`) unless the language sets `S_NO_DIM`.
-fn tonic_position(clause: &[PhonemeCode], own: &[bool], phdata: &PhonemeData, no_dim: bool) -> Option<usize> {
-    let (level, _) = stress_levels(clause, phdata);
+fn tonic_position(
+    clause: &[PhonemeCode],
+    own: &[bool],
+    phdata: &PhonemeData,
+    no_dim: bool,
+    adjacent_dim: bool,
+) -> Option<usize> {
+    let (level, wordstress) = stress_levels(clause, phdata);
     let mut run = 0u32;
     let mut best: Option<(u8, usize)> = None;
     let foreign_primary = clause
@@ -11006,9 +11013,11 @@ fn tonic_position(clause: &[PhonemeCode], own: &[bool], phdata: &PhonemeData, no
     if foreign_primary {
         return None;
     }
-    let lone_vowel = lone_vowel_words(clause, &level);
+    let adjacent = adjacent_dim.then(|| diminish_adjacent_unstressed(clause, &level, &wordstress, phdata));
     for (i, &l) in level.iter().enumerate().filter(|&(i, &l)| l != NO_STRESS_LEVEL && own[i]) {
-        let l = if l > 1 {
+        let l = if let Some(adj) = &adjacent {
+            adj[i]
+        } else if l > 1 {
             run = 0;
             l
         } else {
@@ -11022,7 +11031,6 @@ fn tonic_position(clause: &[PhonemeCode], own: &[bool], phdata: &PhonemeData, no
         if l >= 4 {
             return None;
         }
-        let l = if l <= 1 && lone_vowel[i] { 0 } else { l };
         if best.is_none_or(|(m, _)| l >= m) {
             best = Some((l, i));
         }
@@ -11030,18 +11038,30 @@ fn tonic_position(clause: &[PhonemeCode], own: &[bool], phdata: &PhonemeData, no
     best.map(|(_, i)| i)
 }
 
-/// Marks the vowels that are the only vowel of their word.
-fn lone_vowel_words(clause: &[PhonemeCode], level: &[u8]) -> Vec<bool> {
-    let mut out = vec![false; clause.len()];
-    let mut start = 0;
-    for end in (0..=clause.len()).filter(|&i| {
-        i == clause.len() || clause[i].is_boundary || clause[i].code == crate::phoneme::PHON_END_WORD
-    }) {
-        let vowels: Vec<usize> = (start..end).filter(|&i| level[i] != NO_STRESS_LEVEL).collect();
-        if let [only] = vowels[..] {
-            out[only] = true;
+/// C's `stress_flags & 0x08` branch of `MakePhonemeList`: an unstressed vowel
+/// followed by another unstressed vowel before the next pause is diminished
+/// when its word carries no primary stress.
+fn diminish_adjacent_unstressed(
+    clause: &[PhonemeCode],
+    level: &[u8],
+    wordstress: &[u8],
+    phdata: &PhonemeData,
+) -> Vec<u8> {
+    let mut out = level.to_vec();
+    let is_pause = |i: usize| matches!(phdata.get(clause[i].code), Some(p) if p.typ == 0);
+    for i in 0..level.len() {
+        if level[i] == NO_STRESS_LEVEL || out[i] > 1 {
+            continue;
         }
-        start = end + 1;
+        let next = (i + 1..level.len()).take_while(|&k| !is_pause(k)).find(|&k| level[k] != NO_STRESS_LEVEL);
+        if let Some(j) = next.filter(|&j| out[j] <= 1) {
+            if wordstress[i] < 4 {
+                out[i] = 0;
+            }
+            if wordstress[j] < 4 {
+                out[j] = 0;
+            }
+        }
     }
     out
 }
