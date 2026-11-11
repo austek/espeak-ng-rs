@@ -46,6 +46,11 @@ fn a_doubled_hyphen_pauses_and_a_pause_already_pending_is_not_repeated() {
 }
 
 #[test]
+fn a_word_pre_pause_and_a_closing_quote_pause_do_not_add_up() {
+    check(&[("ku", "Wî got \"ez tînim\" û çû.", "wi got_:_: Ez tin'Im_:_: u tS'u")]);
+}
+
+#[test]
 fn a_pause_after_a_number_attaches_to_it() {
     check(&[
         ("ku", "5 - 3", "p'endZ_:_: s'e"),

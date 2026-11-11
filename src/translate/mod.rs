@@ -10123,6 +10123,14 @@ impl Translator {
                                     && c.code != crate::phoneme::PHON_END_WORD
                             })
                             .map_or(0, |i| i + 1);
+                        // A bracket's pause is the larger of the two, not an
+                        // addition (C's `pre_pause = max(pre_pause, pre_pause_add)`).
+                        let pending = 2 * codes[..at]
+                            .iter()
+                            .rev()
+                            .take_while(|c| c.marker.is_none() && c.code == crate::phoneme::PHON_PAUSE)
+                            .count();
+                        pre_pause = (pre_pause as usize).saturating_sub(pending) as _;
                         let mut n = 0;
                         while pre_pause > 0 {
                             let code = if pre_pause > 1 {
