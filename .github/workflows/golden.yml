@@ -105,6 +105,7 @@ jobs:
           --test french_golden_fixes
           --test suffix_keeps_stem_stress
           --test number_single_stress_tens
+          --test lengthened_pause_and_repeats
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

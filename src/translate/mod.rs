@@ -10069,6 +10069,7 @@ impl Translator {
                 return;
             }
             own_flags.resize(own.len(), false);
+            collapse_repeated_lengthen(own, own_flags);
             // Before the phoneme programs run, as in C's `MakePhonemeList`.
             double_lengthened_consonants(own, own_flags, &phdata);
             resolve_virtual_phonemes_in_codes(own, &phdata, own_flags, stress_opts.reduce);
@@ -10807,6 +10808,26 @@ fn promote_vowel(codes: &mut Vec<PhonemeCode>, vowel: usize) -> (usize, usize) {
     (first, vowel)
 }
 
+/// C keeps the lengthener as a flag on the phoneme before it, so `a::` is `a:`.
+fn collapse_repeated_lengthen(codes: &mut Vec<PhonemeCode>, flags: &mut Vec<bool>) {
+    let is_mark = |c: &PhonemeCode| {
+        !c.is_boundary && c.marker.is_none() && c.code == crate::phoneme::PHON_LENGTHEN
+    };
+    let keep: Vec<bool> = (0..codes.len())
+        .map(|i| !(i > 0 && is_mark(&codes[i]) && is_mark(&codes[i - 1])))
+        .collect();
+    let mut at = 0;
+    codes.retain(|_| {
+        at += 1;
+        keep[at - 1]
+    });
+    at = 0;
+    flags.retain(|_| {
+        at += 1;
+        keep[at - 1]
+    });
+}
+
 /// C's `MakePhonemeList`: a consonant followed by the lengthener (`:`) is
 /// lengthened **by doubling it** when it is a fricative, voiced fricative, nasal
 /// or liquid, and the lengthener goes away.  Italian writes its geminates that
@@ -10824,7 +10845,7 @@ fn double_lengthened_consonants(
     flags: &mut [bool],
     phdata: &PhonemeData,
 ) {
-    use crate::phoneme::{PH_FRICATIVE, PH_LIQUID, PH_NASAL, PH_VFRICATIVE};
+    use crate::phoneme::{PH_FRICATIVE, PH_LIQUID, PH_NASAL, PH_PAUSE, PH_VFRICATIVE};
     let is_sound = |c: &PhonemeCode| !c.is_boundary && c.marker.is_none() && c.code > 8;
     let is_word_break = |c: &PhonemeCode| c.is_boundary || c.code == crate::phoneme::PHON_END_WORD;
     for i in 1..codes.len() {
@@ -10844,7 +10865,7 @@ fn double_lengthened_consonants(
         };
         let doubled = phdata
             .get(codes[prev].code)
-            .is_some_and(|p| matches!(p.typ, PH_FRICATIVE | PH_VFRICATIVE | PH_NASAL | PH_LIQUID));
+            .is_some_and(|p| matches!(p.typ, PH_PAUSE | PH_FRICATIVE | PH_VFRICATIVE | PH_NASAL | PH_LIQUID));
         let Some(before) = codes[clause_start..prev].iter().rposition(is_sound).map(|p| p + clause_start)
         else {
             continue;
