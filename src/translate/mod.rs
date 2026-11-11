@@ -9896,7 +9896,7 @@ impl Translator {
                     });
                     if let Some(sw) = sw {
                         let hyphen_joined = token_ix > 0 && matches!(tokens[token_ix - 1], Token::WordJoin);
-                        if hyphen_joined && open_switch.as_deref() == Some(target.as_str()) {
+                        if hyphen_joined {
                             if codes.last().is_some_and(|c| c.is_boundary && c.marker.is_none()) {
                                 codes.pop();
                             }
@@ -9912,7 +9912,7 @@ impl Translator {
                             .iter()
                             .rposition(|k| k.marker.is_none())
                             .is_some_and(|i| !codes[i].is_boundary);
-                        if word_open && open_switch.is_none() {
+                        if word_open && open_switch.is_none() && !hyphen_joined {
                             codes.push(PhonemeCode { code: 15, is_boundary: true, ..Default::default() });
                         }
                         codes.extend(name.iter().map(|&b| PhonemeCode { code: b, ..Default::default() }));
