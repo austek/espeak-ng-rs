@@ -6317,11 +6317,11 @@ fn split_abandoned_words(
             && word.chars().count() > 1
             && native(word)
             && !dict_lists_word(word, dict, options)
-            && !is_unpronounceable(&lowercase_for_lang(word, &options.lang), dict, options)
+            && !is_unpronounceable(&lowercase_for_lang(word, &options.lang), &[], dict, options)
             && rules_abort_word(word, dict, options)
             // `TranslateWord3` spells an unpronounceable word before the
             // rules get to abandon it.
-            && !is_unpronounceable(&lowercase_for_lang(word, &options.lang), dict, options)
+            && !is_unpronounceable(&lowercase_for_lang(word, &options.lang), &[], dict, options)
     };
     if !tokens.iter().any(|t| matches!(t, Token::Word(w) if abandoned(w))) {
         return vec![None; tokens.len()];
@@ -6410,12 +6410,18 @@ fn foreign_script_voice(word: &str, lang: &str) -> Option<&'static str> {
 
 /// C's `Unpronouncable2`: no start-of-word rule matches the word, or the one
 /// that does is marked `$unpron`.
-fn rules_reject_word_start(rest: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
+fn rules_reject_word_start(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &LangOptions) -> bool {
     let word = rest.split(' ').next().unwrap_or("");
-    let mut buf = Vec::with_capacity(word.len() + 3);
+    let mut buf = Vec::with_capacity(word.len() + 12);
     buf.push(b' ');
     buf.extend_from_slice(word.as_bytes());
-    buf.extend_from_slice(b" \0");
+    buf.push(b' ');
+    let next = next.split(|&b| b == 0).next().unwrap_or(&[]);
+    if !next.is_empty() {
+        buf.extend_from_slice(next);
+        buf.push(b' ');
+    }
+    buf.push(0);
     let (mut vowels, mut stressed) = (0i32, 0i32);
     let r = crate::dictionary::rules::translate_rules(
         dict,
@@ -6436,7 +6442,7 @@ fn rules_reject_word_start(rest: &str, dict: &Dictionary, lang_opts: &LangOption
 /// A word with more than `max_initial_consonants` consonants before its first
 /// vowel (or none at all) is read letter by letter — that is how "BBC" becomes
 /// `b,i:b,i:s'i:`.
-fn is_unpronounceable(rest: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
+fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &LangOptions) -> bool {
     // `LOPT_UNPRONOUNCABLE == 1` turns the test off for the language.
     if lang_opts.unpronouncable == 1 {
         return false;
@@ -6489,7 +6495,7 @@ fn is_unpronounceable(rest: &str, dict: &Dictionary, lang_opts: &LangOptions) ->
     // "FBI" are spelled; "brown", "street" and German "schnell" are not) without
     // depending on every anchored rule matching exactly.
     if lang_opts.unpronouncable == 2 && vowel_posn > 2 {
-        return rules_reject_word_start(rest, dict, lang_opts);
+        return rules_reject_word_start(rest, next, dict, lang_opts);
     }
 
     if lang_opts.unpronouncable > 3 && first as u32 == lang_opts.unpronouncable {
@@ -6506,6 +6512,7 @@ fn spell_unpronounceable<'a>(
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     options: &LangOptions,
+    next: &[u8],
 ) -> Option<(Vec<u8>, &'a str)> {
     if word.chars().count() < 2 {
         return None;
@@ -6515,7 +6522,7 @@ fn spell_unpronounceable<'a>(
     let mut posn = 0usize;
     let mut length = 999usize;
     while (length < 3 && length > 0)
-        || (word.chars().count() > 1 && is_unpronounceable(rest, dict, lang_opts_ref(options)))
+        || (word.chars().count() > 1 && is_unpronounceable(rest, next, dict, lang_opts_ref(options)))
     {
         let Some(c) = rest.chars().next() else { break };
         if c == '\'' {
@@ -8426,10 +8433,10 @@ pub(crate) fn build_translate_entries(
                 else if !wr.found_in_list
                     && !dict_knows_word(&lower, dict)
                     && !dict_lists_word(word, dict, options)
-                    && is_unpronounceable(&lower, dict, options)
+                    && is_unpronounceable(&lower, &next_word, dict, options)
                 {
                     if let Some((letters, rest)) =
-                        spell_unpronounceable(&lower, dict, phdata, stress_opts, options)
+                        spell_unpronounceable(&lower, dict, phdata, stress_opts, options, &next_word)
                     {
                         let mut ph = letters;
                         if !rest.is_empty() {

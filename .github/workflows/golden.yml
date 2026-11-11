@@ -107,6 +107,7 @@ jobs:
           --test number_single_stress_tens
           --test lengthened_pause_and_repeats
           --test german_prefix_stem_lookup
+          --test unpronounceable_next_word
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
