@@ -10394,6 +10394,7 @@ impl Translator {
                 stress_opts.vowel_pause,
                 stress_opts.word_gap,
             );
+            drop_syllabic_after_vowel(own, &phdata);
             if primary_bcp47_subtag(lang) == "fr" {
                 drop_unsurfaced_liaison(own, &phdata);
             }
@@ -10763,6 +10764,20 @@ fn consume_word_break_syllabic(phonemes: &[u8], phdata: &PhonemeData) -> Vec<u8>
         }
     }
     out
+}
+
+/// C's phoneme writer prints the syllabic marker only after a non-vowel, so a
+/// letter name coded for another table (`ku ع`) loses a `-` that lands on a vowel.
+fn drop_syllabic_after_vowel(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData) {
+    let mut prev_vowel = false;
+    codes.retain(|c| {
+        let syllabic = !c.is_boundary && c.code == crate::phoneme::PHON_SYLLABIC;
+        let keep = !(syllabic && prev_vowel);
+        if keep {
+            prev_vowel = !c.is_boundary && phdata.get(c.code).is_some_and(|p| p.typ == 2);
+        }
+        keep
+    });
 }
 
 /// Drop a French liaison phoneme that doesn't surface.

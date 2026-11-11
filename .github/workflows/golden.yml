@@ -125,6 +125,7 @@ jobs:
           --test german_prefix_stem_lookup
           --test unpronounceable_next_word
           --test es_unpron_rule_and_roman
+          --test letters2
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

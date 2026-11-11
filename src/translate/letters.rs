@@ -178,7 +178,7 @@ impl LangCtx {
         dict.dict_condition = options.dict_condition;
         let mut phdata = PhonemeData::load(data_dir).ok()?;
         select_phoneme_table(&mut phdata, data_dir, lang).ok()?;
-        let stress_opts = StressOpts::for_lang_in(lang, data_dir);
+        let stress_opts = StressOpts::for_lang(lang);
         Some(Self { dict, phdata, stress_opts, options })
     }
 
