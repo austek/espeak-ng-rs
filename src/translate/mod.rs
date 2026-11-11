@@ -9931,7 +9931,10 @@ impl Translator {
                             while let Some(i) = codes
                                 .iter()
                                 .rposition(|k| k.marker.is_none())
-                                .filter(|&i| codes[i].is_boundary && codes[i].clause_char.is_none())
+                                .filter(|&i| {
+                                    (codes[i].is_boundary || codes[i].code == crate::phoneme::PHON_END_WORD)
+                                        && codes[i].clause_char.is_none()
+                                })
                             {
                                 codes.remove(i);
                                 closed = true;
