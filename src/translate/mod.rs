@@ -28,6 +28,7 @@ pub mod phoneme_ipa;
 pub mod compat;
 pub mod ssml;
 mod accent;
+pub(crate) mod letters;
 mod ordinal;
 
 use std::path::{Path, PathBuf};
@@ -5444,6 +5445,15 @@ fn word_to_phonemes_inner(
     let result = confirm_prefix(
         result, word, &word_buf, word_start, rule_word_flags, rules_flags, dict, lang_opts, phdata,
     );
+    if result.phonemes.first() == Some(&crate::phoneme::PHON_SWITCH) && result.phonemes.len() > 2 {
+        return WordResult {
+            phonemes: result.phonemes.clone(),
+            dict_flags: 0,
+            found_in_list: false,
+            prefix: None,
+            skip_words: 0,
+        };
+    }
 
     // C's second `TranslateRules` call, with `end_phonemes == NULL`: translate the
     // whole word straight through, ignoring prefix/suffix endings.  Needed for
@@ -5788,6 +5798,9 @@ pub(crate) enum TranslateEntryKind {
     /// `[phonSWITCH, <target-language bytes…>]`.  Excluded from word-level
     /// stress promotion; resolved at render time.
     LangSwitch,
+    /// A letter spelled with names from several phoneme tables: `phonemes`
+    /// holds `letters::encode` items, switches included.
+    Stream,
 }
 
 pub(crate) struct TranslateEntry {
@@ -6369,16 +6382,9 @@ fn split_abandoned_words(
     dict: &Dictionary,
     options: &LangOptions,
 ) -> Vec<Option<usize>> {
-    let native = |word: &str| {
-        word.chars()
-            .find_map(char_script)
-            .is_none_or(|sc| native_scripts(&options.lang).contains(&sc))
-            && foreign_script_voice(word, &options.lang).is_none()
-    };
     let abandoned = |word: &str| {
         !word.is_ascii()
             && word.chars().count() > 1
-            && native(word)
             && !dict_lists_word(word, dict, options)
             && !is_unpronounceable(&lowercase_for_lang(word, &options.lang), &[], dict, options)
             && rules_abort_word(word, dict, options)
@@ -7003,7 +7009,7 @@ fn letter_name(
         word_to_phonemes_inner(text, dict, phdata, stress_opts, options, 0, expect)
     };
     let mut wr = word(&format!("_{key}"));
-    if !spoken(&wr) || wr.dict_flags == 0 {
+    if !spoken(&wr) || !wr.found_in_list {
         wr = word(&key);
     }
     if spoken(&wr) {
@@ -8195,8 +8201,8 @@ pub(crate) fn build_translate_entries(
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     options: &LangOptions,
-    english_has: &dyn Fn(char) -> bool,
     english_word: &dyn Fn(char, bool) -> Option<String>,
+    alts: &letters::AltLangs,
     spelled: &[Option<usize>],
 ) -> Vec<TranslateEntry> {
     let mut entries: Vec<TranslateEntry> = Vec::with_capacity(tokens.len());
@@ -8343,73 +8349,12 @@ pub(crate) fn build_translate_entries(
                     .chars()
                     .find_map(char_script)
                     .filter(|sc| !native_scripts(&options.lang).contains(sc));
-                if let Some(sc) = foreign {
-                    if !script_uses_words(sc)
-                        && alt_alphabet_voice(&options.lang, sc).is_none()
-                        && !dict_knows_word(word, dict)
-                        // …and only when this language's own rules can't read
-                        // it: Macedonian and Uzbek have Latin transliterations,
-                        // Uzbek and Lingua Franca Nova Cyrillic ones, so those
-                        // words are translated, not spelled out.
-                        && !rules_know_word(word_script, dict, options)
-                    {
-                        // If no character has a name here (Han, Hebrew, …), fall
-                        // through to the voice switch rather than dropping the
-                        // word — a deliberate divergence: upstream says
-                        // "Chinese letter", we speak it.
-                        if let Some(ph) =
-                            spell_foreign_word(word, dict, phdata, stress_opts, options)
-                        {
-                            entries.push(TranslateEntry {
-                                phonemes:   ph,
-                                dict_flags: 0,
-                                kind:       TranslateEntryKind::Word,
-                                word_lower: Some(word.to_lowercase()),
-                        no_word_gap: false, word_group: None,
-                                found_in_list: false,
-                            });
-                            prev_word = None;
-                            continue;
-                        }
-                    }
-                }
                 let next_in_script = |from: usize| {
                     tokens[from..].iter().find_map(|t| match t {
                         Token::Word(w) => Some(w.chars().next().and_then(char_script) == foreign),
                         _ => None,
                     })
                 };
-                let switch_target = foreign_script_voice(word_script, &options.lang)
-                    .or_else(|| foreign.map(script_voice));
-                if let Some(target) = switch_target.filter(|_| {
-                    !dict_knows_word(word, dict) && !rules_know_word(word_script, dict, options)
-                }) {
-                    let mut phonemes = vec![crate::phoneme::PHON_SWITCH];
-                    phonemes.extend_from_slice(target.as_bytes());
-                    // A lone letter goes through `TranslateLetter`, which names
-                    // the alphabet first; a following word in the same script
-                    // is switched along with it instead, without the name.
-                    let lone_letter = word_script.chars().count() == 1;
-                    let alphabet = foreign
-                        .filter(|_| lone_letter && next_in_script(token_ix + 1) != Some(true))
-                        .and_then(switched_alphabet_name_key)
-                        .and_then(|key| raw_list_entry(key, dict, phdata, stress_opts, options));
-                    // The name rides behind a NUL, past the target `switch_target` reads.
-                    if let Some((name, _)) = alphabet {
-                        phonemes.extend([0, crate::phoneme::PHON_PAUSE]);
-                        phonemes.extend(name);
-                    }
-                    entries.push(TranslateEntry {
-                        phonemes,
-                        dict_flags: 0,
-                        kind:       TranslateEntryKind::Word, // retagged to LangSwitch below
-                        word_lower: Some(word.clone()),
-                        no_word_gap: false, word_group: None,
-                        found_in_list: false,
-                    });
-                    prev_word = None;
-                    continue;
-                }
                 let lower = lowercase_for_lang(word, &options.lang);
                 let letters = word.chars().filter(|c| c.is_alphabetic());
                 // The opening of the next word in the same clause, for the
@@ -8443,16 +8388,26 @@ pub(crate) fn build_translate_entries(
                 if !wr.found_in_list && wr.phonemes.iter().all(|&b| b == 0) && !ordinal_indicator {
                     let mut chars = lower.chars();
                     let lone = chars.next().filter(|c| c.is_alphabetic() && chars.next().is_none());
-                    let reading = lone.and_then(|c| {
-                        letter_fallback(c, dict, phdata, stress_opts, options, english_has)
-                    });
-                    if let Some(reading) = reading {
+                    let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
+                    let env = letters::LetterEnv { voice, tr: voice, alts };
+                    let reading = lone.map(|c| (c, letters::translate_letter(&env, c)));
+                    if let Some((c, reading)) = reading {
                         prev_word = Some(lower.clone());
+                        let (mut phonemes, kind) = match reading {
+                            letters::LetterOut::HandOver(name) => (name, TranslateEntryKind::Word),
+                            letters::LetterOut::Items(items) if letters::has_switch(&items) => {
+                                (letters::encode(&items), TranslateEntryKind::Stream)
+                            }
+                            letters::LetterOut::Items(items) => {
+                                (letters::plain_bytes(&items), TranslateEntryKind::Word)
+                            }
+                        };
+                        phonemes.push(0);
                         entries.push(TranslateEntry {
-                            phonemes: reading.phonemes,
+                            phonemes,
                             dict_flags: 0,
-                            kind: TranslateEntryKind::Word,
-                            word_lower: Some(reading.word),
+                            kind,
+                            word_lower: Some(c.to_string()),
                             no_word_gap: false,
                             word_group: spelled.get(token_ix).copied().flatten(),
                             found_in_list: false,
@@ -8468,19 +8423,36 @@ pub(crate) fn build_translate_entries(
                         wr.phonemes.remove(0);
                     }
                 }
-                // A letter the list hands to another voice (`it м` → `_^_RU`) is
-                // announced by the alphabet's name first, as `TranslateLetter` does.
+                // A lone letter handed to another voice (`it м` → `_^_RU`, a
+                // Devanagari letter in `de`) is spelled by that voice, with the
+                // alphabet's name first, as `TranslateLetter` does; a word
+                // followed by another in the same script is switched whole.
                 if wr.phonemes.first() == Some(&crate::phoneme::PHON_SWITCH)
-                    && word.chars().count() == 1
                     && next_in_script(token_ix + 1) != Some(true)
                 {
-                    let name = foreign
-                        .and_then(switched_alphabet_name_key)
-                        .and_then(|key| raw_list_entry(key, dict, phdata, stress_opts, options));
-                    if let Some((name, _)) = name {
-                        wr.phonemes.retain(|&b| b != 0);
-                        wr.phonemes.extend([0, crate::phoneme::PHON_PAUSE]);
-                        wr.phonemes.extend(name);
+                    // `TranslateChar` has already broken a Hangul syllable into jamo.
+                    let jamo = decompose_hangul(word_script);
+                    let mut chars = jamo.as_deref().unwrap_or(word_script).chars();
+                    let lone = chars.next().filter(|c| c.is_alphabetic() && chars.next().is_none());
+                    let target = String::from_utf8_lossy(&wr.phonemes[1..])
+                        .trim_end_matches('\0')
+                        .to_string();
+                    let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
+                    let items = lone.and_then(|c| letters::spell_in_switched(voice, alts, &target, c));
+                    if let Some(items) = items {
+                        let mut phonemes = letters::encode(&items);
+                        phonemes.push(0);
+                        entries.push(TranslateEntry {
+                            phonemes,
+                            dict_flags: 0,
+                            kind: TranslateEntryKind::Stream,
+                            word_lower: Some(word.clone()),
+                            no_word_gap: false,
+                            word_group: None,
+                            found_in_list: false,
+                        });
+                        prev_word = None;
+                        continue;
                     }
                 }
                 skip_words = wr.skip_words;
@@ -9726,27 +9698,22 @@ impl Translator {
         apply_fractions(&mut tokens, lang);
         apply_exponents(&mut tokens, lang);
         let spelled = split_abandoned_words(&mut tokens, &dict, &self.options);
-        let english:std::cell::OnceCell<Option<Translator>> = std::cell::OnceCell::new();
-        let english_has = |c: char| {
-            english
-                .get_or_init(|| Translator::new("en", Some(&self.data_dir)).ok())
-                .as_ref()
-                .is_some_and(|en| en.char_name_phonemes(c).is_some())
-        };
+        let english: std::cell::OnceCell<Option<Translator>> = std::cell::OnceCell::new();
         let english_word = |c: char, by_name: bool| {
             english
                 .get_or_init(|| Translator::new("en", Some(&self.data_dir)).ok())
                 .as_ref()
                 .and_then(|en| en.symbol_switch_word(c, by_name))
         };
+        let alts = letters::AltLangs::new(&self.data_dir);
         let mut entries = build_translate_entries(
             &tokens,
             &dict,
             &phdata,
             &stress_opts,
             &self.options,
-            &english_has,
             &english_word,
+            &alts,
             &spelled,
         );
         let outer_continues = self.options.switched && !self.options.switched_last;
@@ -9770,6 +9737,7 @@ impl Translator {
         let mut switch_cache: std::collections::HashMap<String, Translator> =
             std::collections::HashMap::new();
         let mut open_switch: Option<String> = None;
+        let mut stream_tail: Option<letters::StreamTail> = None;
 
         // Parallel to `codes` when tracking: the token each code came from.
         // Filled one iteration behind — every `continue` in the loop below would
@@ -10154,7 +10122,15 @@ impl Translator {
                             from_dict.resize(codes.len(), false);
                         }
                     }
-                    for &b in &consume_word_break_syllabic(&entry.phonemes, &phdata) {
+                    if entry.kind == TranslateEntryKind::Stream {
+                        letters::push_stream(&mut codes, &entry.phonemes, lang, &mut stream_tail);
+                    }
+                    let plain = if entry.kind == TranslateEntryKind::Stream {
+                        Vec::new()
+                    } else {
+                        consume_word_break_syllabic(&entry.phonemes, &phdata)
+                    };
+                    for &b in &plain {
                         // `phonX1` is a marker, not a sound: C reads it as
                         // "double the next word's initial consonant"
                         // (`FLAG_DOUBLING`) and does *not* put it in the phoneme

@@ -161,6 +161,24 @@ pub fn is_alpha_c(c: u32) -> bool {
     }
 }
 
+/// The language a letter with no rule hands its word to: English for a Latin
+/// letter in a non-Latin voice, else the language the letter's alphabet nominates
+/// (`alt_alphabet`, or `AL_WORDS`).
+fn script_switch(dict: &Dictionary, wc: u32) -> Option<&'static str> {
+    if dict.letter_bits_offset > 0 && wc <= 0x241 && char::from_u32(wc)?.is_alphabetic() {
+        return Some("en");
+    }
+    let alphabet = crate::translate::letters::alphabet_from_char(wc)?;
+    if alphabet.offset == dict.letter_bits_offset {
+        return None;
+    }
+    let (alt, alt_lang, _) = crate::translate::letters::voice_alphabets(&dict.lang);
+    if alt == alphabet.offset {
+        return Some(alt_lang);
+    }
+    alphabet.words.then_some(alphabet.language)
+}
+
 /// Whether an unmatched letter abandons its word (C's `FLAG_SPELLWORD`).
 ///
 /// C tests the byte after the letter as a signed `char`, so only an ASCII
@@ -1259,6 +1277,19 @@ pub fn translate_rules_ext(
                     }
                 }
 
+                if match1.points == 0 {
+                    if let Some(language) = script_switch(dict, wc) {
+                        let mut phonemes = vec![crate::phoneme::PHON_SWITCH];
+                        phonemes.extend_from_slice(language.as_bytes());
+                        return RulesResult {
+                            phonemes,
+                            spellword,
+                            aborted,
+                            ..RulesResult::default()
+                        };
+                    }
+                }
+
                 if match1.points == 0 && is_alpha(wc) {
                     // An unrecognised letter: note it (the caller may spell the
                     // word).  Unless the word is abandoned here, scanning goes
@@ -1385,8 +1416,10 @@ pub fn translate_rules_ext(
         }
 
         // Advance position.
-
-        // Advance
+        if match1.points == 0 {
+            // C: `p += (wc_bytes-1)` — an unmatched letter is skipped whole.
+            next_pos1 = next_pos1.max(pos + wc_bytes + 1);
+        }
         if next_pos1 <= pos {
             // Avoid infinite loop
             let (_, adv) = utf8_decode(word_buf, pos);
