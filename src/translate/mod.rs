@@ -2012,6 +2012,15 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     break;
                 }
             }
+            // C speaks no second separator in a decimal-comma language
+            // ("1,234,567"): the digits after it are a cardinal of their own.
+            let after_decimal =
+                c == ',' && matches!(tokens.last(), Some(Token::Number(NumberToken::Decimal { .. })));
+            if after_decimal {
+                tokens.push(Token::Space);
+                tokens.push(Token::Number(NumberToken::Cardinal(fractional)));
+                continue;
+            }
             tokens.push(Token::Number(if continued {
                 NumberToken::Decimal { integer: String::new(), fractional }
             } else {
