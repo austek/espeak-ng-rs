@@ -986,21 +986,24 @@ fn format_x(
     out.trim_end().to_string()
 }
 
-/// Map the `-b` value to an [`Encoding`].  1/unset = UTF-8, 2 = ISO-8859-1
-/// (Latin-1, the common 8-bit default), 4 = UCS-2 (16-bit little-endian).
-fn input_encoding(b: Option<u32>) -> espeak_ng::Encoding {
-    use espeak_ng::Encoding;
+/// Map the `-b` value to an encoding and decode mode.  Unset = auto (UTF-8,
+/// falling back to Latin-1 at the first invalid byte, like `espeakCHARS_AUTO`),
+/// 1 = strict UTF-8, 2 = ISO-8859-1, 4 = UCS-2 (16-bit little-endian).
+fn input_encoding(b: Option<u32>) -> (espeak_ng::Encoding, espeak_ng::DecodeMode) {
+    use espeak_ng::{DecodeMode, Encoding};
     match b {
-        Some(2) => Encoding::Iso8859_1,
-        Some(4) => Encoding::Ucs2,
-        _ => Encoding::Utf8,
+        None => (Encoding::Iso8859_1, DecodeMode::Auto),
+        Some(2) => (Encoding::Iso8859_1, DecodeMode::Strict),
+        Some(4) => (Encoding::Ucs2, DecodeMode::Strict),
+        Some(_) => (Encoding::Utf8, DecodeMode::Strict),
     }
 }
 
 fn gather_text(cli: &Cli) -> std::io::Result<String> {
-    let enc = input_encoding(cli.input_encoding);
+    let (enc, mode) = input_encoding(cli.input_encoding);
     let decode = |bytes: Vec<u8>| -> String {
-        espeak_ng::encoding::decode_to_string(&bytes, enc)
+        espeak_ng::TextDecoder::new(&bytes, enc, mode)
+            .map(|mut d| d.decode_to_string())
             .unwrap_or_else(|_| String::from_utf8_lossy(&bytes).into_owned())
     };
 
