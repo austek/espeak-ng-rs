@@ -5705,6 +5705,8 @@ fn word_to_phonemes_inner(
     if rules_produced_output(&result) {
         let mut stress_dict_flags = dict_flags_from_lookup;
         let mut stress_done = false;
+        // A stem found in the list hands its `FLAG_FOUND` to the whole word.
+        let mut stem_in_list = false;
         let mut peeled: Option<PeeledPrefix> = None;
         let mut late_suffix: Vec<u8> = Vec::new();
         let listed_with_prefix = remove_standard_prefix(word, result.end_type).and_then(|(stem, flags)| {
@@ -5824,6 +5826,7 @@ fn word_to_phonemes_inner(
                         // C takes the stem's flags only when the word's own entry has none.
                         if stress_dict_flags == 0 {
                             stress_dict_flags = stem_lookup.flags1.0;
+                            stem_in_list = true;
                         }
                         used_stem = true;
                     } else {
@@ -5966,7 +5969,7 @@ fn word_to_phonemes_inner(
         reorder_tone_phonemes(&mut phonemes, phdata);
         // Pronounced by the rules: only the *flags* came from the list, so
         // this is not `FLAG_FOUND` and the stress-conditioned changes still apply.
-        return WordResult { phonemes, dict_flags: stress_dict_flags, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() };
+        return WordResult { phonemes, dict_flags: stress_dict_flags, found_in_list: stem_in_list, prefix: None, skip_words: 0, late_suffix: Vec::new() };
     }
 
     // Could not translate (unknown word)
