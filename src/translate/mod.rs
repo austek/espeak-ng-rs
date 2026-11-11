@@ -2244,7 +2244,14 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     break;
                 }
             }
-        } else if c.is_alphabetic() || (c == '\'' && grammar.apostrophe & 1 != 0) {
+        } else if c.is_alphabetic()
+            || (c == '\''
+                && (grammar.apostrophe & 1 != 0
+                    || (matches!(tokens.last(), Some(Token::Number(_)))
+                        && chars.peek().is_some_and(|n| n.is_alphabetic()))))
+        {
+            // (An apostrophe between a digit and a letter stays in the word, as
+            // in C: `2024'an` is the number and the word `'an`.)
             // Accumulate a word (letters, apostrophes, hyphens within words).
             let mut word = String::new();
             // Lojban (`caps_mark_stress`): a capital marks the stressed syllable,

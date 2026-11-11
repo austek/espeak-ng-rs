@@ -46,6 +46,7 @@ jobs:
           --test ru_voice_replace
           --test unspaced_ascii_punctuation
           --test dot_run_ellipsis
+          --test number_apostrophe_suffix
           --test max_digits
           --test number_group_pause
           --test leading_zero_long_runs
