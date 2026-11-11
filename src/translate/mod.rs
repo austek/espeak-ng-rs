@@ -7053,7 +7053,7 @@ fn letter_fallback(
 /// C's `TranslateRoman` validity scan over a lower-case word: `ix`, `xxi` and
 /// `mcm`, but not `iiii`, `vx` or `ic`.  Returns the value when it lies within
 /// the language's `min_roman..=max_roman` (2..=49 by default).
-fn c_roman_value(word: &str) -> Option<u32> {
+fn c_roman_value(word: &str, bounds: (i32, i32)) -> Option<u32> {
     const LETTERS: &str = "ixcmvld";
     const VALUES: [i32; 7] = [1, 10, 100, 1000, 5, 50, 500];
     if word.chars().count() < 2 {
@@ -7087,7 +7087,26 @@ fn c_roman_value(word: &str) -> Option<u32> {
         prev = value;
     }
     acc += prev;
-    (2..=49).contains(&acc).then_some(acc as u32)
+    (bounds.0..=bounds.1).contains(&acc).then_some(acc as u32)
+}
+
+/// C's `min_roman` and `max_roman` for the language.
+fn roman_bounds(lang: &str) -> (i32, i32) {
+    match primary_bcp47_subtag(lang) {
+        "hu" => (1, 899),
+        "la" | "lt" | "pt" => (2, 5000),
+        _ => (2, 49),
+    }
+}
+
+/// Whether C's `TranslateWord3` tries `TranslateRoman` on a word of this case.
+fn roman_numerals_apply(numbers: u32, all_upper: bool) -> bool {
+    const NUM_ROMAN: u32 = 0x0100_0000;
+    const NUM_ROMAN_CAPITALS: u32 = 0x0200_0000;
+    const NUM_ROMAN_ORDINAL: u32 = 0x0800_0000;
+    numbers & NUM_ROMAN_ORDINAL == 0
+        && numbers & (NUM_ROMAN | NUM_ROMAN_CAPITALS) != 0
+        && (numbers & NUM_ROMAN_CAPITALS == 0 || all_upper)
 }
 
 /// A Roman numeral read as "roman" plus its number (`vi` is "roman six"), for
@@ -7099,12 +7118,18 @@ fn roman_number_phonemes(
     stress_opts: &StressOpts,
     grammar: &NumberGrammar,
 ) -> Option<Vec<u8>> {
-    let value = c_roman_value(word)?;
+    const NUM_ROMAN_AFTER: u32 = 0x0400_0000;
+    let value = c_roman_value(word, roman_bounds(&dict.lang))?;
     let number = translate_number_token(
         &NumberToken::Cardinal(value.to_string()), dict, phdata, stress_opts, grammar,
     )?;
-    let mut out = trim_lookup(&lookup_num_phonemes(dict, "_roman")).to_vec();
-    out.extend(number.phonemes.iter().copied().filter(|&b| b != 0));
+    let roman = trim_lookup(&lookup_num_phonemes(dict, "_roman")).to_vec();
+    let digits = number.phonemes.iter().copied().filter(|&b| b != 0);
+    let mut out = if grammar.c_numbers & NUM_ROMAN_AFTER != 0 {
+        digits.chain(roman).collect()
+    } else {
+        roman.into_iter().chain(digits).collect::<Vec<u8>>()
+    };
     out.push(0);
     set_word_stress(&mut out, phdata, stress_opts, Some(0), -1, 0);
     Some(out)
@@ -8395,7 +8420,7 @@ pub(crate) fn build_translate_entries(
                     format!("{lower} {rest}")
                 };
                 let roman = (!wr.found_in_list
-                    && primary_bcp47_subtag(&options.lang) == "en"
+                    && roman_numerals_apply(options.number_grammar.c_numbers, expect.all_upper)
                     && !(expect.first_upper && !expect.all_upper)
                     && !dict_lists_word(word, dict, options)
                     && !matches!(tokens.get(token_ix.wrapping_sub(1)), Some(Token::Number(_))))
