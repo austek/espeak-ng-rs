@@ -2046,7 +2046,9 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
                 chars.next();
             }
-            tokens.push(Token::ClauseBoundary(c));
+            if clause_has_word(&tokens) {
+                tokens.push(Token::ClauseBoundary(c));
+            }
         } else if matches!(c, '.' | ',' | '!' | '?' | ';' | ':') {
             // A '.' immediately followed by a letter or digit is not a sentence
             // end — espeak reads it as the "dot"/"point"/"punkt" symbol
@@ -6204,6 +6206,16 @@ fn hyphen_flags_at(tokens: &[Token], ix: usize) -> u32 {
     let joined_after = matches!(tokens.get(ix + 1), Some(Token::WordJoin));
     (if joined_before { crate::dictionary::FLAG_HYPHEN } else { 0 })
         | (if joined_after { crate::dictionary::FLAG_HYPHEN_AFTER } else { 0 })
+}
+
+/// C ends a clause at punctuation only after a letter or digit has been read
+/// in it (`any_alnum`).
+fn clause_has_word(tokens: &[Token]) -> bool {
+    tokens
+        .iter()
+        .rev()
+        .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
+        .any(|t| matches!(t, Token::Word(_) | Token::Number(_)))
 }
 
 fn is_dotted_letters(word: &str) -> bool {
