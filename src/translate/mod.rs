@@ -10994,6 +10994,7 @@ fn tonic_position(clause: &[PhonemeCode], own: &[bool], phdata: &PhonemeData, no
     if foreign_primary {
         return None;
     }
+    let lone_vowel = lone_vowel_words(clause, &level);
     for (i, &l) in level.iter().enumerate().filter(|&(i, &l)| l != NO_STRESS_LEVEL && own[i]) {
         let l = if l > 1 {
             run = 0;
@@ -11009,11 +11010,28 @@ fn tonic_position(clause: &[PhonemeCode], own: &[bool], phdata: &PhonemeData, no
         if l >= 4 {
             return None;
         }
+        let l = if l <= 1 && lone_vowel[i] { 0 } else { l };
         if best.is_none_or(|(m, _)| l >= m) {
             best = Some((l, i));
         }
     }
     best.map(|(_, i)| i)
+}
+
+/// Marks the vowels that are the only vowel of their word.
+fn lone_vowel_words(clause: &[PhonemeCode], level: &[u8]) -> Vec<bool> {
+    let mut out = vec![false; clause.len()];
+    let mut start = 0;
+    for end in (0..=clause.len()).filter(|&i| {
+        i == clause.len() || clause[i].is_boundary || clause[i].code == crate::phoneme::PHON_END_WORD
+    }) {
+        let vowels: Vec<usize> = (start..end).filter(|&i| level[i] != NO_STRESS_LEVEL).collect();
+        if let [only] = vowels[..] {
+            out[only] = true;
+        }
+        start = end + 1;
+    }
+    out
 }
 
 /// Puts a primary-stress mark before `vowel`, replacing the marks already
