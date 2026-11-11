@@ -4765,6 +4765,9 @@ pub struct PosExpect {
     /// Leave the `.replace` table out.  C applies it while reading the clause,
     /// so a letter looked up by name (`LookupLetter`) is never substituted.
     pub no_replace: bool,
+    /// Skip the whole-word dictionary lookup: C hands the remainder of a word
+    /// whose leading letters were spelled straight to `TranslateRules`.
+    pub rules_only: bool,
 }
 
 /// A [`PosExpect`] carrying only the opening of the word that follows, so a
@@ -5196,7 +5199,7 @@ fn word_to_phonemes_inner(
 
     // Try dictionary first
     let follow = expect.follow.split(|&b| b == 0).next().unwrap_or(&[]);
-    let dict_result = lookup_with_follow(dict, word, &ctx, follow);
+    let dict_result = if expect.rules_only { None } else { lookup_with_follow(dict, word, &ctx, follow) };
 
     // Extract flags from dict even if no phonemes (FLAGS-only entries).
     // Note: FLAGS-only entries have FLAG_FOUND_ATTRIBUTES (bit 30) but NOT FLAG_FOUND (bit 31).
@@ -6583,6 +6586,8 @@ fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &La
     if lang_opts.unpronouncable == 1 {
         return false;
     }
+    let replaced = dict.apply_replacements(rest);
+    let rest = replaced.as_deref().unwrap_or(rest);
     // C refuses the test for a character outside the language's own alphabet
     // ("so we can re-translate the word as English"), which keeps every
     // non-Latin script out of it.  The port applies the rule only to Latin text
@@ -6590,7 +6595,9 @@ fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &La
     if dict.letter_bits_offset > 0 {
         return false;
     }
-    let is_latin_letter = |c: char| c.is_alphabetic() && (c as u32) < 0x250;
+    let in_other_alphabet = |c: char| {
+        letters::alphabet_from_char(c as u32).is_some_and(|a| a.offset != dict.letter_bits_offset)
+    };
     let is_vowel = |c: char| {
         let base = crate::dictionary::rules::fold_accent(c);
         matches!(base, 'a' | 'e' | 'i' | 'o' | 'u' | 'y')
@@ -6602,7 +6609,7 @@ fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &La
             )
     };
     let Some(first) = rest.chars().next() else { return false };
-    if !is_latin_letter(first) {
+    if in_other_alphabet(first) {
         return false;
     }
     let mut count = 0usize;
@@ -6611,7 +6618,7 @@ fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &La
         if c == ' ' {
             break;
         }
-        if !is_latin_letter(c) && c != '\'' {
+        if !c.is_alphabetic() && c != '\'' {
             return false; // not our alphabet
         }
         if c == '\'' && count > 1 {
@@ -8615,7 +8622,7 @@ pub(crate) fn build_translate_entries(
                                 phdata,
                                 stress_opts,
                                 options,
-                                PosExpect { prev_letters, ..PosExpect::default() },
+                                PosExpect { prev_letters, rules_only: true, ..PosExpect::default() },
                             );
                             ph.extend(
                                 without_leading_break(&tail.phonemes, stress_opts).iter().copied().filter(|&b| b != 0),

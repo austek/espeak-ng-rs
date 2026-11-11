@@ -45,6 +45,15 @@ fn arabic_ain_named_through_another_translator_uses_its_default_stress() {
 }
 
 #[test]
+fn a_word_starting_outside_every_alphabet_is_unpronounceable_and_its_rest_comes_from_the_rules() {
+    check(&[
+        ("en", "ʃba", "ˌɛʃbˌiːˈeɪ", ",ESb,i:;'eI"),
+        ("en", "ʃxa", "ˌɛʃˌɛksˈeɪ", ",ES,Eks'eI"),
+        ("en", "ʃhello", "ˈɛʃhˈɛləʊ", "'ESh'EloU"),
+    ]);
+}
+
+#[test]
 fn syllabic_marker_after_a_vowel_of_the_voice_table_is_not_written() {
     check(&[("ku", "ع", "(en)ˈaɹəbɪk(ku)ɔˈaːjn", "_:(en)'ar@bIk(ku)O'a:jn")]);
 }
