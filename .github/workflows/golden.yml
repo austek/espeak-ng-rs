@@ -103,6 +103,7 @@ jobs:
           --test pt_underscore_symbols
           --test pt_currency_and_degrees
           --test french_golden_fixes
+          --test suffix_keeps_stem_stress
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

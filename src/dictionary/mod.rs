@@ -192,6 +192,8 @@ pub const SUFX_D:   u32 = 0x1000;
 /// rather than re-running the rules on the stem.  Italian `casa` matches
 /// `@C) a (_S1q`, and retranslating the stem loses the intervocalic `s` → `z`.
 pub const SUFX_Q:   u32 = 0x4000;
+/// `t` — the ending does not affect the stress position in the stem.
+pub const SUFX_T:   u32 = 0x10000;
 pub const SUFX_A:   u32 = 0x40000;
 /// Bit 19 — "allow multiple suffixes before this suffix" (C `SUFX_M`).
 pub const SUFX_M:   u32 = 0x80000;

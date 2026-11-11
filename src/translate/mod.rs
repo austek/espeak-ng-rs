@@ -3118,6 +3118,9 @@ pub struct WordResult {
     /// Following words a multi-word list entry (`(de een)`) covers (C's
     /// `flag - 80`); the caller leaves them out.
     pub skip_words: usize,
+    /// Phonemes of an ending flagged `SUFX_T`, held back from a deferred-stress
+    /// result so the caller adds them after the stress is placed.
+    pub late_suffix: Vec<u8>,
 }
 
 /// The peeled-prefix run at the front of a deferred [`WordResult`].
@@ -3136,6 +3139,16 @@ fn append_raw_phonemes(dst: &mut Vec<u8>, src: &[u8]) {
         }
         dst.push(b);
     }
+}
+
+fn append_late_suffix(phonemes: &mut Vec<u8>, late_suffix: &[u8]) {
+    if late_suffix.is_empty() {
+        return;
+    }
+    let end = phonemes.iter().position(|&b| b == 0).unwrap_or(phonemes.len());
+    phonemes.truncate(end);
+    phonemes.extend_from_slice(late_suffix);
+    phonemes.push(0);
 }
 
 fn combine_rules_result(result: &crate::dictionary::rules::RulesResult) -> Vec<u8> {
@@ -4424,7 +4437,7 @@ fn try_ordinal_number(
         pronunciation.push_c_words(&numbers.num3(year, false, false));
         let mut phonemes = pronunciation.finish();
         set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, STRESS_UNBOUNDED);
-        return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0 });
+        return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() });
     }
     let groups = split_scale_groups(digits);
     // C makes every group of a long number a word of its own: the higher ones are
@@ -4436,7 +4449,7 @@ fn try_ordinal_number(
         pronunciation.word_ends.push(pronunciation.bytes.len());
         pronunciation.word_breaks.push(last.value < 100);
         let phonemes = stress_each_word(pronunciation, phdata, stress_opts, STRESS_UNBOUNDED);
-        return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0 });
+        return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() });
     }
     // For a zero value there is no non-zero group; fall back to the *last* group
     // (the units, scale-less) so "0th" renders "zeroth" instead of dropping the
@@ -4469,7 +4482,7 @@ fn try_ordinal_number(
         phonemes.insert(0, PHON_END_WORD);
     }
     set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, STRESS_UNBOUNDED);
-    Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0 })
+    Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() })
 }
 
 /// Whether C's `LookupNum3` leaves an end-of-word marker in front of the
@@ -4576,7 +4589,7 @@ fn translate_number_token_with_tail(
             .map(|wr| WordResult { found_in_list: true, ..wr }),
         NumberToken::Cardinal(digits) if reads_digit_by_digit(digits, grammar) => {
             let phonemes = spelled_digit_groups(digits, dict, phdata, stress_opts, grammar);
-            Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0 })
+            Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0, late_suffix: Vec::new() })
         }
         _ => {
             // Over-long runs are bounded like C's word buffer; composed number words are not.
@@ -4593,7 +4606,7 @@ fn translate_number_token_with_tail(
             };
             if let Some(pronunciation) = grouped {
                 let phonemes = stress_each_word(pronunciation, phdata, stress_opts, control);
-                return Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0 });
+                return Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0, late_suffix: Vec::new() });
             }
             let leading_break = match token {
                 NumberToken::Cardinal(digits) | NumberToken::Grouped(digits) => {
@@ -4622,7 +4635,7 @@ fn translate_number_token_with_tail(
             if let Some(tail) = tail.as_ref().filter(|t| t.fused) {
                 tail.append_to(&mut phonemes);
             }
-            Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0 })
+            Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0, late_suffix: Vec::new() })
         }
     }
 }
@@ -4812,7 +4825,7 @@ fn emoji_parts_fallback(
     if phonemes.is_empty() {
         return result;
     }
-    WordResult { phonemes, dict_flags, found_in_list, prefix: None, skip_words: 0 }
+    WordResult { phonemes, dict_flags, found_in_list, prefix: None, skip_words: 0, late_suffix: Vec::new() }
 }
 
 /// Like [`word_to_phonemes`] but with a part-of-speech expectation, so a
@@ -5132,7 +5145,7 @@ fn word_to_phonemes_inner(
                 phonemes.push(0);
                 let dict_flags = result.flags1.0;
                 set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags), -1, 0);
-                return WordResult { phonemes, dict_flags, found_in_list: false, prefix: None, skip_words: 0 };
+                return WordResult { phonemes, dict_flags, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() };
             }
         }
     }
@@ -5252,7 +5265,7 @@ fn word_to_phonemes_inner(
                     phonemes.extend_from_slice(ph);
                 }
                 if !phonemes.is_empty() || dropped_switch {
-                    return WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0 };
+                    return WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() };
                 }
             }
             let dict_flags = result.flags1.0;
@@ -5275,11 +5288,12 @@ fn word_to_phonemes_inner(
                     found_in_list: true,
                     prefix: None,
                     skip_words: result.skipwords,
+                    late_suffix: Vec::new(),
                 };
             }
             let mut phonemes = result.phonemes.clone();
             if expect.defer_stress {
-                return WordResult { phonemes, dict_flags, found_in_list: true, prefix: None, skip_words: 0 };
+                return WordResult { phonemes, dict_flags, found_in_list: true, prefix: None, skip_words: 0, late_suffix: Vec::new() };
             }
             // Apply stress placement
             set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags as u32), -1, 0);
@@ -5303,6 +5317,7 @@ fn word_to_phonemes_inner(
                 found_in_list: true,
                 prefix: None,
                 skip_words: result.skipwords,
+                late_suffix: Vec::new(),
             };
         }
     }
@@ -5430,7 +5445,7 @@ fn word_to_phonemes_inner(
             if !phonemes.is_empty() {
                 phonemes.push(0);
                 set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags_from_lookup), -1, 0);
-                return WordResult { phonemes, dict_flags: dict_flags_from_lookup, found_in_list: false, prefix: None, skip_words: 0 };
+                return WordResult { phonemes, dict_flags: dict_flags_from_lookup, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() };
             }
         }
     }
@@ -5439,6 +5454,7 @@ fn word_to_phonemes_inner(
         let mut stress_dict_flags = dict_flags_from_lookup;
         let mut stress_done = false;
         let mut peeled: Option<PeeledPrefix> = None;
+        let mut late_suffix: Vec<u8> = Vec::new();
         let mut phonemes = if result.end_type != 0 && (result.end_type & SUFX_P) != 0 {
             if let Some((stem, stem_word_flags)) = remove_standard_prefix(word, result.end_type) {
                 let mut prefix_ph = Vec::new();
@@ -5454,11 +5470,14 @@ fn word_to_phonemes_inner(
                 );
                 let mut stem_ph = Vec::new();
                 append_raw_phonemes(&mut stem_ph, &stem_wr.phonemes);
+                late_suffix = stem_wr.late_suffix;
                 // Prefixes the stem peeled itself join this word's prefix run.
                 let inner = stem_wr.prefix;
                 let inner_len = inner.map_or(0, |p| p.len).min(stem_ph.len());
                 prefix_ph.extend(stem_ph.drain(..inner_len));
-                let prefix_flags = stress_dict_flags != 0 || inner.is_some_and(|p| p.flagged);
+                let stale_stem_flags = !late_suffix.is_empty() && stem_wr.dict_flags != 0;
+                let prefix_flags =
+                    stress_dict_flags != 0 || inner.is_some_and(|p| p.flagged) || stale_stem_flags;
                 if stress_dict_flags == 0 {
                     stress_dict_flags = stem_wr.dict_flags;
                 }
@@ -5472,7 +5491,7 @@ fn word_to_phonemes_inner(
                 if !expect.defer_stress {
                     let flags = Some(stress_dict_flags as u32);
                     if prefix_flags || prefix_stressed {
-                        if stress_opts.prefixes {
+                        if stress_opts.prefixes || result.end_type & crate::dictionary::SUFX_T != 0 {
                             stem_ph.push(0);
                             set_word_stress(&mut stem_ph, phdata, stress_opts, flags, 3, 0);
                             stem_ph.retain(|&b| b != 0);
@@ -5480,7 +5499,8 @@ fn word_to_phonemes_inner(
                         }
                     } else {
                         stem_ph.push(0);
-                        set_word_stress(&mut stem_ph, phdata, stress_opts, flags, -1, 0);
+                        let control = if late_suffix.is_empty() { 0 } else { 2 };
+                        set_word_stress(&mut stem_ph, phdata, stress_opts, flags, -1, control);
                         stem_ph.retain(|&b| b != 0);
                         stress_done = true;
                     }
@@ -5503,6 +5523,7 @@ fn word_to_phonemes_inner(
             // collected (C's `strcpy(end_phonemes2, end_phonemes); … strcat`).
             // Bounded like C's prefix loop; upstream left this loop uncapped,
             // which is how a 440-byte `s's's…` smashed its stack (#2495).
+            let keeps_stem_stress = result.end_type & crate::dictionary::SUFX_T != 0;
             let peeled =
                 peel_stacked_suffixes(word, &result, dict, &letter_bits, lang_opts, phdata);
             let word = peeled.word.as_str();
@@ -5602,7 +5623,8 @@ fn word_to_phonemes_inner(
                 }
 
                 if used_stem {
-                    append_raw_phonemes(&mut combined, &result_end_phonemes);
+                    let ending = if keeps_stem_stress { &mut late_suffix } else { &mut combined };
+                    append_raw_phonemes(ending, &result_end_phonemes);
                     combined.push(0);
                     combined
                 } else if let Some(stem_ph) = peeled_stem_phonemes
@@ -5655,11 +5677,14 @@ fn word_to_phonemes_inner(
                 found_in_list: false,
                 prefix: peeled,
                 skip_words: 0,
+                late_suffix,
             };
         }
         if !stress_done {
-            set_word_stress(&mut phonemes, phdata, stress_opts, flags_for_stress, -1, 0);
+            let control = if late_suffix.is_empty() || peeled.is_some() { 0 } else { 2 };
+            set_word_stress(&mut phonemes, phdata, stress_opts, flags_for_stress, -1, control);
         }
+        append_late_suffix(&mut phonemes, &late_suffix);
         // Stressed-vowel upgrading (e.g. Turkish e→E, o→O under primary stress)
         if stress_opts.alt_stress_upgrade {
             apply_alt_stress_upgrade(&mut phonemes, phdata);
@@ -5681,11 +5706,11 @@ fn word_to_phonemes_inner(
         reorder_tone_phonemes(&mut phonemes, phdata);
         // Pronounced by the rules: only the *flags* came from the list, so
         // this is not `FLAG_FOUND` and the stress-conditioned changes still apply.
-        return WordResult { phonemes, dict_flags: stress_dict_flags, found_in_list: false, prefix: None, skip_words: 0 };
+        return WordResult { phonemes, dict_flags: stress_dict_flags, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() };
     }
 
     // Could not translate (unknown word)
-    WordResult { phonemes: Vec::new(), dict_flags: dict_flags_from_lookup, found_in_list: false, prefix: None, skip_words: 0 }
+    WordResult { phonemes: Vec::new(), dict_flags: dict_flags_from_lookup, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() }
 }
 
 // ---------------------------------------------------------------------------
@@ -6631,7 +6656,7 @@ fn letter_word_phonemes(
     let mut phonemes: Vec<u8> = r.phonemes.iter().copied().take_while(|&b| b != 0).collect();
     phonemes.push(0);
     set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
-    WordResult { phonemes, dict_flags: r.flags1.0, found_in_list: true, prefix: None, skip_words: 0 }
+    WordResult { phonemes, dict_flags: r.flags1.0, found_in_list: true, prefix: None, skip_words: 0, late_suffix: Vec::new() }
 }
 
 /// `langopts.accents & 1`: Afrikaans, Croatian, Bosnian, Serbian and Swedish
