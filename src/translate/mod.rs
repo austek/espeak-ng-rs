@@ -8636,7 +8636,8 @@ pub(crate) fn build_translate_entries(
                 if matches!(token, Token::Operator(_))
                     || is_spoken_symbol(*c)
                     || punct_covers(options, *c)
-                    || dict_names_symbol(dict, *c, options.dict_condition) =>
+                    || dict_names_symbol(dict, *c, options.dict_condition)
+                    || (!is_clause_punctuation(*c) && english_word(*c, false).is_some()) =>
             {
                 // Technical symbols read as their name by default (# $ % & * + / = @ ~),
                 // as does any character the dictionary names (see `dict_names_symbol`).

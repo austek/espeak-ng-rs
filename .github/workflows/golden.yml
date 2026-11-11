@@ -127,6 +127,7 @@ jobs:
           --test es_unpron_rule_and_roman
           --test letters2
           --test symbol_table_removed
+          --test symbol_english_switch
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
