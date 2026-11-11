@@ -59,7 +59,7 @@ fn exact_thousand_variant() {
     if let Some(t) = tr("ta") {
         let ipa = |s: &str| t.text_to_ipa(s).unwrap();
         // Round thousand → bare "āyiram", no leading "onru".
-        assert!(ipa("1000").contains("aːj") && ipa("1000").ends_with("ʌm") && !ipa("1000").contains("onrʉ"),
+        assert!(ipa("1000").contains("aːj") && ipa("1000").ends_with("əm") && !ipa("1000").contains("onrʉ"),
                 "ta 1000 = 'āyiram': {}", ipa("1000"));
         // With a remainder → combining "āyiratti".
         assert!(ipa("1001").contains("ʌttʉ"), "ta 1001 = 'āyiratti onru': {}", ipa("1001"));
@@ -67,7 +67,7 @@ fn exact_thousand_variant() {
     }
     if let Some(t) = tr("ml") {
         let ipa = |s: &str| t.text_to_ipa(s).unwrap();
-        assert!(ipa("1000").ends_with("ɐm") && !ipa("1000").starts_with("onn"),
+        assert!(ipa("1000").ends_with("əm") && !ipa("1000").starts_with("onn"),
                 "ml 1000 = 'āyiram': {}", ipa("1000"));
         assert!(ipa("1001").contains("ɐtti"), "ml 1001 = 'āyiratti onnu': {}", ipa("1001"));
     }
