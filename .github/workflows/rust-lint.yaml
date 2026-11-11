@@ -84,7 +84,5 @@ jobs:
       - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          # crossbeam-epoch 0.9.18 is transitive via rayon (criterion, parallel feature);
-          # the fix needs a Cargo.lock update outside this change.
           # tokio AsyncFd I/O-safety unsoundness: the crate never calls AsyncFd.
-          ignore: RUSTSEC-2026-0204,RUSTSEC-2026-0386
+          ignore: RUSTSEC-2026-0386
