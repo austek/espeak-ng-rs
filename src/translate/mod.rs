@@ -9889,14 +9889,24 @@ impl Translator {
                             while let Some(i) = codes
                                 .iter()
                                 .rposition(|k| k.marker.is_none())
-                                .filter(|&i| codes[i].is_boundary)
+                                .filter(|&i| codes[i].is_boundary && codes[i].clause_char.is_none())
                             {
                                 codes.remove(i);
                                 closed = true;
                             }
                             let (plain, announced) = self.options.bracket_pause;
                             // The pre-pause loop in C spends 2 per `phonPAUSE`.
-                            let pauses = if punct_covers(&self.options, *c) {
+                            let tight_after_bracket = token_ix
+                                .checked_sub(1)
+                                .is_some_and(|k| matches!(&tokens[k], Token::Punctuation(p) if is_bracket(*p)));
+                            let pause_open = tight_after_bracket
+                                && codes
+                                    .iter()
+                                    .rposition(|k| k.marker.is_none())
+                                    .is_some_and(|i| codes[i].code == crate::phoneme::PHON_PAUSE);
+                            let pauses = if pause_open {
+                                0
+                            } else if punct_covers(&self.options, *c) {
                                 announced / 2
                             } else {
                                 plain / 2
