@@ -5799,7 +5799,7 @@ fn is_spoken_symbol(c: char) -> bool {
         || matches!(c, '.' | '#' | '$' | '%' | '&' | '*' | '+' | '/' | '=' | '@' | '~'
                 | '×' | '÷' | '°' | '±' | '−' | '§' | '№'
                 | '∞' | '√' | '∑' | '≈' | '≠' | '≤' | '≥'
-                | '℃' | '℉' | '™' | '®' | '©'
+                | '™' | '®' | '©'
                 | '‰' | '‱')
 }
 
@@ -7623,8 +7623,6 @@ fn lookup_symbol_name(
             '≠' => Some("not equal to"),
             '≤' => Some("less than or equal to"),
             '≥' => Some("greater than or equal to"),
-            '℃' => Some("degrees celsius"),
-            '℉' => Some("degrees fahrenheit"),
             '™' => Some("trademark"),
             '®' => Some("registered trademark"),
             '©' => Some("copyright"),
