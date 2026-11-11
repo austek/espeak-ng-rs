@@ -1206,7 +1206,12 @@ world   w'3:ld
             phonemes: vec![s_code],
             ..Default::default()
         };
-        let groups = vec![RuleGroup { name: "a".into(), rules: vec![rule] , letter_group: None, group3_ix: 0 }];
+        // C abandons a word at any letter no rule covers, so `b` needs a (silent) rule of its own.
+        let silent_b = Rule { phonemes: vec![], ..Default::default() };
+        let groups = vec![
+            RuleGroup { name: "a".into(), rules: vec![rule], letter_group: None, group3_ix: 0 },
+            RuleGroup { name: "b".into(), rules: vec![silent_b], letter_group: None, group3_ix: 0 },
+        ];
         let rules = compile_rules(&groups);
         let bytes = compile_dict_with_rules(&[], &TransposeConfig::LATIN, &rules).expect("compile");
         let dict = Dictionary::from_bytes("en", bytes).expect("valid dict");

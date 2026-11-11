@@ -166,10 +166,7 @@ pub fn is_alpha_c(c: u32) -> bool {
 /// C tests the byte after the letter as a signed `char`, so only an ASCII
 /// character counts as "another letter follows" for a word's first letter.
 fn abandons_word(wc: u32, next: Option<&u8>, any_alpha: u32) -> bool {
-    // Every shipped rules file covers the ASCII letters it uses, so an ASCII
-    // letter without a rule only comes from a deliberately partial rule set.
-    wc >= 0x80
-        && is_alpha_c(wc)
+    is_alpha_c(wc)
         && !(0x300..=0x36f).contains(&wc)
         && (any_alpha > 1 || next.is_some_and(|b| *b > b' ' && *b < 0x80))
 }
