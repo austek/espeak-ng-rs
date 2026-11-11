@@ -142,6 +142,30 @@ pub(super) fn c_number_flags(lang: &str) -> (u32, u32) {
         .map_or((NUM_DEFAULT, 0), |&(_, n1, n2)| (n1, n2))
 }
 
+const NUM_THOUS_SPACE: u32 = 0x4;
+const NUM_DECIMAL_COMMA: u32 = 0x8;
+const NUM_ALLOW_SPACE: u32 = 0x1000;
+
+/// C's `(thousands_sep, decimal_sep)` and whether a space also separates
+/// thousands.  `SetTranslator` sets Hungarian, Czech and Slovak by hand;
+/// `ProcessLanguageOptions` then lets `NUM_DECIMAL_COMMA` and `NUM_THOUS_SPACE`
+/// override whatever came before.
+pub(super) fn c_separators(lang: &str, numbers: u32) -> (Option<char>, char, bool) {
+    let (mut thousands, mut decimal) = match lang {
+        "hu" => (Some(' '), ','),
+        "cs" | "sk" => (None, ','),
+        _ => (Some(','), '.'),
+    };
+    if numbers & NUM_DECIMAL_COMMA != 0 {
+        (thousands, decimal) = (Some('.'), ',');
+    }
+    if numbers & NUM_THOUS_SPACE != 0 {
+        thousands = None;
+    }
+    let space = thousands == Some(' ') || numbers & NUM_ALLOW_SPACE != 0;
+    (thousands.filter(|&c| c != ' '), decimal, space)
+}
+
 /// Everything C's ordinal composition reads: the language switches and the
 /// ordinal suffix (`_#<suffix>`) the number carries.
 pub(super) struct OrdinalNumbers<'a> {

@@ -987,6 +987,8 @@ impl NumberGrammar {
             "af" | "da" | "en" | "fo" | "is" | "kl" | "nb" | "nl" | "no" | "sv"
         );
         (grammar.c_numbers, grammar.c_numbers2) = ordinal::c_number_flags(lang);
+        (grammar.group_separator, grammar.decimal_separator, grammar.space_group) =
+            ordinal::c_separators(lang, grammar.c_numbers);
         // Hungarian is left out: C declines the dot before a month name, which
         // needs the next word's `$alt` flag.
         grammar.ordinals.dot_marks_ordinal |=
@@ -1179,11 +1181,25 @@ pub enum Token {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NumberToken {
     Cardinal(String),
+    /// Four digits written with a thousands separator (`1,234`, `1 234`) whose
+    /// last three digits are not all zero.  C splits that at the separator into
+    /// a thousands word and a word for the rest, each stressed on its own.
+    Grouped(String),
     Decimal { integer: String, fractional: String },
     Ordinal(OrdinalNumber),
 }
 
 impl NumberToken {
+    /// The number for `digits` written with a thousands separator.
+    fn separated(digits: String) -> Self {
+        let exact = digits.get(1..).is_some_and(|tail| tail.bytes().all(|b| b == b'0'));
+        if digits.len() == MAX_UNSPLIT_DIGITS && !exact {
+            NumberToken::Grouped(digits)
+        } else {
+            NumberToken::Cardinal(digits)
+        }
+    }
+
     fn parse(word: &str, grammar: &NumberGrammar) -> Option<Self> {
         if word.is_empty() {
             return None;
@@ -1233,7 +1249,7 @@ impl NumberToken {
 
     fn surface(&self) -> String {
         match self {
-            NumberToken::Cardinal(digits) => digits.clone(),
+            NumberToken::Cardinal(digits) | NumberToken::Grouped(digits) => digits.clone(),
             NumberToken::Decimal { integer, fractional } => format!("{integer}.{fractional}"),
             NumberToken::Ordinal(ordinal) => ordinal.surface(),
         }
@@ -1449,7 +1465,7 @@ fn portuguese_cardinal_word(digits: &str) -> Option<String> {
 /// `None` for ordinals or values the cardinal speller doesn't cover.
 fn portuguese_number_word(token: &NumberToken) -> Option<String> {
     match token {
-        NumberToken::Cardinal(digits) => portuguese_cardinal_word(digits),
+        NumberToken::Cardinal(digits) | NumberToken::Grouped(digits) => portuguese_cardinal_word(digits),
         NumberToken::Decimal { integer, fractional } => {
             let mut s = portuguese_cardinal_word(integer)?;
             s.push_str(" vírgula");
@@ -2007,6 +2023,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             let mut digits = String::new();
             digits.push(c);
             let mut has_dot = false;
+            let mut separated = false;
             let mut fractional = String::new();
             while let Some(&next) = chars.peek() {
                 if next.is_ascii_digit() {
@@ -2041,6 +2058,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     let more_digits = lookahead.peek().map_or(false, |c| c.is_ascii_digit());
                     if three_digits && !more_digits {
                         chars.next(); // consume the separator; the 3 digits accumulate below
+                        separated = true;
                     } else {
                         break;
                     }
@@ -2098,7 +2116,11 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 }
             }
 
-            tokens.push(Token::Number(NumberToken::Cardinal(digits)));
+            tokens.push(Token::Number(if separated {
+                NumberToken::separated(digits)
+            } else {
+                NumberToken::Cardinal(digits)
+            }));
         } else if is_cjk_ideograph(c) {
             // Each ideograph is its own word.  Upstream *joins* a pair that
             // undergoes tone sandhi (你好 → `ni35X'Au214_|`, no gap and no
@@ -3794,7 +3816,9 @@ fn number_token_to_phonemes(
     grammar: &NumberGrammar,
 ) -> Option<Vec<u8>> {
     match token {
-        NumberToken::Cardinal(digits) => Some(cardinal_pronunciation(digits, dict, grammar)?.finish()),
+        NumberToken::Cardinal(digits) | NumberToken::Grouped(digits) => {
+            Some(cardinal_pronunciation(digits, dict, grammar)?.finish())
+        }
         NumberToken::Decimal { integer, fractional } => {
             // An empty integer is a continued decimal ("1.2.3" → "…point three"):
             // render just the point and the fractional digits, no leading cardinal.
@@ -3812,12 +3836,12 @@ fn number_token_to_phonemes(
             {
                 return Some(pronunciation.finish());
             }
-            if (grammar.fraction_digits_as_number > 0 || grammar.fraction_whole_number)
-                && push_fraction_as_number(&mut pronunciation, fractional, dict, grammar)
-            {
-                return Some(pronunciation.finish());
-            }
-            for digit in fractional.bytes() {
+            let consumed = if grammar.fraction_digits_as_number > 0 || grammar.fraction_whole_number {
+                push_fraction_as_number(&mut pronunciation, fractional, dict, grammar)
+            } else {
+                0
+            };
+            for digit in fractional.bytes().skip(consumed) {
                 pronunciation.push_lookup_word(&lookup_num_phonemes(dict, &num_key(digit - b'0')));
             }
             Some(pronunciation.finish())
@@ -3912,61 +3936,74 @@ fn push_fraction(
 /// fraction longer than the language's limit (2 or 5 digits) falls back to
 /// digit-by-digit, exactly as C does.
 ///
-/// Returns `false` when the fallback should be used.
+/// Returns how many leading fractional digits were spoken; the caller reads the
+/// rest one by one.
 fn push_fraction_as_number(
     pronunciation: &mut Pronunciation,
     fractional: &str,
     dict: &Dictionary,
     grammar: &NumberGrammar,
-) -> bool {
+) -> usize {
     if fractional.is_empty() || !fractional.bytes().all(|b| b.is_ascii_digit()) {
-        return false;
+        return 0;
     }
     if grammar.fraction_whole_number {
-        // C reads the fraction with `atoi`, so a longer one overflows into digits.
-        if fractional.len() > 9 {
-            return false;
-        }
-        let Ok(value) = fractional.parse::<u64>() else { return false };
-        // Leading zeros name the scale ("millesimi") from `_0Z<n>`; without that
-        // entry the digits are spoken one by one.
-        let scale = if fractional.starts_with('0') {
-            let scale = lookup_num_phonemes(dict, &format!("_0Z{}", fractional.len()));
-            if scale.is_empty() {
-                return false;
-            }
-            scale
-        } else {
-            Vec::new()
-        };
-        let Some(number) = cardinal_pronunciation(&value.to_string(), dict, grammar) else {
-            return false;
-        };
-        // C appends a fraction of 100 or more straight onto the decimal-point
-        // word; a smaller one starts a word of its own.
-        if value >= 100 {
-            pronunciation.append_lookup_suffix(&number.finish());
-        } else if scale.is_empty() {
-            pronunciation.push_lookup_word(&number.finish());
-        } else {
-            pronunciation.push_pronunciation(&number);
-            pronunciation.append_lookup_suffix(&scale);
-        }
-        return true;
+        return push_fraction_whole(pronunciation, fractional, dict, grammar);
     }
     let zeros = fractional.bytes().take_while(|&b| b == b'0').count();
+    for _ in 0..zeros {
+        pronunciation.append_lookup_suffix(&lookup_num_phonemes(dict, &num_key(0)));
+    }
     let rest = &fractional[zeros..];
     if rest.is_empty() || rest.len() > grammar.fraction_digits_as_number as usize {
-        return false;
+        return zeros;
     }
-    let Some(number) = cardinal_pronunciation(rest, dict, grammar) else {
-        return false;
+    match fraction_number_bytes(rest, dict, grammar) {
+        Some(number) => {
+            pronunciation.append_lookup_suffix(&number);
+            fractional.len()
+        }
+        None => zeros,
+    }
+}
+
+/// C `LookupNum3` for a fraction numerator: it opens with an end-of-word marker
+/// when there are no hundreds, and nothing separates it from the text before.
+fn fraction_number_bytes(digits: &str, dict: &Dictionary, grammar: &NumberGrammar) -> Option<Vec<u8>> {
+    let numeric = digits.parse::<u64>().ok()?;
+    let number = cardinal_pronunciation(&numeric.to_string(), dict, grammar)?;
+    let mut out = Vec::new();
+    if numeric < 100 {
+        out.push(PHON_END_WORD);
+    }
+    out.extend_from_slice(&number.bytes[..number.trimmed_len()]);
+    Some(out)
+}
+
+/// `NUM_DFRACTION_1`: the whole fraction as one number, with the `_0Z<n>` scale
+/// word when it starts with a zero.
+fn push_fraction_whole(
+    pronunciation: &mut Pronunciation,
+    fractional: &str,
+    dict: &Dictionary,
+    grammar: &NumberGrammar,
+) -> usize {
+    // C reads the fraction with `atoi`, so a longer one overflows into digits.
+    if fractional.len() > 9 {
+        return 0;
+    }
+    let scale = if fractional.starts_with('0') {
+        trim_lookup(&lookup_num_phonemes(dict, &format!("_0Z{}", fractional.len()))).to_vec()
+    } else {
+        Vec::new()
     };
-    for _ in 0..zeros {
-        pronunciation.push_lookup_word(&lookup_num_phonemes(dict, &num_key(0)));
+    if fractional.starts_with('0') && scale.is_empty() {
+        return 0;
     }
-    pronunciation.push_lookup_word(&number.finish());
-    true
+    let Some(mut number) = fraction_number_bytes(fractional, dict, grammar) else { return 0 };
+    number.extend_from_slice(&scale);
+    pronunciation.append_lookup_suffix(&number);
+    fractional.len()
 }
 
 fn cardinal_pronunciation(
@@ -4049,8 +4086,13 @@ fn push_cardinal_groups(
     push_cardinal_group_prefix(result, digits, dict, grammar, usize::MAX);
 }
 
-/// The first `count` groups of `digits` as cardinal words; returns whether any
-/// of them was non-zero.
+/// A thousands-separated number as C reads it: one word per group.
+fn grouped_pronunciation(digits: &str, dict: &Dictionary, grammar: &NumberGrammar) -> Pronunciation {
+    let mut result = Pronunciation::default();
+    push_groups(&mut result, digits, dict, grammar, usize::MAX, true);
+    result
+}
+
 fn push_cardinal_group_prefix(
     result: &mut Pronunciation,
     digits: &str,
@@ -4058,20 +4100,33 @@ fn push_cardinal_group_prefix(
     grammar: &NumberGrammar,
     count: usize,
 ) -> bool {
+    push_groups(result, digits, dict, grammar, count, digits.len() > MAX_UNSPLIT_DIGITS)
+}
+
+/// The first `count` groups of `digits` as cardinal words; returns whether any
+/// of them was non-zero.  With `split` each group is a word of its own.
+fn push_groups(
+    result: &mut Pronunciation,
+    digits: &str,
+    dict: &Dictionary,
+    grammar: &NumberGrammar,
+    count: usize,
+    split: bool,
+) -> bool {
     let mut spoken = false;
     for group in split_scale_groups(digits, dict).into_iter().take(count) {
         let exact = scale_group_is_exact(digits, group.scale);
         let before = result.bytes.len();
         append_cardinal_group(result, group, dict, grammar, exact, spoken);
         // C ends each group word that is not exact with PHON_PAUSE_NOLINK, which stops regressive voicing across groups.
-        if digits.len() > MAX_UNSPLIT_DIGITS && !exact {
+        if split && !exact {
             // An all-zero group is still a word of its own: empty, then the pause.
             if result.bytes.len() == before {
                 result.start_word();
             }
             result.bytes.push(crate::phoneme::PHON_PAUSE_NOLINK);
         }
-        if digits.len() > MAX_UNSPLIT_DIGITS {
+        if split {
             result.word_ends.push(result.bytes.len());
             result.word_breaks.push(group.value < 100);
         }
@@ -4425,6 +4480,7 @@ fn translate_number_token_with_tail(
                 NumberToken::Cardinal(digits) if digits.len() > MAX_UNSPLIT_DIGITS => {
                     cardinal_pronunciation(digits, dict, grammar).filter(|p| p.word_ends.len() > 1)
                 }
+                NumberToken::Grouped(digits) => Some(grouped_pronunciation(digits, dict, grammar)),
                 _ => None,
             };
             if let Some(pronunciation) = grouped {
@@ -4432,7 +4488,7 @@ fn translate_number_token_with_tail(
                 return Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0 });
             }
             let leading_break = match token {
-                NumberToken::Cardinal(digits) => {
+                NumberToken::Cardinal(digits) | NumberToken::Grouped(digits) => {
                     digits.len() <= MAX_GROUPED_DIGITS && starts_with_word_break(digits)
                 }
                 NumberToken::Decimal { integer, .. } => {
@@ -5807,7 +5863,7 @@ fn apply_space_grouping(tokens: &mut Vec<Token>, grammar: &NumberGrammar) {
                         Some(fractional) => {
                             NumberToken::Decimal { integer: merged, fractional }
                         }
-                        None => NumberToken::Cardinal(merged),
+                        None => NumberToken::separated(merged),
                     };
                     out.push(Token::Number(token));
                     i = j;
@@ -11134,6 +11190,11 @@ mod tests {
         // Maltese is not.
         assert!(g("nl").year_1900 && !g("mt").year_1900, "nl reads 19xx as a year");
         nl.year_1900 = false;
+        // Dutch writes the decimal as a comma, Maltese as a point (C `NUM_DECIMAL_COMMA`).
+        assert_eq!(g("nl").decimal_separator, ',');
+        assert_eq!(g("mt").decimal_separator, '.');
+        (nl.group_separator, nl.decimal_separator, nl.space_group) =
+            (g("mt").group_separator, g("mt").decimal_separator, g("mt").space_group);
         assert_eq!(nl, g("mt"), "nl and mt share the same number arm (apart from Dutch-only flags)");
         // Danish/Faroese/Slovenian are units-first ("enogtyve"), so they differ
         // from the tens-first Finnish/Estonian they used to share an arm with.
@@ -11148,8 +11209,10 @@ mod tests {
 
         // Unknown / untabulated languages fall back to the default, never a
         // neighbour's config (what the missing-break bug produced in C).
-        assert_eq!(g("zz"), NumberGrammar::default(), "unknown lang → default grammar");
-        assert_eq!(g("xyz"), NumberGrammar::default());
+        // C's default translator groups thousands with a comma.
+        let default = NumberGrammar { group_separator: Some(','), ..NumberGrammar::default() };
+        assert_eq!(g("zz"), default, "unknown lang → default grammar");
+        assert_eq!(g("xyz"), default);
     }
 
     fn contains_subsequence(haystack: &[u8], needle: &[u8]) -> bool {
@@ -11964,8 +12027,12 @@ mod tests {
                      "bs", "id", "vi", "az", "hy"] {
             let g = NumberGrammar::for_lang(lang);
             assert_eq!(g.decimal_separator, ',', "{lang} decimal");
-            assert_eq!(g.group_separator, Some('.'), "{lang} group");
-            assert!(g.space_group, "{lang} should allow space grouping too");
+            // C: Czech and Bosnian have no thousands separator at all.
+            let group = if lang == "cs" || lang == "bs" { None } else { Some('.') };
+            assert_eq!(g.group_separator, group, "{lang} group");
+            // C `NUM_ALLOW_SPACE`: only these accept a space between groups.
+            let space = ["sv", "pl", "ro", "id", "az", "hy"].contains(&lang);
+            assert_eq!(g.space_group, space, "{lang} space grouping");
         }
         // Period-decimal languages are unchanged — including af, ka and kk, which
         // read "3,14" as two numbers (verified against upstream).
