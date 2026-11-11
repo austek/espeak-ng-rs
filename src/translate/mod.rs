@@ -2079,6 +2079,10 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 tokens.push(Token::Punctuation(':'));
                 continue;
             }
+            if c != '.' && !ascii_clause_end_follows(c, chars.clone()) {
+                tokens.push(Token::Punctuation(c));
+                continue;
+            }
             // Clause/sentence boundary punctuation
             // Absorb trailing whitespace after punctuation
             while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
@@ -2330,6 +2334,13 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     word.push('.');
                     chars.next();
                     break;
+                } else if next == '?'
+                    && chars.clone().nth(1).is_some_and(char::is_alphabetic)
+                    && !ascii_clause_end_follows('?', chars.clone().skip(1))
+                {
+                    // An unspaced `?` is dropped by the letter rules, so the
+                    // letters either side of it read as one word.
+                    chars.next();
                 } else if next == '-' {
                     // A hyphen between two letters is a word break, not part of
                     // the word (espeak `TranslateClause`: `well-known` → "well
@@ -6235,6 +6246,21 @@ where
         Some(c) if c.is_whitespace() => after.find(|c| !c.is_whitespace()).is_some_and(char::is_lowercase),
         _ => false,
     }
+}
+
+/// Whether an ASCII clause punctuation mark `c` ends the clause, given the
+/// text after it: C needs a space, a bracket, a `?` or the end of the text
+/// (after skipping a run of `?` and `!`), and otherwise reads the mark inside
+/// the word.
+fn ascii_clause_end_follows<I>(c: char, after: I) -> bool
+where
+    I: Iterator<Item = char> + Clone,
+{
+    let mut after = after.peekable();
+    if matches!(c, '?' | '!') {
+        while after.next_if(|n| matches!(n, '?' | '!')).is_some() {}
+    }
+    after.peek().is_none_or(|&n| n.is_whitespace() || is_bracket(n) || n == '?' || n == CTRL_EMBEDDED)
 }
 
 /// C reads `e.g.` as the words `e . g .`, which a multi-word list entry
@@ -11733,16 +11759,17 @@ mod tests {
             tokenize_opts("1,000.5", &en),
             vec![Token::Number(NumberToken::Decimal { integer: "1000".into(), fractional: "5".into(), grouped: true })]
         );
-        // Malformed groups (not exactly three digits) keep the comma as a boundary.
+        // Malformed groups (not exactly three digits) stay separate numbers; a
+        // comma glued to a digit does not end the clause (C `ReadClause`).
         assert!(
-            tokenize_opts("1,0000", &en).iter().any(|t| t == &Token::ClauseBoundary(',')),
+            tokenize_opts("1,0000", &en).iter().any(|t| t == &Token::Punctuation(',')),
             "4-digit group must not be absorbed"
         );
         // A language without a group separator (the default) is unchanged.
         assert!(
             tokenize_opts("1,000", &NumberGrammar::default())
                 .iter()
-                .any(|t| t == &Token::ClauseBoundary(',')),
+                .any(|t| t == &Token::Punctuation(',')),
             "no grouping without a configured separator"
         );
     }
