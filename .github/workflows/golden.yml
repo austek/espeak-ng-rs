@@ -75,6 +75,7 @@ jobs:
           --test dutch_prefix_confirmation
           --test dutch_first_suffix_match
           --test absent_letters
+          --test foreign_script_letters
           --test switched_letter_names
           --test switched_replace
           --test spellword_abort

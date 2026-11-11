@@ -8394,7 +8394,18 @@ pub(crate) fn build_translate_entries(
                     if let Some((c, reading)) = reading {
                         prev_word = Some(lower.clone());
                         let (mut phonemes, kind) = match reading {
-                            letters::LetterOut::HandOver(name) => (name, TranslateEntryKind::Word),
+                            letters::LetterOut::HandOver(name) => {
+                                let target = letters::switch_language(&name);
+                                match letters::spell_in_switched(voice, alts, &target, c) {
+                                    Some(items) if items.is_empty() => {
+                                        (Vec::new(), TranslateEntryKind::Word)
+                                    }
+                                    Some(items) => {
+                                        (letters::encode(&items), TranslateEntryKind::Stream)
+                                    }
+                                    None => (name, TranslateEntryKind::Word),
+                                }
+                            }
                             letters::LetterOut::Items(items) if letters::has_switch(&items) => {
                                 (letters::encode(&items), TranslateEntryKind::Stream)
                             }
@@ -8442,10 +8453,11 @@ pub(crate) fn build_translate_entries(
                     if let Some(items) = items {
                         let mut phonemes = letters::encode(&items);
                         phonemes.push(0);
+                        let silent = items.is_empty();
                         entries.push(TranslateEntry {
-                            phonemes,
+                            phonemes: if silent { Vec::new() } else { phonemes },
                             dict_flags: 0,
-                            kind: TranslateEntryKind::Stream,
+                            kind: if silent { TranslateEntryKind::Word } else { TranslateEntryKind::Stream },
                             word_lower: Some(word.clone()),
                             no_word_gap: false,
                             word_group: None,

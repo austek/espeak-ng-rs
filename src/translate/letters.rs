@@ -253,6 +253,23 @@ fn opens_with_switch(items: &[Item]) -> bool {
     matches!(items, [Item::Switch(_), ..] | [Item::Ph(PHON_PAUSE), Item::Switch(_), ..])
 }
 
+/// A switch back to the voice that closed another word's region just before.
+fn closing_marker(codes: &[PhonemeCode], voice: &str) -> Option<StreamTail> {
+    let at = codes.iter().rposition(|c| !(c.is_boundary && c.marker.is_none()))?;
+    let is_voice = |c: &PhonemeCode| matches!(&c.marker, Some(CodeMarker::LangSwitch(t)) if t == voice);
+    if !is_voice(&codes[at]) {
+        return None;
+    }
+    let before = codes[..at]
+        .iter()
+        .rev()
+        .find_map(|c| match &c.marker {
+            Some(CodeMarker::LangSwitch(t)) => Some(t.clone()),
+            _ => None,
+        })?;
+    Some(StreamTail { at, before })
+}
+
 /// C's `phonSWITCH` clean-up in `MakePhonemeList`: a switch to the table already
 /// in force, or one followed by another switch (a pause may sit between), is dropped.
 pub(super) fn push_stream(
@@ -263,6 +280,9 @@ pub(super) fn push_stream(
 ) {
     let items = decode(bytes);
     let mut current = voice.to_string();
+    if tail.is_none() {
+        *tail = closing_marker(codes, voice);
+    }
     if let Some(t) = tail.take() {
         let only_gaps = codes[t.at + 1..].iter().all(|c| c.is_boundary && c.marker.is_none());
         if only_gaps && opens_with_switch(&items) {
@@ -462,15 +482,31 @@ pub(super) fn spell_in_switched(
     target: &str,
     letter: char,
 ) -> Option<Vec<Item>> {
-    let tr = alts.get(target)?;
-    let env = LetterEnv { voice, tr: tr.ctx(), alts };
-    let LetterOut::Items(mut items) = translate_letter(&env, letter) else { return None };
+    let mut target = target.to_string();
+    for attempt in 0..2 {
+        let tr = alts.get(&target)?;
+        let env = LetterEnv { voice, tr: tr.ctx(), alts };
+        match translate_letter(&env, letter) {
+            LetterOut::Items(items) => return Some(wrap_switched(items, &tr.options.lang, voice)),
+            LetterOut::HandOver(name) if attempt == 0 => target = switch_language(&name),
+            LetterOut::HandOver(_) => return Some(Vec::new()),
+        }
+    }
+    None
+}
+
+pub(super) fn switch_language(phonemes: &[u8]) -> String {
+    let name: Vec<u8> = phonemes[1..].iter().copied().take_while(|b| b.is_ascii_alphanumeric() || *b == b'-').collect();
+    if name.is_empty() { "en".to_string() } else { String::from_utf8_lossy(&name).into_owned() }
+}
+
+fn wrap_switched(mut items: Vec<Item>, target: &str, voice: Ctx) -> Vec<Item> {
     let opens = matches!(items.as_slice(), [Item::Ph(PHON_PAUSE), Item::Switch(_), ..]);
     if !opens {
-        items.insert(0, Item::Switch(tr.options.lang.clone()));
+        items.insert(0, Item::Switch(target.to_string()));
     }
     items.push(Item::Switch(voice.lang().to_string()));
-    Some(items)
+    items
 }
 
 /// C's `TranslateLetter` for one letter, spoken by `env.tr` for `env.voice`.

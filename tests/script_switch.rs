@@ -47,16 +47,13 @@ fn al_words_scripts_switch_translator() {
     }
 }
 
-/// A script with no letter names in this language (Han, Hebrew) can't be
-/// spelled, so it falls back to the script's own voice rather than being
-/// dropped — a deliberate divergence: upstream says "Chinese letter".
+/// Han characters have no letter names in English: C says "Chinese letter"
+/// for each rather than switching voice.
 #[test]
-fn unspellable_scripts_fall_back_to_a_voice() {
+fn unspellable_scripts_are_called_a_chinese_letter() {
     let Some(en) = tr("en") else { return };
-    if tr("cmn").is_some() {
-        let out = en.text_to_ipa("你好").unwrap();
-        assert!(out.contains("(cmn)"), "Han should fall back to a voice: {out}");
-    }
+    let out = en.text_to_ipa("你好").unwrap();
+    assert_eq!(out, "tʃˈaɪniːzlˌɛtə tʃˈaɪniːzlˌɛtə");
 }
 
 /// English lists Hebrew letter names (`_ש`), so upstream spells a Hebrew word
