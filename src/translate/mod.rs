@@ -3925,6 +3925,7 @@ fn num3_phonemes_g(
         }
     }
 
+    ordinal::limit_single_stress(grammar.c_numbers, &mut tens_part.bytes);
     let mut result = Pronunciation::default();
     result.push_pronunciation(&hundreds_part);
     result.push_pronunciation(&tens_part);

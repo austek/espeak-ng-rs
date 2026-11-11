@@ -183,6 +183,28 @@ pub(super) struct OrdinalNumbers<'a> {
     pub digit_lookup_len: usize,
 }
 
+/// C's `NUM_SINGLE_STRESS[_L]`: keep one primary stress in a tens-and-units
+/// pair, the last (or with `_L` the first), and demote the others.
+pub(super) fn limit_single_stress(numbers: u32, out: &mut [u8]) {
+    let demote = |out: &mut [u8], order: &mut dyn Iterator<Item = usize>| {
+        let mut seen = false;
+        for ix in order {
+            if out[ix] == PHON_STRESS_P {
+                if seen {
+                    out[ix] = PHON_STRESS_3;
+                }
+                seen = true;
+            }
+        }
+    };
+    let len = out.len();
+    if numbers & NUM_SINGLE_STRESS_L != 0 {
+        demote(out, &mut (0..len));
+    } else if numbers & NUM_SINGLE_STRESS != 0 {
+        demote(out, &mut (0..len).rev());
+    }
+}
+
 fn is_stress_code(code: u8) -> bool {
     (2..=8).contains(&code)
 }
@@ -215,23 +237,7 @@ impl OrdinalNumbers<'_> {
     }
 
     fn limit_stress(&self, out: &mut [u8]) {
-        let demote = |out: &mut [u8], order: &mut dyn Iterator<Item = usize>| {
-            let mut seen = false;
-            for ix in order {
-                if out[ix] == PHON_STRESS_P {
-                    if seen {
-                        out[ix] = PHON_STRESS_3;
-                    }
-                    seen = true;
-                }
-            }
-        };
-        let len = out.len();
-        if self.has(NUM_SINGLE_STRESS_L) {
-            demote(out, &mut (0..len));
-        } else if self.has(NUM_SINGLE_STRESS) {
-            demote(out, &mut (0..len).rev());
-        }
+        limit_single_stress(self.numbers, out);
     }
 
     /// Tens and units joined by the ordinal rules; returns the phonemes and
