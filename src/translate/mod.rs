@@ -437,6 +437,9 @@ pub struct LangOptions {
     /// the *first* language's `.replace` table while reading the clause, so the
     /// table of the language that reads the word is not applied again.
     pub switched: bool,
+    /// For a switched translator: the word it re-reads ends the first language's
+    /// clause, so end-of-clause stress applies.
+    pub switched_last: bool,
 }
 
 const BREAK_THOUSANDS: u32 = 0x4924_9248;
@@ -1057,6 +1060,7 @@ impl Default for LangOptions {
             max_initial_consonants: 3,
             unpronouncable: 0,
             switched: false,
+            switched_last: false,
         }
     }
 }
@@ -8176,21 +8180,13 @@ fn follow_text(tokens: &[Token], from: usize, lang: &str) -> [u8; 32] {
     out
 }
 
-/// Whether the symbol is the only thing its clause says — the case C reads
-/// as a single character by name instead of as a word of running text.
-fn symbol_stands_alone(tokens: &[Token], token_ix: usize) -> bool {
-    let start = tokens[..token_ix]
+/// Whether no word follows the symbol in its clause — the case where C reads
+/// the character by name instead of by its word entry.
+fn symbol_ends_clause(tokens: &[Token], token_ix: usize) -> bool {
+    !tokens[token_ix + 1..]
         .iter()
-        .rposition(|t| matches!(t, Token::ClauseBoundary(_)))
-        .map_or(0, |i| i + 1);
-    let end = tokens[token_ix + 1..]
-        .iter()
-        .position(|t| matches!(t, Token::ClauseBoundary(_)))
-        .map_or(tokens.len(), |i| token_ix + 1 + i);
-    tokens[start..end]
-        .iter()
-        .enumerate()
-        .all(|(i, t)| start + i == token_ix || matches!(t, Token::Space))
+        .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
+        .any(|t| matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_)))
 }
 
 pub(crate) fn build_translate_entries(
@@ -8200,7 +8196,7 @@ pub(crate) fn build_translate_entries(
     stress_opts: &StressOpts,
     options: &LangOptions,
     english_has: &dyn Fn(char) -> bool,
-    english_word: &dyn Fn(char) -> Option<String>,
+    english_word: &dyn Fn(char, bool) -> Option<String>,
     spelled: &[Option<usize>],
 ) -> Vec<TranslateEntry> {
     let mut entries: Vec<TranslateEntry> = Vec::with_capacity(tokens.len());
@@ -8251,6 +8247,9 @@ pub(crate) fn build_translate_entries(
                 .take_while(|(_, t)| !matches!(t, Token::ClauseBoundary(_)))
                 .any(|(k, _)| word_like[i + 1 + k]);
         }
+    }
+    if options.switched {
+        at_end.iter_mut().for_each(|e| *e = options.switched_last);
     }
     // The letters of an abandoned word keep the clause position of the word:
     // C translates each with the flags of the word they came from.
@@ -8766,9 +8765,8 @@ pub(crate) fn build_translate_entries(
                 );
                 let english_reading = (mode == SymbolName::Inline
                     && phonemes.first() == Some(&crate::phoneme::PHON_SWITCH)
-                    && !dict_names_symbol(dict, *c, options.dict_condition)
-                    && !symbol_stands_alone(tokens, token_ix))
-                .then(|| english_word(*c));
+                    && !dict_names_symbol(dict, *c, options.dict_condition))
+                .then(|| english_word(*c, symbol_ends_clause(tokens, token_ix)));
                 let phonemes = if english_reading == Some(None) { Vec::new() } else { phonemes };
                 let phonemes = if max3 && repeat_of_symbol == Some(*c) {
                     repeat_count += 1;
@@ -9063,13 +9061,19 @@ pub(crate) fn promote_translate_entries(
     entries: &mut [TranslateEntry],
     phdata: &PhonemeData,
     lang: &str,
+    outer_continues: bool,
 ) {
     const FLAG_STREND: u32 = 1 << 9;
     const FLAG_STREND2: u32 = 1 << 10;
     const PHON_STRESS_P_CODE: u8 = 6;
     const PHON_STRESS_P2_CODE: u8 = 7;
 
-    fn promote_clause(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang: &str) {
+    fn promote_clause(
+        entries: &mut [TranslateEntry],
+        phdata: &PhonemeData,
+        lang: &str,
+        outer_continues: bool,
+    ) {
         let n = entries.len();
         let alt_attributes = StressOpts::for_lang(lang).alt_attributes;
         #[allow(clippy::needless_range_loop)]
@@ -9084,10 +9088,11 @@ pub(crate) fn promote_translate_entries(
 
             // The letters of one abandoned word all count as its last word.
             let own_group = entries[i].word_group;
-            let is_last_word = entries[i + 1..].iter().all(|e| {
-                e.kind != TranslateEntryKind::Word
-                    || (own_group.is_some() && e.word_group == own_group)
-            });
+            let is_last_word = !outer_continues
+                && entries[i + 1..].iter().all(|e| {
+                    e.kind != TranslateEntryKind::Word
+                        || (own_group.is_some() && e.word_group == own_group)
+                });
             let following_all_unstressed = entries[i + 1..]
                 .iter()
                 .filter(|e| e.kind == TranslateEntryKind::Word)
@@ -9201,7 +9206,7 @@ pub(crate) fn promote_translate_entries(
 
     let lang_for_promo = lang;
     if clause_boundaries.is_empty() {
-        promote_clause(entries, phdata, lang_for_promo);
+        promote_clause(entries, phdata, lang_for_promo, outer_continues);
     } else {
         let mut prev_end = 0usize;
         let mut boundaries_with_end = clause_boundaries.clone();
@@ -9209,7 +9214,7 @@ pub(crate) fn promote_translate_entries(
         for &bound in &boundaries_with_end {
             let slice_end = if bound < entries.len() { bound } else { entries.len() };
             if slice_end > prev_end {
-                promote_clause(&mut entries[prev_end..slice_end], phdata, lang_for_promo);
+                promote_clause(&mut entries[prev_end..slice_end], phdata, lang_for_promo, outer_continues);
             }
             prev_end = if bound < entries.len() { bound + 1 } else { entries.len() };
         }
@@ -9477,7 +9482,7 @@ impl Translator {
     /// English is asked to speak it inside running text: the symbol itself, or
     /// the first word of its replacement text, and `None` when English's own
     /// entry is missing or that word is not in its list.
-    pub(crate) fn symbol_switch_word(&self, c: char) -> Option<String> {
+    pub(crate) fn symbol_switch_word(&self, c: char, by_name: bool) -> Option<String> {
         let dict_stem = resolve_dict_stem(&self.data_dir, &self.options.lang)?;
         let dict_bytes = std::fs::read(dict_path(&self.data_dir, &dict_stem)?).ok()?;
         let mut dict = Dictionary::from_bytes(&dict_stem, dict_bytes).ok()?;
@@ -9487,6 +9492,9 @@ impl Translator {
             dict_condition: self.options.dict_condition,
             ..Default::default()
         };
+        if by_name && lookup(&dict, &format!("_{c}"), &ctx).is_some_and(|r| r.flags1.found()) {
+            return Some(format!("_{c}"));
+        }
         let entry = lookup(&dict, &c.to_string(), &ctx).filter(|r| r.flags1.found())?;
         if !entry.flags1.textmode() {
             return Some(c.to_string());
@@ -9726,11 +9734,11 @@ impl Translator {
                 .as_ref()
                 .is_some_and(|en| en.char_name_phonemes(c).is_some())
         };
-        let english_word = |c: char| {
+        let english_word = |c: char, by_name: bool| {
             english
                 .get_or_init(|| Translator::new("en", Some(&self.data_dir)).ok())
                 .as_ref()
-                .and_then(|en| en.symbol_switch_word(c))
+                .and_then(|en| en.symbol_switch_word(c, by_name))
         };
         let mut entries = build_translate_entries(
             &tokens,
@@ -9742,7 +9750,8 @@ impl Translator {
             &english_word,
             &spelled,
         );
-        promote_translate_entries(&mut entries, &phdata, lang);
+        let outer_continues = self.options.switched && !self.options.switched_last;
+        promote_translate_entries(&mut entries, &phdata, lang, outer_continues);
         if primary_bcp47_subtag(lang) == "en" {
             apply_en_or_linking_r(&mut entries, &phdata);
         }
@@ -9793,6 +9802,13 @@ impl Translator {
                             switch_cache.insert(target.clone(), tr);
                         }
                     }
+                    let last_in_clause = !tokens[token_ix + 1..]
+                        .iter()
+                        .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
+                        .any(|t| matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_)));
+                    if let Some(tr) = switch_cache.get_mut(&target) {
+                        tr.options.switched_last = last_in_clause;
+                    }
                     // A `_<char>` key is a character *name* to look up, not
                     // text to translate (`_@` tokenises as two symbols).
                     // A one-letter word is spelled, not read: C marks it
@@ -9836,6 +9852,13 @@ impl Translator {
                                 marker: Some(CodeMarker::LangSwitch(self.options.lang.clone())),
                                 ..Default::default()
                             });
+                        }
+                        let word_open = codes
+                            .iter()
+                            .rposition(|k| k.marker.is_none())
+                            .is_some_and(|i| !codes[i].is_boundary);
+                        if word_open && open_switch.is_none() {
+                            codes.push(PhonemeCode { code: 15, is_boundary: true, ..Default::default() });
                         }
                         codes.extend(name.iter().map(|&b| PhonemeCode { code: b, ..Default::default() }));
                         if open_switch.as_deref() != Some(target.as_str()) {
