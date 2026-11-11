@@ -10364,6 +10364,17 @@ impl Translator {
         let mut own: Vec<PhonemeCode> = Vec::new();
         let mut own_flags: Vec<bool> = Vec::new();
         let mut in_switch = false;
+        // The voice's own `replace` substitutions match the phonemes the rules
+        // wrote, so they run before the phoneme programs change them (C does
+        // them at the top of `MakePhonemeList`).
+        let replacements: Vec<(u8, u8, u8)> = crate::voices::voice_replacements(&self.data_dir, lang)
+            .into_iter()
+            .filter_map(|(f, old, new)| {
+                let o = phdata.lookup_phoneme(&old);
+                let n = if new == "NULL" { 0 } else { phdata.lookup_phoneme(&new) };
+                (o != 0).then_some((f, o, n))
+            })
+            .collect();
         let finish = |own: &mut Vec<PhonemeCode>,
                           own_flags: &mut Vec<bool>,
                           out: &mut Vec<PhonemeCode>| {
@@ -10372,6 +10383,8 @@ impl Translator {
             }
             own_flags.resize(own.len(), false);
             collapse_repeated_lengthen(own, own_flags);
+            apply_voice_replacements(own, &phdata, &replacements);
+            own_flags.resize(own.len(), false);
             // Before the phoneme programs run, as in C's `MakePhonemeList`.
             double_lengthened_consonants(own, own_flags, &phdata);
             resolve_virtual_phonemes_in_codes(own, &phdata, own_flags, stress_opts.reduce);
@@ -10413,20 +10426,7 @@ impl Translator {
                 &self.options.lang,
             );
         }
-        // The voice's own `replace` substitutions run over the finished list,
-        // ahead of the pause insertion (C does them at the top of
-        // `MakePhonemeList`).
-        let replacements: Vec<(u8, u8, u8)> = crate::voices::voice_replacements(&self.data_dir, lang)
-            .into_iter()
-            .filter_map(|(f, old, new)| {
-                let o = phdata.lookup_phoneme(&old);
-                let n = if new == "NULL" { 0 } else { phdata.lookup_phoneme(&new) };
-                (o != 0).then_some((f, o, n))
-            })
-            .collect();
-        apply_voice_replacements(&mut out, &phdata, &replacements);
-
-        // …and so does the inter-word pause insertion.
+        // The inter-word pause insertion runs over the finished list.
         if self.options.word_gap == 0 {
             insert_word_gaps(&mut out, &phdata, stress_opts.vowel_pause, stress_opts.word_gap);
         }

@@ -43,6 +43,7 @@ jobs:
           --test geminates_and_alt_vowels
           --test ku_hundred_link
           --test ku_tr_ru_golden
+          --test ru_voice_replace
           --test max_digits
           --test number_group_pause
           --test leading_zero_long_runs
