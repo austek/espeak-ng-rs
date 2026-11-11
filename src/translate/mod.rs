@@ -6199,9 +6199,17 @@ fn only_pauses_since_clause_start(codes: &[PhonemeCode]) -> bool {
 /// A hyphen with a blank on each side (` - `) or doubled (`--`) is a dash that
 /// pauses before the next word.
 fn spaced_dash(tokens: &[Token], ix: usize) -> bool {
+    let is_dash = |t: Option<&Token>| matches!(t, Some(Token::Punctuation('-') | Token::Operator('-')));
     let before = ix > 0 && matches!(tokens[ix - 1], Token::Space);
     let after = matches!(tokens.get(ix + 1), Some(Token::Space));
-    before && after
+    let doubled = is_dash(tokens.get(ix + 1));
+    let second_of_pair = ix > 0 && is_dash(tokens.get(ix - 1));
+    let pause_pending = tokens[..ix]
+        .iter()
+        .rev()
+        .find(|t| !matches!(t, Token::Space))
+        .is_some_and(|t| matches!(t, Token::Punctuation(p) if is_bracket(*p) || *p == '-'));
+    ((before && after) || doubled) && !second_of_pair && !pause_pending
 }
 
 fn word_tail(word: Option<&str>) -> [u8; 8] {

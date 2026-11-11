@@ -34,6 +34,18 @@ fn a_closing_quote_after_a_comma_pauses_at_the_next_clause_start() {
 }
 
 #[test]
+fn a_doubled_hyphen_pauses_and_a_pause_already_pending_is_not_repeated() {
+    check(&[
+        ("ku", "a -- b", "a_:_: b'e"),
+        ("ku", "a--b", "a_:_: b'e"),
+        ("ku", "a - b -- c", "a_:_: b'e_:_: dZ'e"),
+        ("ku", "a - - b", "a_:_: b'e"),
+        ("ku", "\"a\" - b", "_:_:a_:_: b'e"),
+        ("ku", "a - (b)", "a_:_:_:_: b'e"),
+    ]);
+}
+
+#[test]
 fn a_pause_after_a_number_attaches_to_it() {
     check(&[
         ("ku", "5 - 3", "p'endZ_:_: s'e"),
