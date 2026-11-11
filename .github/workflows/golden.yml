@@ -97,6 +97,7 @@ jobs:
           --test acronym_periods
           --test dotted_abbreviations
           --test dotted_phrase_entries
+          --test dot_between_words
           --test vulgar_fractions
           --test dotted_ordinals
           --test german_ordinals

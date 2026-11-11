@@ -2028,14 +2028,6 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             }
             tokens.push(Token::ClauseBoundary(c));
         } else if matches!(c, '.' | ',' | '!' | '?' | ';' | ':') {
-            // A '.' between a single letter and a longer word (`p.ex`) is
-            // dropped; the two words are spoken separately.
-            if c == '.'
-                && matches!(chars.peek(), Some(n) if n.is_alphabetic())
-                && matches!(tokens.last(), Some(Token::Word(w)) if is_single_letter_word(w))
-            {
-                continue;
-            }
             // A '.' immediately followed by a letter or digit is not a sentence
             // end — espeak reads it as the "dot"/"point"/"punkt" symbol
             // ("cat.Dog" → "cat dot dog", "5.and" → "five dot and", and in a
@@ -2044,6 +2036,15 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // English "3.14" never reaches here — its '.' is the decimal
             // separator, consumed by the number tokenizer above.)
             if c == '.' && matches!(chars.peek(), Some(n) if n.is_alphanumeric()) {
+                tokens.push(Token::Punctuation('.'));
+                continue;
+            }
+            // A word that follows a spoken dot keeps its own dot too: C drops a
+            // dot only after a word that does not itself follow punctuation.
+            if c == '.'
+                && matches!(tokens.as_slice(), [.., Token::Punctuation('.'), Token::Word(_)])
+                && dot_stays_in_clause(chars.clone())
+            {
                 tokens.push(Token::Punctuation('.'));
                 continue;
             }
@@ -2301,7 +2302,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     word.push('.');
                     chars.next();
                     prev_char = '.';
-                } else if next == '.' && is_dotted_letters(&word) && dot_stays_in_clause(&chars) {
+                } else if next == '.' && is_dotted_letters(&word) && dot_stays_in_clause(chars.clone().skip(1)) {
                     word.push('.');
                     chars.next();
                     break;
@@ -5318,7 +5319,9 @@ fn word_to_phonemes_inner(
                     phonemes.extend_from_slice(ph);
                 }
                 if !phonemes.is_empty() || dropped_switch {
-                    return WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() };
+                    let dot_flags = result.flags1.0
+                        & (crate::dictionary::FLAG_ALLOW_DOT | crate::dictionary::FLAG_NEEDS_DOT);
+                    return WordResult { phonemes, dict_flags: dot_flags, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() };
                 }
             }
             let dict_flags = result.flags1.0;
@@ -6005,14 +6008,14 @@ fn is_dotted_letters(word: &str) -> bool {
     word.contains('.') && word.split('.').all(is_single_letter_word)
 }
 
-/// Whether the '.' at the head of `chars` stays inside the clause, as C's
-/// `ReadClause` decides: it is followed by a letter or hyphen, or by blanks and
-/// then a lower-case letter.
-fn dot_stays_in_clause<I>(chars: &std::iter::Peekable<I>) -> bool
+/// Whether a '.' followed by `after` stays inside the clause, as C's
+/// `ReadClause` decides: a letter or hyphen follows, or blanks and then a
+/// lower-case letter.
+fn dot_stays_in_clause<I>(after: I) -> bool
 where
     I: Iterator<Item = char> + Clone,
 {
-    let mut after = chars.clone().skip(1).peekable();
+    let mut after = after.peekable();
     match after.peek() {
         Some(&c) if c.is_alphabetic() || c == '-' => true,
         Some(c) if c.is_whitespace() => after.find(|c| !c.is_whitespace()).is_some_and(char::is_lowercase),
@@ -7835,7 +7838,7 @@ fn dict_symbol_flags(dict: &Dictionary, c: char, dict_condition: u32) -> Option<
     // Clause punctuation goes to the clause path, not the dictionary: Hindi
     // `।`, Ethiopic `።` and CJK `。` all have list entries naming them, and C
     // speaks none of them (`a ❓ b` → "a b").
-    if is_clause_punctuation(c) {
+    if is_clause_punctuation(c) && c != '.' {
         return None;
     }
     // The entry may be behind a `?n` condition — Portuguese names `§` twice,
@@ -8076,6 +8079,12 @@ fn lookup_symbol_name(
     // In running text C ignores a character the language names only as `_<char>`
     // (`LookupLetter`: "specified as _* so ignore it"), which is why French
     // says nothing for `/` or `#` unless punctuation is announced.
+    if mode == SymbolName::Inline && c == '.' {
+        let wr = word_to_phonemes_pos(".", dict, phdata, stress_opts, options, expect);
+        if wr.phonemes.iter().any(|&b| b != 0) {
+            return (wr.phonemes, wr.found_in_list);
+        }
+    }
     if mode == SymbolName::Inline
         && primary_bcp47_subtag(&options.lang) != "en"
         && !matches!(c, '$' | '€' | '£' | '¥' | '¢') && has_underscore_name(dict, c, options.dict_condition) {
@@ -8298,8 +8307,20 @@ pub(crate) fn build_translate_entries(
 
     // Words a multi-word list entry already pronounced with its first word.
     let mut skip_words = 0usize;
+    let mut dot_removed_at: Option<usize> = None;
     for (token_ix, token) in tokens.iter().enumerate() {
         match token {
+            Token::Punctuation('.') if dot_removed_at == Some(token_ix) => {
+                entries.push(TranslateEntry {
+                    phonemes: Vec::new(),
+                    dict_flags: 0,
+                    kind: TranslateEntryKind::Other,
+                    word_lower: None,
+                    no_word_gap: false,
+                    word_group: None,
+                    found_in_list: false,
+                });
+            }
             // Later passes pair entries with word tokens one to one, so a word
             // the entry swallowed keeps an empty entry of its own.
             Token::Word(_) if skip_words > 0 => {
@@ -8469,6 +8490,10 @@ pub(crate) fn build_translate_entries(
                     }
                 }
                 skip_words = wr.skip_words;
+                let allows_dot = wr.dict_flags
+                    & (crate::dictionary::FLAG_ALLOW_DOT | crate::dictionary::FLAG_NEEDS_DOT)
+                    != 0;
+                dot_removed_at = allows_dot.then_some(token_ix + 1);
                 let lower = if skip_words == 0 {
                     lower
                 } else {
@@ -8491,7 +8516,15 @@ pub(crate) fn build_translate_entries(
                 // pronunciation ("the word has $abbrev flag, but no pronunciation
                 // specified.  Speak as individual letters") — English `usa` is
                 // `j,u:,Es'eI`.
-                if !wr.found_in_list && lower.contains('.') {
+                let dot_follows = matches!(tokens.get(token_ix + 1), Some(Token::Punctuation('.')));
+                if skip_words == 0 && dot_follows && is_single_letter_word(&lower) {
+                    // C's `CheckDottedAbbrev`: a lone letter before a dot word is spelled.
+                    if let Some(spelled) = spell_word_letters(&lower, dict, phdata, stress_opts, options) {
+                        wr.phonemes = spelled;
+                        wr.found_in_list = false;
+                        wr.dict_flags = 0;
+                    }
+                } else if !wr.found_in_list && lower.contains('.') {
                     // Single letters joined by dots (`e.g`, `U.S.A`) are one
                     // word that no list names; it is spelled out.
                     if let Some(spelled) = spell_word_letters(

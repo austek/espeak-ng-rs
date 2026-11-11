@@ -209,6 +209,7 @@ pub const FLAG_ALLOW_TEXTMODE: u32 = 0x02;
 pub const FLAG_FOUND:           u32 = 0x8000_0000;
 pub const FLAG_FOUND_ATTRIBUTES:u32 = 0x4000_0000;
 pub const FLAG_TEXTMODE:        u32 = 0x2000_0000;
+pub const FLAG_ALLOW_DOT:       u32 = 0x0100_0000;
 pub const FLAG_NEEDS_DOT:       u32 = 0x0200_0000;
 pub const FLAG_MAX3:            u32 = 0x0800_0000;
 pub const FLAG_SKIPWORDS:       u32 = 0x0000_0080;
