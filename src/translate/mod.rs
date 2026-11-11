@@ -11524,7 +11524,8 @@ fn resolve_virtual_phonemes_in_codes(
             this_wordstart: starts[n],
             prev_wordstart: n.checked_sub(1).is_some_and(|k| starts[k]),
             next_wordstart,
-            next2_wordstart: next_wordstart,
+            next2_wordstart: next_wordstart
+                || matches!((real.get(n + 1), real.get(n + 2)), (Some(&a), Some(&b)) if crosses(a, b)),
             next_vowel,
             next_vowel_stress,
             prev_vowel,

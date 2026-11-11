@@ -1063,6 +1063,7 @@ where
                 // The phoneme after the moved position starts a new word / pause.
                 match which {
                     1 => nb.next == 0 || nb.next_wordstart || resolve(nb.next).typ == PH_PAUSE,
+                    2 | 4 => nb.next2 == 0 || nb.next2_wordstart || resolve(nb.next2).typ == PH_PAUSE,
                     0 | 5 => nb.this_wordstart,
                     _ => false,
                 }

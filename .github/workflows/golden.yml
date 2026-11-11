@@ -48,6 +48,7 @@ jobs:
           --test dot_run_ellipsis
           --test number_apostrophe_suffix
           --test tr_phoneme_program_context
+          --test tr_next_phoneme_word_end
           --test max_digits
           --test number_group_pause
           --test leading_zero_long_runs
