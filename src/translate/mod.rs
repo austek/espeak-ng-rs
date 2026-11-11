@@ -3252,6 +3252,49 @@ fn confirm_prefix(
     if without_suffix.end_type & SUFX_P == 0 { suffix_only } else { without_suffix }
 }
 
+/// C looks the word up with its prefix kept but its suffix removed (`unser`
+/// for `unsereren`) before it re-translates the stem alone.  Returns the list
+/// entry's phonemes with the suffix's added, and the entry's flags.
+#[allow(clippy::too_many_arguments)]
+fn prefix_with_stem_listed(
+    word: &str,
+    stem: &str,
+    stem_word_flags: u32,
+    rules_flags: u32,
+    dict: &Dictionary,
+    lang_opts: &LangOptions,
+    phdata: &PhonemeData,
+    expect: PosExpect,
+) -> Option<(Vec<u8>, u32)> {
+    let mut buf = vec![b' '];
+    buf.extend_from_slice(stem.as_bytes());
+    buf.extend_from_slice(&[b' ', 0]);
+    let (mut vowels, mut stressed) = (0i32, 0i32);
+    let rules = translate_rules_phdata(
+        dict, &buf, 1, stem_word_flags, rules_flags, &dict.letter_bits,
+        lang_opts.dict_condition, &mut vowels, &mut stressed, Some(phdata),
+    );
+    if rules.end_type == 0 || rules.end_type & SUFX_P != 0 {
+        return None;
+    }
+    let (whole, end_flags, _) = remove_standard_suffix(word, rules.end_type, dict)?;
+    let ctx = LookupCtx {
+        lookup_symbol: false,
+        end_flags,
+        expect_verb: expect.verb,
+        expect_noun: expect.noun,
+        expect_past: expect.past,
+        dict_condition: lang_opts.dict_condition,
+        ..Default::default()
+    };
+    let hit = lookup(dict, &whole, &ctx).filter(|h| !h.phonemes.is_empty())?;
+    let mut phonemes = Vec::new();
+    append_raw_phonemes(&mut phonemes, &hit.phonemes);
+    append_raw_phonemes(&mut phonemes, &rules.end_phonemes);
+    phonemes.push(0);
+    Some((phonemes, hit.flags1.0))
+}
+
 fn remove_standard_prefix(word: &str, end_type: u32) -> Option<(String, u32)> {
     if end_type & SUFX_P == 0 {
         return None;
@@ -5456,7 +5499,15 @@ fn word_to_phonemes_inner(
         let mut stress_done = false;
         let mut peeled: Option<PeeledPrefix> = None;
         let mut late_suffix: Vec<u8> = Vec::new();
-        let mut phonemes = if result.end_type != 0 && (result.end_type & SUFX_P) != 0 {
+        let listed_with_prefix = remove_standard_prefix(word, result.end_type).and_then(|(stem, flags)| {
+            prefix_with_stem_listed(word, &stem, flags, rules_flags, dict, lang_opts, phdata, expect)
+        });
+        let mut phonemes = if let Some((listed, listed_flags)) = listed_with_prefix {
+            if stress_dict_flags == 0 {
+                stress_dict_flags = listed_flags;
+            }
+            listed
+        } else if result.end_type != 0 && (result.end_type & SUFX_P) != 0 {
             if let Some((stem, stem_word_flags)) = remove_standard_prefix(word, result.end_type) {
                 let mut prefix_ph = Vec::new();
                 append_raw_phonemes(&mut prefix_ph, &result.end_phonemes);
@@ -11107,8 +11158,8 @@ fn resolve_virtual_phonemes_in_codes(
         // looking past the comma.
         let clause_break =
             |a: usize, b: usize| codes[a + 1..b].iter().any(|c| c.is_boundary && c.code == 0);
-        let prev = n
-            .checked_sub(1)
+        let prev_n = (0..n).rev().find(|&k| !deleted.contains(&real[k]));
+        let prev = prev_n
             .map(|k| real[k])
             .filter(|&k| !clause_break(k, i))
             .map(|k| codes[k].code)
@@ -11165,6 +11216,9 @@ fn resolve_virtual_phonemes_in_codes(
         let mut from = i;
         for k in (0..n).rev() {
             let at = real[k];
+            if deleted.contains(&at) {
+                continue;
+            }
             if crosses(at, from) {
                 break;
             }
@@ -11183,11 +11237,7 @@ fn resolve_virtual_phonemes_in_codes(
             next2,
             stress: level[i],
             next_stress: next_ix.map(|k| level[k]).unwrap_or(NO_STRESS_LEVEL),
-            prev_stress: n
-                .checked_sub(1)
-                .and_then(|k| real.get(k))
-                .map(|&k| level[k])
-                .unwrap_or(NO_STRESS_LEVEL),
+            prev_stress: prev_n.map(|k| level[real[k]]).unwrap_or(NO_STRESS_LEVEL),
             next2_stress: real.get(n + 2).map(|&k| level[k]).unwrap_or(NO_STRESS_LEVEL),
             wordstress: wordstress[i],
             vowel_position: vowel_pos[i],
