@@ -158,14 +158,6 @@ fn run() -> std::io::Result<()> {
         let data = resolved_data_dir(cli.path_override.as_deref());
         cli.voice = resolve_voice(&cli.voice, &data);
     }
-    // Warn (but continue on the base voice) if a `+variant` was requested whose
-    // file is missing — the variant is acoustic-only, so the base still speaks.
-    if let (_, Some(var)) = espeak_ng::translate::split_voice_variant(&cli.voice) {
-        let data = resolved_data_dir(cli.path_override.as_deref());
-        if espeak_ng::voices::load_variant(&data, var).is_none() {
-            eprintln!("{}: voice variant '{var}' not found in voices/!v/", argv0_display());
-        }
-    }
 
     let text = gather_text(&cli)?;
 
@@ -356,8 +348,18 @@ fn speak_mbrola(
 /// against the installed voices by name (`-v "French (France)"` → `fr-fr`),
 /// falling back to the original string if nothing matches.
 fn resolve_voice(value: &str, data_dir: &Path) -> String {
-    if espeak_ng::translate::resolve_dict_stem(data_dir, value).is_some() {
+    let (base, variant) = espeak_ng::translate::split_voice_variant(value);
+    let with_variant = |tag: String| match variant {
+        Some(v) => format!("{tag}+{v}"),
+        None => tag,
+    };
+    if espeak_ng::translate::resolve_dict_stem(data_dir, base).is_some() {
         return value.to_string();
+    }
+    if let Some(v) = espeak_ng::voices::voice_file_entry(data_dir, base) {
+        let want = v.dictionary.clone().unwrap_or_else(|| v.language.clone());
+        let stem = espeak_ng::translate::resolve_dict_stem(data_dir, &want).unwrap_or(want);
+        return with_variant(stem);
     }
     let voices = espeak_ng::voices::list_voices(data_dir);
     let query = espeak_ng::voices::VoiceQuery { name: Some(value.to_string()), ..Default::default() };

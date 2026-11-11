@@ -577,12 +577,33 @@ pub struct VariantParams {
     pub breathw: Vec<i32>,
 }
 
+/// The `!v/` file a `+variant` suffix names: a number 1-9 is `m<n>`, 11 and up
+/// is `f<n-10>` (C's `ExtractVoiceVariantName`); anything else is the name.
+pub fn variant_file_name(name: &str) -> String {
+    let digits: String = name.chars().take_while(char::is_ascii_digit).collect();
+    match (name.starts_with(|c: char| c.is_ascii_digit()), digits.parse::<u32>()) {
+        (true, Ok(n)) if n > 0 && n < 10 => format!("m{n}"),
+        (true, Ok(n)) if n >= 10 => format!("f{}", n - 10),
+        _ => name.to_string(),
+    }
+}
+
+/// Find the voice definition a `-v` value names as a file: `<data>/voices/<name>`
+/// first, then `<data>/lang/<name>`, as C's `LoadVoice` looks.
+pub fn voice_file_entry(data_dir: &Path, name: &str) -> Option<VoiceEntry> {
+    [data_dir.join("voices"), data_dir.join("lang")]
+        .iter()
+        .map(|root| root.join(name))
+        .find(|p| p.is_file())
+        .and_then(|p| load_voice_file(&p))
+}
+
 /// Load and parse a variant voice file at `<data_dir>/voices/!v/<name>`.
 ///
 /// Variant names are case-sensitive (`f3`, `Alex`, `whisper`).  Returns `None`
 /// if the file is absent or is not a `language variant` definition.
 pub fn load_variant(data_dir: &Path, name: &str) -> Option<VariantParams> {
-    let path = data_dir.join("voices").join("!v").join(name);
+    let path = data_dir.join("voices").join("!v").join(variant_file_name(name));
     let bytes = fs::read(&path).ok()?;
     parse_variant(&String::from_utf8_lossy(&bytes))
 }

@@ -142,6 +142,7 @@ jobs:
           --test symbol_english_switch
           --test clause_tonic_unstressed_words
           --test clause_leading_punctuation
+          --test voice_names
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

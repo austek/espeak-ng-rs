@@ -58,7 +58,7 @@ fn missing_variant_warns_but_still_speaks_base() {
         .expect("run");
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("variant 'nope' not found"), "no warning:\n{stderr}");
+    assert!(stderr.is_empty(), "C prints nothing for an unknown variant:\n{stderr}");
     assert!(stdout.trim() == "hˈaɪ", "base voice should still speak: {stdout:?}");
 
     // A valid variant must NOT warn.
