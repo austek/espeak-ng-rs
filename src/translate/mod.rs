@@ -7534,18 +7534,6 @@ fn suppress_abbreviation_periods(tokens: &mut [Token]) {
         }
     }
 
-    // A comma directly between two numbers is a digit separator, not a clause
-    // break: `en "3,14"` reads "three fourteen" on one line upstream, where the
-    // port used to add a clause break as well as the space.
-    for i in 1..tokens.len().saturating_sub(1) {
-        if matches!(tokens[i], Token::ClauseBoundary(','))
-            && matches!(tokens[i - 1], Token::Number(_))
-            && matches!(tokens[i + 1], Token::Number(_))
-        {
-            tokens[i] = Token::Space;
-        }
-    }
-
 }
 
 /// Read a `H:MM` (or `H:MM:SS`) time.  The colon is a time separator, not a
