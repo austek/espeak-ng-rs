@@ -2296,6 +2296,10 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     word.push('.');
                     chars.next();
                     prev_char = '.';
+                } else if next == '.' && is_dotted_letters(&word) && dot_stays_in_clause(&chars) {
+                    word.push('.');
+                    chars.next();
+                    break;
                 } else if next == '-' {
                     // A hyphen between two letters is a word break, not part of
                     // the word (espeak `TranslateClause`: `well-known` → "well
@@ -5979,6 +5983,61 @@ fn is_single_letter_word(w: &str) -> bool {
     matches!(chars.next(), Some(c) if c.is_alphabetic()) && chars.next().is_none()
 }
 
+fn is_dotted_letters(word: &str) -> bool {
+    word.contains('.') && word.split('.').all(is_single_letter_word)
+}
+
+/// Whether the '.' at the head of `chars` stays inside the clause, as C's
+/// `ReadClause` decides: it is followed by a letter or hyphen, or by blanks and
+/// then a lower-case letter.
+fn dot_stays_in_clause<I>(chars: &std::iter::Peekable<I>) -> bool
+where
+    I: Iterator<Item = char> + Clone,
+{
+    let mut after = chars.clone().skip(1).peekable();
+    match after.peek() {
+        Some(&c) if c.is_alphabetic() || c == '-' => true,
+        Some(c) if c.is_whitespace() => after.find(|c| !c.is_whitespace()).is_some_and(char::is_lowercase),
+        _ => false,
+    }
+}
+
+/// C reads `e.g.` as the words `e . g .`, which a multi-word list entry
+/// (`(e . g .)`) can match; spell the dotted word out as those words when the
+/// list has such an entry, and otherwise drop a stay-in-clause dot.
+fn expand_dotted_phrases(tokens: &mut Vec<Token>, dict: &Dictionary, lang: &str) {
+    let ctx = LookupCtx { dict_condition: dict.dict_condition, ..Default::default() };
+    let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
+    for (ix, token) in tokens.iter().enumerate() {
+        let Token::Word(word) = token else { out.push(token.clone()); continue };
+        let core = word.trim_end_matches('.');
+        if !is_dotted_letters(core) {
+            out.push(token.clone());
+            continue;
+        }
+        let pieces: Vec<String> = core.split('.').map(|p| lowercase_for_lang(p, lang)).collect();
+        let mut follow: String = pieces[1..].iter().map(|p| format!(". {p} ")).collect();
+        if word.ends_with('.') {
+            follow.push_str(". ");
+        }
+        let rest = follow_text(tokens, ix + 1, lang);
+        follow.push_str(&String::from_utf8_lossy(rest.split(|&b| b == 0).next().unwrap_or(&[])));
+        let matched = lookup_with_follow(dict, &pieces[0], &ctx, follow.as_bytes())
+            .is_some_and(|r| r.skipwords > 0 && !r.phonemes.is_empty());
+        if !matched {
+            out.push(Token::Word(core.to_string()));
+            continue;
+        }
+        for (n, piece) in core.split('.').enumerate() {
+            let dots = if n + 1 < pieces.len() || word.ends_with('.') { 1 } else { 0 };
+            out.push(Token::Word(piece.to_string()));
+            out.extend((0..dots).flat_map(|_| [Token::Space, Token::Word(".".into())]));
+            out.push(Token::Space);
+        }
+    }
+    *tokens = out;
+}
+
 fn is_spoken_symbol(c: char) -> bool {
     matches!(c, '\u{00BC}'..='\u{00BE}' | '\u{2150}'..='\u{215E}')
         || matches!(c, '.' | '#' | '$' | '%' | '&' | '*' | '+' | '/' | '=' | '@' | '~'
@@ -9599,6 +9658,7 @@ impl Translator {
         let mut tokens = split_overlong_clauses(tokenize_opts(&text, &number_grammar));
         split_unrecognised_ordinals(&mut tokens, &dict, &number_grammar);
         merge_digit_follow(&mut tokens, &dict);
+        expand_dotted_phrases(&mut tokens, &dict, lang);
         suppress_abbreviation_periods(&mut tokens);
         apply_time_reading(&mut tokens, lang);
         apply_dash_reading(&mut tokens, lang);
