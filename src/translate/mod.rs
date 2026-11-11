@@ -1197,6 +1197,9 @@ pub enum NumberToken {
     /// a thousands word and a word for the rest, each stressed on its own.
     Grouped(String),
     Decimal { integer: String, fractional: String },
+    /// A decimal separator that opens the word (`.5`): not a number to C, whose
+    /// rules speak the separator and then every digit on its own.
+    Bare { separator: char, digits: String },
     Ordinal(OrdinalNumber),
 }
 
@@ -1262,6 +1265,7 @@ impl NumberToken {
         match self {
             NumberToken::Cardinal(digits) | NumberToken::Grouped(digits) => digits.clone(),
             NumberToken::Decimal { integer, fractional } => format!("{integer}.{fractional}"),
+            NumberToken::Bare { separator, digits } => format!("{separator}{digits}"),
             NumberToken::Ordinal(ordinal) => ordinal.surface(),
         }
     }
@@ -1551,7 +1555,7 @@ fn portuguese_number_word(token: &NumberToken) -> Option<String> {
             }
             Some(s)
         }
-        NumberToken::Ordinal(_) => None,
+        NumberToken::Ordinal(_) | NumberToken::Bare { .. } => None,
     }
 }
 
@@ -1998,7 +2002,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // "zero point five"; but immediately after a number it is a *continued*
             // decimal separator — a dotted "1.2.3" version → "one point two point
             // three" — and takes no "zero".
-            let integer = if matches!(tokens.last(), Some(Token::Number(_))) { "" } else { "0" };
+            let continued = matches!(tokens.last(), Some(Token::Number(_)));
             let mut fractional = String::new();
             while let Some(&d) = chars.peek() {
                 if d.is_ascii_digit() {
@@ -2008,7 +2012,11 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     break;
                 }
             }
-            tokens.push(Token::Number(NumberToken::Decimal { integer: integer.into(), fractional }));
+            tokens.push(Token::Number(if continued {
+                NumberToken::Decimal { integer: String::new(), fractional }
+            } else {
+                NumberToken::Bare { separator: c, digits: fractional }
+            }));
         } else if !matches!(c, '.' | ',' | '!' | '?' | ';' | ':')
             && clause_punctuation_class(c).is_some_and(|(_, optional_space)| {
                 // C only ends the clause when the character is followed by
@@ -4021,7 +4029,7 @@ fn number_token_to_phonemes(
             }
             Some(pronunciation.finish())
         }
-        NumberToken::Ordinal(_) => None,
+        NumberToken::Ordinal(_) | NumberToken::Bare { .. } => None,
     }
 }
 
@@ -4311,6 +4319,14 @@ fn push_groups(
 }
 
 fn push_individual_digits(result: &mut Pronunciation, digits: &str, dict: &Dictionary) {
+    let word = individual_digit_word(digits, dict);
+    if !word.is_empty() {
+        result.push_lookup_word(&word);
+    }
+}
+
+/// The digits' names run together, a no-link pause after every second one.
+fn individual_digit_word(digits: &str, dict: &Dictionary) -> Vec<u8> {
     let words: Vec<Vec<u8>> = (0..10u8)
         .map(|d| lookup_num_phonemes(dict, &num_key(d)))
         .collect();
@@ -4329,9 +4345,7 @@ fn push_individual_digits(result: &mut Pronunciation, digits: &str, dict: &Dicti
             word.extend_from_slice(&piece);
         }
     }
-    if !word.is_empty() {
-        result.push_lookup_word(&word);
-    }
+    word
 }
 
 /// Whether C splits the run into digit groups: 5 to 32 digits that exceed
@@ -4373,9 +4387,9 @@ fn rules_phonemes(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> Vec
 
 /// How C speaks the dot it glues to a digit group that ends in the thousands
 /// separator: the list entry for ".", else the rules' reading of it.
-fn group_point_phonemes(dict: &Dictionary, lang_opts: &LangOptions) -> Vec<u8> {
-    let listed = lookup_num_phonemes(dict, ".");
-    let spoken = if listed.is_empty() { rules_phonemes(".", dict, lang_opts) } else { listed };
+fn symbol_phonemes(symbol: &str, dict: &Dictionary, lang_opts: &LangOptions) -> Vec<u8> {
+    let listed = lookup_num_phonemes(dict, symbol);
+    let spoken = if listed.is_empty() { rules_phonemes(symbol, dict, lang_opts) } else { listed };
     spoken.into_iter().take_while(|&b| b != 0).collect()
 }
 
@@ -4387,14 +4401,14 @@ fn spelled_digit_groups(
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     grammar: &NumberGrammar,
-    group_point: &dyn Fn() -> Vec<u8>,
+    speak_symbol: &dyn Fn(&str) -> Vec<u8>,
 ) -> Vec<u8> {
     let mut out = Vec::new();
     let groups = digit_groups(digits, grammar);
     // C inserts the thousands separator after every group but the last; the
     // rules then speak a dot glued to the group's digits.
     let point = if grammar.group_separator == Some('.') && groups.len() > 1 {
-        group_point()
+        speak_symbol(".")
     } else {
         Vec::new()
     };
@@ -4626,9 +4640,9 @@ fn translate_number_token(
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     grammar: &NumberGrammar,
-    group_point: &dyn Fn() -> Vec<u8>,
+    speak_symbol: &dyn Fn(&str) -> Vec<u8>,
 ) -> Option<WordResult> {
-    translate_number_token_with_tail(token, dict, phdata, stress_opts, grammar, group_point, None)
+    translate_number_token_with_tail(token, dict, phdata, stress_opts, grammar, speak_symbol, None)
 }
 
 /// A point's raw phonemes that C's `TranslateNumber_1` appends to the number
@@ -4677,10 +4691,17 @@ fn translate_number_token_with_tail(
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     grammar: &NumberGrammar,
-    group_point: &dyn Fn() -> Vec<u8>,
+    speak_symbol: &dyn Fn(&str) -> Vec<u8>,
     tail: Option<NumberTail>,
 ) -> Option<WordResult> {
     match token {
+        NumberToken::Bare { separator, digits } => {
+            let mut phonemes = speak_symbol(&format!("{separator}{digits}"));
+            phonemes.extend(individual_digit_word(digits, dict));
+            phonemes.push(0);
+            set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
+            Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() })
+        }
         NumberToken::Ordinal(ordinal) => try_ordinal_number(ordinal, dict, phdata, stress_opts, grammar)
             // The number words come from `_1`…`_20`/`_100` list entries, so C's
             // `TranslateInteger` sets `FLAG_FOUND` on the whole token and the
@@ -4689,7 +4710,7 @@ fn translate_number_token_with_tail(
             // — go through the rules and keep `found_in_list = false`.)
             .map(|wr| WordResult { found_in_list: true, ..wr }),
         NumberToken::Cardinal(digits) if reads_digit_by_digit(digits, grammar) => {
-            let phonemes = spelled_digit_groups(digits, dict, phdata, stress_opts, grammar, group_point);
+            let phonemes = spelled_digit_groups(digits, dict, phdata, stress_opts, grammar, speak_symbol);
             Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() })
         }
         _ => {
@@ -4716,7 +4737,7 @@ fn translate_number_token_with_tail(
                 NumberToken::Decimal { integer, .. } => {
                     integer.len() <= MAX_GROUPED_DIGITS && starts_with_word_break(integer)
                 }
-                NumberToken::Ordinal(_) => false,
+                NumberToken::Ordinal(_) | NumberToken::Bare { .. } => false,
             };
             let mut phonemes = number_token_to_phonemes(token, dict, grammar)?;
             if leading_break {
@@ -5461,7 +5482,7 @@ fn word_to_phonemes_inner(
                     phdata,
                     stress_opts,
                     &lang_opts.number_grammar,
-                    &|| group_point_phonemes(dict, lang_opts),
+                    &|symbol| symbol_phonemes(symbol, dict, lang_opts),
                 )
             {
                 return result;
@@ -7326,7 +7347,7 @@ fn roman_number_phonemes(
     const NUM_ROMAN_AFTER: u32 = 0x0400_0000;
     let value = c_roman_value(word, roman_bounds(&dict.lang))?;
     let number = translate_number_token(
-        &NumberToken::Cardinal(value.to_string()), dict, phdata, stress_opts, grammar, &Vec::new,
+        &NumberToken::Cardinal(value.to_string()), dict, phdata, stress_opts, grammar, &|_| Vec::new(),
     )?;
     let roman = trim_lookup(&lookup_num_phonemes(dict, "_roman")).to_vec();
     let digits = number.phonemes.iter().copied().filter(|&b| b != 0);
@@ -7659,7 +7680,8 @@ fn apply_units(tokens: &mut Vec<Token>, lang: &str) {
     let mut out = Vec::with_capacity(tokens.len());
     let mut i = 0;
     while i < tokens.len() {
-        if let Token::Number(n) = &tokens[i] {
+        let bare = matches!(&tokens[i], Token::Number(NumberToken::Bare { .. }));
+        if let (Token::Number(n), false) = (&tokens[i], bare) {
             let j = after(i);
             if let Some(Token::Word(w)) = tokens.get(j) {
                 if let Some((sing, plur)) = unit_words(&w.to_lowercase(), lang) {
@@ -8607,7 +8629,7 @@ pub(crate) fn build_translate_entries(
                     phdata,
                     stress_opts,
                     &options.number_grammar,
-                    &|| group_point_phonemes(dict, options),
+                    &|symbol| symbol_phonemes(symbol, dict, options),
                     number_tail(tokens, token_ix, dict),
                 )
                 .unwrap_or_else(|| {
@@ -11754,15 +11776,15 @@ mod tests {
     }
 
     #[test]
-    fn leading_decimal_point_is_a_number() {
+    fn leading_decimal_point_is_a_bare_separator() {
         let en = NumberGrammar::for_lang("en");
         assert_eq!(
             tokenize_opts(".5", &en),
-            vec![Token::Number(NumberToken::Decimal { integer: "0".into(), fractional: "5".into() })]
+            vec![Token::Number(NumberToken::Bare { separator: '.', digits: "5".into() })]
         );
         assert_eq!(
             tokenize_opts(".25", &en),
-            vec![Token::Number(NumberToken::Decimal { integer: "0".into(), fractional: "25".into() })]
+            vec![Token::Number(NumberToken::Bare { separator: '.', digits: "25".into() })]
         );
         // A dot NOT followed by a digit is still a clause boundary.
         assert!(
@@ -11773,7 +11795,7 @@ mod tests {
         let de = NumberGrammar::for_lang("de");
         assert_eq!(
             tokenize_opts(",5", &de),
-            vec![Token::Number(NumberToken::Decimal { integer: "0".into(), fractional: "5".into() })]
+            vec![Token::Number(NumberToken::Bare { separator: ',', digits: "5".into() })]
         );
     }
 

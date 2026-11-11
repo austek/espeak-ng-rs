@@ -29,11 +29,11 @@ fn dotted_version_has_no_spurious_zero() {
 }
 
 #[test]
-fn standalone_leading_decimal_keeps_zero() {
+fn standalone_leading_decimal_reads_dot_five() {
     let Some(t) = tr() else { return };
     let ipa = |s: &str| t.text_to_ipa(s).unwrap();
-    // ".5" and "0.5" still read "zero point five" (the leading zero is spoken).
-    assert!(ipa(".5").starts_with("zˈiəɹəʊ"), "'.5' = 'zero point five': {}", ipa(".5"));
+    // C reads ".5" as the dot glued to "five" (C: dɒtfˈaɪv); "0.5" keeps its zero.
+    assert_eq!(ipa(".5"), "dɒtfˈaɪv");
     assert!(ipa("0.5").starts_with("zˈiəɹəʊ"), "'0.5' = 'zero point five': {}", ipa("0.5"));
     // An ordinary decimal is unchanged.
     assert_eq!(ipa("3.14"), "θɹˈiː pɔɪnt wˈɒn fˈɔː");
