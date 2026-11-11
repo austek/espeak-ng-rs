@@ -602,6 +602,14 @@ pub struct OrdinalGrammar {
     /// (`_#de` in Afrikaans, `_#ος` in Greek); filled per translation by
     /// [`with_dict_ordinal_suffixes`].
     pub dict_suffixes: Vec<String>,
+    /// Hungarian: a dot before a word the dictionary flags `$alt` (a month
+    /// name) is part of a date, not an ordinal; `declines_alt_words` turns the
+    /// check on and [`with_dict_ordinal_suffixes`] fills `alt_words`.
+    pub declines_alt_words: bool,
+    pub alt_words: Vec<String>,
+    /// Hyphenated suffixes (`-ig`) whose `_#` entry is `$alt2`: Hungarian
+    /// applies them only after an `$alt` word.
+    pub alt2_suffixes: Vec<String>,
 }
 
 /// Word-order rule for tens and units.
@@ -989,10 +997,8 @@ impl NumberGrammar {
         (grammar.c_numbers, grammar.c_numbers2) = ordinal::c_number_flags(lang);
         (grammar.group_separator, grammar.decimal_separator, grammar.space_group) =
             ordinal::c_separators(lang, grammar.c_numbers);
-        // Hungarian is left out: C declines the dot before a month name, which
-        // needs the next word's `$alt` flag.
-        grammar.ordinals.dot_marks_ordinal |=
-            lang != "hu" && grammar.c_numbers & ordinal::NUM_ORDINAL_DOT != 0;
+        grammar.ordinals.dot_marks_ordinal |= grammar.c_numbers & ordinal::NUM_ORDINAL_DOT != 0;
+        grammar.ordinals.declines_alt_words = lang == "hu";
         grammar
     }
 }
@@ -1310,13 +1316,24 @@ fn is_ordinal_suffix(suffix: &str, digits: &str, grammar: &NumberGrammar) -> boo
 /// capitalised, so "am 3. Mai" is not an ordinal.  A dot that ends the clause
 /// (end of text, or before a comma) is dropped by C before the number is read,
 /// so the number stays a cardinal.
-fn dot_marks_ordinal_before(mut rest: impl Iterator<Item = char>) -> bool {
+fn dot_marks_ordinal_before(
+    mut rest: impl Iterator<Item = char> + Clone,
+    declined: &[String],
+) -> bool {
     match rest.next() {
         Some(first) if first.is_whitespace() => {
-            rest.next().is_some_and(|next| next.is_alphabetic() && !next.is_uppercase())
+            let next = rest.clone().next();
+            let lower_start = next.is_some_and(|next| next.is_alphabetic() && !next.is_uppercase());
+            let word: String = rest.take_while(|c| c.is_alphabetic()).flat_map(char::to_lowercase).collect();
+            lower_start && !declined.contains(&word)
         }
         _ => false,
     }
+}
+
+/// Whether the last word before the end of `tokens` is one of `alt_words`.
+fn follows_alt_word(tokens: &[Token], alt_words: &[String]) -> bool {
+    matches!(tokens, [.., Token::Word(word), Token::Space] if alt_words.contains(&word.to_lowercase()))
 }
 
 /// The letters glued to a number anywhere in `text`, lower-cased.
@@ -1331,6 +1348,15 @@ fn glued_number_suffixes(text: &str) -> Vec<String> {
             chars.next();
         }
         let mut suffix = String::new();
+        let mut tail = chars.clone();
+        if tail.peek() == Some(&'.') {
+            tail.next();
+        }
+        if tail.peek() == Some(&'-') && tail.clone().nth(1).is_some_and(char::is_alphabetic) {
+            suffix.push('-');
+            tail.next();
+            chars = tail;
+        }
         while let Some(&next) = chars.peek() {
             if !(next.is_alphabetic() || next == 'º' || next == 'ª') {
                 break;
@@ -1338,7 +1364,7 @@ fn glued_number_suffixes(text: &str) -> Vec<String> {
             suffix.extend(next.to_lowercase());
             chars.next();
         }
-        if !suffix.is_empty() && !found.contains(&suffix) {
+        if !suffix.is_empty() && suffix != "-" && !found.contains(&suffix) {
             found.push(suffix);
         }
     }
@@ -1364,7 +1390,38 @@ fn with_dict_ordinal_suffixes(grammar: &NumberGrammar, text: &str, dict: &Dictio
         .into_iter()
         .filter(|suffix| !lookup_num_phonemes(dict, &format!("_#{suffix}")).is_empty())
         .collect();
+    if grammar.ordinals.declines_alt_words {
+        extended.ordinals.alt_words = alt_flagged_words(text, dict);
+        extended.ordinals.alt2_suffixes = extended
+            .ordinals
+            .dict_suffixes
+            .iter()
+            .filter(|suffix| {
+                lookup(dict, &format!("_#{suffix}"), &LookupCtx { lookup_symbol: true, ..Default::default() })
+                    .is_some_and(|r| r.flags1.0 & crate::dictionary::FLAG_ALT2_TRANS != 0)
+            })
+            .cloned()
+            .collect();
+    }
     extended
+}
+
+/// The words of `text`, lower-cased, whose dictionary entry carries `$alt`.
+fn alt_flagged_words(text: &str, dict: &Dictionary) -> Vec<String> {
+    let mut words: Vec<String> = text
+        .split(|c: char| !c.is_alphabetic())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    words.sort_unstable();
+    words.dedup();
+    words
+        .into_iter()
+        .filter(|word| {
+            lookup(dict, word, &LookupCtx::default())
+                .is_some_and(|r| r.flags1.0 & crate::dictionary::FLAG_ALT_TRANS != 0)
+        })
+        .collect()
 }
 
 /// Spell a Portuguese cardinal group `0..=999` as text (European Portuguese).
@@ -2081,6 +2138,20 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // being swallowed into a bogus ordinal.
             let mut lookahead = chars.clone();
             let mut suffix = String::new();
+            let mut consumed = 0usize;
+            // A hyphen, after a dot where the language writes ordinals with one,
+            // opens a suffix the dictionary lists with the hyphen (`_#-én`).
+            let dotted = grammar.ordinals.dot_marks_ordinal && lookahead.peek() == Some(&'.');
+            let mut hyphen = lookahead.clone();
+            if dotted {
+                hyphen.next();
+            }
+            if hyphen.peek() == Some(&'-') && hyphen.clone().nth(1).is_some_and(char::is_alphabetic) {
+                consumed = usize::from(dotted) + 1;
+                suffix.push('-');
+                hyphen.next();
+                lookahead = hyphen;
+            }
             while let Some(&next) = lookahead.peek() {
                 if next.is_alphabetic() || next == 'º' || next == 'ª' {
                     suffix.push(next);
@@ -2090,8 +2161,10 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 }
             }
             let suffix_lc = suffix.to_lowercase();
-            if !suffix.is_empty() && is_ordinal_suffix(&suffix_lc, &digits, grammar) {
-                for _ in 0..suffix.chars().count() {
+            let gated = grammar.ordinals.alt2_suffixes.contains(&suffix_lc)
+                && !follows_alt_word(&tokens, &grammar.ordinals.alt_words);
+            if !suffix.is_empty() && suffix != "-" && !gated && is_ordinal_suffix(&suffix_lc, &digits, grammar) {
+                for _ in 0..consumed + suffix.chars().count() - usize::from(consumed > 0) {
                     chars.next(); // now consume the suffix from the real iterator
                 }
                 tokens.push(Token::Number(NumberToken::Ordinal(OrdinalNumber {
@@ -2106,7 +2179,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             if grammar.ordinals.dot_marks_ordinal && chars.peek() == Some(&'.') {
                 let mut lookahead = chars.clone();
                 lookahead.next(); // skip '.'
-                if dot_marks_ordinal_before(lookahead) {
+                if dot_marks_ordinal_before(lookahead, &grammar.ordinals.alt_words) {
                     chars.next();
                     tokens.push(Token::Number(NumberToken::Ordinal(OrdinalNumber {
                         digits,
