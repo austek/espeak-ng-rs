@@ -5452,6 +5452,7 @@ fn word_to_phonemes_inner(
             found_in_list: false,
             prefix: None,
             skip_words: 0,
+            late_suffix: Vec::new(),
         };
     }
 
