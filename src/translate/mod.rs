@@ -7419,35 +7419,6 @@ fn apply_dash_reading(tokens: &mut Vec<Token>, lang: &str) {
     *tokens = out;
 }
 
-/// "No." before a number is the numero abbreviation, read "number" (`No. 5` →
-/// "number five", like the `№` sign).  Requires a capital "No", a period, and a
-/// following number — so the word "no" (`No way`, `No. I refuse`) is left alone.
-/// English-only.
-fn apply_number_abbrev(tokens: &mut Vec<Token>, lang: &str) {
-    if primary_bcp47_subtag(lang) != "en" {
-        return;
-    }
-    let is_dot = |t: Option<&Token>| {
-        matches!(t, Some(Token::Punctuation('.')) | Some(Token::ClauseBoundary('.')))
-    };
-    let mut out = Vec::with_capacity(tokens.len());
-    let mut i = 0;
-    while i < tokens.len() {
-        if matches!(&tokens[i], Token::Word(w) if w == "No") && is_dot(tokens.get(i + 1)) {
-            let j = if matches!(tokens.get(i + 2), Some(Token::Space | Token::WordJoin)) { i + 3 } else { i + 2 };
-            if matches!(tokens.get(j), Some(Token::Number(_))) {
-                out.push(Token::Word("number".to_string()));
-                out.push(Token::Space);
-                i = j; // continue from the number itself (the period is dropped)
-                continue;
-            }
-        }
-        out.push(tokens[i].clone());
-        i += 1;
-    }
-    *tokens = out;
-}
-
 /// A lowercase `x` between two numbers is a dimension separator, read "by":
 /// `8x10` → "eight by ten", `1920x1080` → "…by…".  English-only; requires a
 /// number on both sides so algebra (`2x`) and multipliers (`3x faster`) — which
@@ -9739,7 +9710,6 @@ impl Translator {
         apply_decades(&mut tokens, lang);
         apply_units(&mut tokens, lang);
         apply_dimensions(&mut tokens, lang);
-        apply_number_abbrev(&mut tokens, lang);
         apply_space_grouping(&mut tokens, &self.options.number_grammar);
         apply_fractions(&mut tokens, lang);
         apply_exponents(&mut tokens, lang);

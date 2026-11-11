@@ -154,13 +154,12 @@ fn stylized_letters_normalize_to_ascii() {
 }
 
 #[test]
-fn no_abbreviation_reads_number() {
+fn no_abbreviation_is_the_word_no() {
     let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
     let ipa = |s: &str| t.text_to_ipa(s).unwrap();
-    // "No." before a number reads "number" (a port convenience; the `№` sign
-    // instead reads "numero", matching espeak-ng — the two are not the same).
-    assert_eq!(ipa("No. 5"), ipa("number 5"), "No. 5 → number 5");
-    assert_eq!(ipa("issue No. 42"), ipa("issue number 42"));
+    // espeak-ng reads "No." before a number as the word "no" and ends the clause.
+    assert_eq!(ipa("No. 5"), "nˈəʊ\nfˈaɪv");
+    assert_eq!(ipa("issue No. 42"), "ˈɪʃuː nˈəʊ\nfˈɔːti tˈuː");
     // The word "no" is left alone when no number follows.
     assert!(ipa("No way").contains("nˈəʊ"), "No way stays 'no'");
     assert!(ipa("No. I refuse").contains("nˈəʊ"), "No. I refuse stays 'no'");
