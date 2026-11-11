@@ -98,6 +98,7 @@ jobs:
           --test dotted_abbreviations
           --test dotted_phrase_entries
           --test dot_between_words
+          --test hyphen_and_clause_stress
           --test vulgar_fractions
           --test dotted_ordinals
           --test german_ordinals

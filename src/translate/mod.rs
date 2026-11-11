@@ -4736,6 +4736,9 @@ pub struct PosExpect {
     /// still matched with the `s` in front of it — which is what picks
     /// `s) 's` → `I2z` over the bare `'s` → `z`.
     pub prev_letters: [u8; 8],
+    /// The end of the previous word in the clause, NUL-padded, for a rule
+    /// pre-context that reaches back across the word boundary (pt `por_) que`).
+    pub prev_tail: [u8; 8],
     /// The first few UTF-8 bytes of the *following* word, NUL-padded.
     ///
     /// A rule's post-context may reach past the word boundary — Portuguese's
@@ -4750,6 +4753,9 @@ pub struct PosExpect {
     /// A hyphen joins this word to the next, so it does not end a word in C's
     /// phoneme list and the word-final changes (devoicing) do not apply.
     pub hyphen_after: bool,
+    /// `FLAG_HYPHEN` / `FLAG_HYPHEN_AFTER` of the word, for the rule contexts
+    /// that match a hyphen (`-) t (-`).
+    pub hyphen_flags: u32,
     /// Return the phonemes unstressed: the caller is a prefix branch that
     /// stresses prefix and stem together, as C's `TranslateWord3` does.
     pub defer_stress: bool,
@@ -4802,6 +4808,24 @@ fn pos_expect_after(prev: Option<&str>) -> PosExpect {
         noun: NOUN_TRIGGERS.contains(&p),
         past: PAST_TRIGGERS.contains(&p),
         ..Default::default()
+    }
+}
+
+/// C's `expect_verb` / `expect_noun` / `expect_past`: the previous word's list
+/// flags (`$verbf`, `$nounf`, `$pastf`) say which homograph form the next word takes.
+fn pos_expect_after_in(prev: Option<&str>, dict: &Dictionary, dict_condition: u32) -> PosExpect {
+    let legacy = pos_expect_after(prev);
+    let Some(word) = prev else { return legacy };
+    let ctx = LookupCtx { dict_condition, ..Default::default() };
+    let flags2 = lookup(dict, word, &ctx).map_or(0, |r| r.flags2.0);
+    let past = flags2 & 0x8 != 0;
+    let verb = !past && flags2 & 0x1 != 0;
+    let noun = !past && !verb && flags2 & 0x4 != 0;
+    PosExpect {
+        verb: legacy.verb || verb,
+        noun: legacy.noun || noun,
+        past: legacy.past || past,
+        ..legacy
     }
 }
 
@@ -5412,6 +5436,8 @@ fn word_to_phonemes_inner(
     // the boundary (`_) o (_C`).  The translation loop itself stops at the
     // space, so the extra text is only ever read by a context.
     let mut word_buf = Vec::with_capacity(word.len() + 20);
+    let tail = expect.prev_tail.split(|&b| b == 0).next().unwrap_or(&[]);
+    word_buf.extend_from_slice(tail);
     word_buf.push(b' ');
     // Letters of the same word that come *before* this fragment, so a rule's
     // pre-context can see them.  They are not translated: `word_start` points
@@ -5437,7 +5463,7 @@ fn word_to_phonemes_inner(
         dict,
         &word_buf,
         word_start, // past the leading space and any in-word pre-context
-        rule_word_flags,
+        rule_word_flags | expect.hyphen_flags,
         rules_flags,
         &letter_bits,
         lang_opts.dict_condition,
@@ -6002,6 +6028,21 @@ fn english_ordinal_suffix(digits: &str) -> &'static str {
 fn is_single_letter_word(w: &str) -> bool {
     let mut chars = w.chars().filter(|&c| c != '\u{02c8}');
     matches!(chars.next(), Some(c) if c.is_alphabetic()) && chars.next().is_none()
+}
+
+fn word_tail(word: Option<&str>) -> [u8; 8] {
+    let mut out = [0u8; 8];
+    let Some(w) = word else { return out };
+    let start = (w.len().saturating_sub(8)..=w.len()).find(|&k| w.is_char_boundary(k)).unwrap_or(w.len());
+    out[..w.len() - start].copy_from_slice(&w.as_bytes()[start..]);
+    out
+}
+
+fn hyphen_flags_at(tokens: &[Token], ix: usize) -> u32 {
+    let joined_before = ix > 0 && matches!(tokens[ix - 1], Token::WordJoin);
+    let joined_after = matches!(tokens.get(ix + 1), Some(Token::WordJoin));
+    (if joined_before { crate::dictionary::FLAG_HYPHEN } else { 0 })
+        | (if joined_after { crate::dictionary::FLAG_HYPHEN_AFTER } else { 0 })
 }
 
 fn is_dotted_letters(word: &str) -> bool {
@@ -8371,7 +8412,9 @@ pub(crate) fn build_translate_entries(
                         follow_text(tokens, token_ix + 1, &options.lang)
                     },
                     hyphen_after: matches!(tokens.get(token_ix + 1), Some(Token::WordJoin)),
-                    ..pos_expect_after(prev_word.as_deref())
+                    hyphen_flags: hyphen_flags_at(tokens, token_ix),
+                    prev_tail: word_tail(prev_word.as_deref()),
+                    ..pos_expect_after_in(prev_word.as_deref(), dict, options.dict_condition)
                 };
                 let mut wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
                 // The indicator of an ordinal that was read as a number (`3.º`)
@@ -8422,7 +8465,8 @@ pub(crate) fn build_translate_entries(
                 // C drops the opening pause of a word that follows a hyphen.
                 if token_ix > 0 && matches!(tokens[token_ix - 1], Token::WordJoin) {
                     if wr.phonemes.first().is_some_and(|&c| {
-                        phdata.get(c).is_some_and(|p| p.typ == crate::phoneme::PH_PAUSE)
+                        c != crate::phoneme::PHON_SWITCH
+                            && phdata.get(c).is_some_and(|p| p.typ == crate::phoneme::PH_PAUSE)
                     }) {
                         wr.phonemes.remove(0);
                     }
@@ -9079,7 +9123,7 @@ pub(crate) fn promote_translate_entries(
             let own_group = entries[i].word_group;
             let is_last_word = !outer_continues
                 && entries[i + 1..].iter().all(|e| {
-                    e.kind != TranslateEntryKind::Word
+                    !matches!(e.kind, TranslateEntryKind::Word | TranslateEntryKind::LangSwitch)
                         || (own_group.is_some() && e.word_group == own_group)
                 });
             let following_all_unstressed = entries[i + 1..]
@@ -9829,7 +9873,13 @@ impl Translator {
                         codes.iter().any(|c| !c.is_boundary && c.marker.is_none())
                     });
                     if let Some(sw) = sw {
-                        let name = entry.phonemes.iter().position(|&b| b == 0).map_or(&[][..], |z| &entry.phonemes[z + 1..]);
+                        let hyphen_joined = token_ix > 0 && matches!(tokens[token_ix - 1], Token::WordJoin);
+                        if hyphen_joined && open_switch.as_deref() == Some(target.as_str()) {
+                            if codes.last().is_some_and(|c| c.is_boundary && c.marker.is_none()) {
+                                codes.pop();
+                            }
+                        }
+                        let name =entry.phonemes.iter().position(|&b| b == 0).map_or(&[][..], |z| &entry.phonemes[z + 1..]);
                         if !name.is_empty() && open_switch.take().is_some() {
                             codes.push(PhonemeCode {
                                 marker: Some(CodeMarker::LangSwitch(self.options.lang.clone())),
@@ -11000,6 +11050,13 @@ fn tonic_position(clause: &[PhonemeCode], own: &[bool], phdata: &PhonemeData, no
     let (level, _) = stress_levels(clause, phdata);
     let mut run = 0u32;
     let mut best: Option<(u8, usize)> = None;
+    let foreign_primary = clause
+        .iter()
+        .zip(own)
+        .any(|(c, &o)| !o && !c.is_boundary && matches!(c.code, PHON_STRESS_P | PHON_STRESS_P2 | PHON_STRESS_TONIC));
+    if foreign_primary {
+        return None;
+    }
     for (i, &l) in level.iter().enumerate().filter(|&(i, &l)| l != NO_STRESS_LEVEL && own[i]) {
         let l = if l > 1 {
             run = 0;
