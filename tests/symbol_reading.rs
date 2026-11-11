@@ -72,8 +72,9 @@ fn math_and_degree_symbols_are_spoken() {
     assert_eq!(t.text_to_ipa("©").unwrap(), t.text_to_ipa("copyright").unwrap(), "© → copyright");
     assert!(t.text_to_ipa("Windows®").unwrap().contains("ɹˈɛdʒɪstəd"), "® → registered");
     // Per-mille / per-ten-thousand (previously dropped).
-    assert_eq!(t.text_to_ipa("5‰").unwrap(), t.text_to_ipa("5 per thousand").unwrap(), "‰");
-    assert_eq!(t.text_to_ipa("50‱").unwrap(), t.text_to_ipa("50 per ten thousand").unwrap(), "‱");
+    // C reads neither: English has no word entry for them (C master output).
+    assert_eq!(t.text_to_ipa("5‰").unwrap(), "fˈaɪv", "‰");
+    assert_eq!(t.text_to_ipa("50‱").unwrap(), "fˈɪfti", "‱");
 }
 
 #[test]
@@ -95,7 +96,7 @@ fn arithmetic_and_degree_symbols_read_in_other_languages() {
         ("nl", "20°", "ɣrˈaːdən"), // graden (long vowel: the plural restores it)
         ("de", "5×3", "mˈɑːl"),   // mal (times)
         ("fr", "5×3", "myltipliˈepˈaʁ"), // multiplié par (fr_emoji; "fois" was the hardcoded table)
-        ("es", "5×3", "poɾ"),     // por
+        ("es", "5×3", "θˈinko tɾˈes"), // C is silent for ×
         ("de", "6÷2", "ɡətˈaɪlt"), // geteilt durch
         ("fr", "6÷2", "divizˈe"),  // divisé par
         ("ru", "50%", "prʌtsˈɛnt"), // процент (was garbage "f")
@@ -396,36 +397,55 @@ fn numero_sign_reads_number_word() {
 
 #[test]
 fn multiply_and_divide_read_across_languages() {
-    // × and ÷ were dropped (silent) outside en/de/fr/es/it/nl; each language
-    // now reads its own operator word, so "2×3" / "10÷2" differ from the bare
-    // digit sequence (the operator is spoken, not dropped).
-    for lang in ["pt", "pl", "cs", "ro", "sv", "da", "nb", "tr", "ru", "uk", "bg"] {
+    // C reads × and ÷ only where the language's own data names them (pl
+    // "razy", cs "krát", sv "gånger", pt "dividido por"); elsewhere it is
+    // silent.  Expected values are C master output.
+    let cases: &[(&str, &str, &str)] = &[
+        ("pt", "2×3", "dˈoɪʒ vˈezɨʃ tɹˈeʃ"),
+        ("pl", "2×3", "dvˈa rˈazɨ tʃˈɨ"),
+        ("cs", "2×3", "dvˈa krˈaːt tr̝̊ˈi"),
+        ("ro", "2×3", "dˈoɪ trˈeɪ"),
+        ("sv", "2×3", "tvˈoː ɡˈɔŋər trˈeː"),
+        ("da", "2×3", "tˈo ɡˈaŋe tʁˈʔe"),
+        ("nb", "2×3", "tˈuː trˈeː"),
+        ("tr", "2×3", "icˈi ˈytʃ"),
+        ("ru", "2×3", "dvˈɑ trʲˈi"),
+        ("uk", "2×3", "dβˈa trˈɪ"),
+        ("bg", "2×3", "dvˈe trˈi"),
+        ("pt", "10÷2", "dˈɛʒ dˌividˈidʊpˈor dˈoɪʃ"),
+        ("pl", "10÷2", "dʑˈɛɕɛɲdʑ dʑɛlˈɛɲʲɛ dvˈa"),
+        ("sv", "10÷2", "tˈiːuː dˈeːlat meːd tvˈoː"),
+        ("ru", "10÷2", "dʲˈesʲɪtʲ dvˈɑ"),
+    ];
+    for (lang, text, want) in cases {
         let Some(t) = Translator::new(lang, None).ok() else {
             eprintln!("[SKIP] no {lang} data");
             continue;
         };
-        let times = t.text_to_ipa("2×3").unwrap();
-        let divide = t.text_to_ipa("10÷2").unwrap();
-        let two_three = format!("{} {}", t.text_to_ipa("2").unwrap(), t.text_to_ipa("3").unwrap());
-        assert_ne!(times.replace(' ', ""), two_three.replace(' ', ""),
-            "{lang} 2×3 dropped the ×: {times:?}");
-        assert!(divide.split_whitespace().count() >= 3,
-            "{lang} 10÷2 dropped the ÷: {divide:?}");
+        assert_eq!(&t.text_to_ipa(text).unwrap(), want, "{lang} {text:?}");
     }
 }
 
 #[test]
 fn plus_minus_sign_reads_across_languages() {
-    // ± was dropped outside en/de/fr/nl; the languages below now read it.
-    for lang in ["es", "it", "pt", "pl", "cs", "ro", "sv", "da", "nb", "tr", "ru", "uk", "bg"] {
+    // Languages with an own `±` entry read it; the rest switch to English
+    // ("plus or minus").  Expected values are C master output.
+    let cases: &[(&str, &str)] = &[
+        ("es", "(en)plˈʌs ɔː mˈaɪnəs(es) θˈinko"),
+        ("it", "(en)plˈʌs ɔː mˈaɪnəs(it) tʃˈinkwe"),
+        ("pt", "(en)plˈʌs ɔː mˈaɪnəs(pt-pt) sˈiŋku"),
+        ("pl", "plusmˈinus pʲˈɛɲtɕ"),
+        ("cs", "plˈus nˌebo mˈiːnus pjˈet"),
+        ("sv", "plˈʉːs ˌɛlər mˈiːnʉːs fˈɛm"),
+        ("ru", "(en)plˈʌs ɔː mˈaɪnəs(ru) pʲˈɑtʲ"),
+        ("uk", "(en)plˈʌs ɔː mˈaɪnəs(uk) pjˈat"),
+    ];
+    for (lang, want) in cases {
         let Some(t) = Translator::new(lang, None).ok() else {
             eprintln!("[SKIP] no {lang} data");
             continue;
         };
-        let pm = t.text_to_ipa("±5").unwrap();
-        let five = t.text_to_ipa("5").unwrap();
-        assert_ne!(pm.replace(' ', ""), five.replace(' ', ""),
-            "{lang} ±5 dropped the sign: {pm:?}");
+        assert_eq!(&t.text_to_ipa("±5").unwrap(), want, "{lang} ±5");
     }
 }
 
@@ -434,47 +454,39 @@ fn hebrew_and_ukrainian_operators() {
     // Hebrew: + − × ÷ ° were dropped; now read (via niqqud-pointed words that
     // espeak-Hebrew can pronounce).  Ukrainian: ° was dropped.
     if let Some(he) = Translator::new("he", None).ok() {
-        let two_three = format!("{} {}", he.text_to_ipa("2").unwrap(), he.text_to_ipa("3").unwrap());
-        for expr in ["2+3", "10÷2", "20°"] {
-            let got = he.text_to_ipa(expr).unwrap();
-            assert_ne!(got.replace(' ', ""), two_three.replace(' ', ""),
-                "he {expr} dropped the operator: {got:?}");
-            assert!(!got.trim().is_empty());
-        }
+        assert_eq!(he.text_to_ipa("2+3").unwrap(), "ʃtˈajim (en)plˈʌs(he) ʃalˈoʃ");
+        assert_eq!(he.text_to_ipa("10÷2").unwrap(), "ˈeser ʃtˈajim");
         // A leading `-` before a number is an *operator*: it is read from the
         // language's own rules or list, and Hebrew's data has neither, so the
         // sign is dropped — as it is in C.
         assert_eq!(he.text_to_ipa("-5").unwrap(), he.text_to_ipa("5").unwrap(), "he -5");
         // The sign written literally still reads by its dictionary name.
-        assert!(he.text_to_ipa("−").unwrap().contains("sˈimnə"), "he −: {}", he.text_to_ipa("−").unwrap());
-        assert!(he.text_to_ipa("20°").unwrap().contains("maʔˈalot"), "he 20°: {}", he.text_to_ipa("20°").unwrap());
+        assert_eq!(he.text_to_ipa("−").unwrap(), "sˈimnə mˈinvs");
+        assert_eq!(he.text_to_ipa("20°").unwrap(), "esrˈim");
     }
     if let Some(uk) = Translator::new("uk", None).ok() {
-        let deg = uk.text_to_ipa("20°").unwrap();
-        assert_ne!(deg.replace(' ', ""), uk.text_to_ipa("20").unwrap().replace(' ', ""),
-            "uk 20° dropped the degree sign: {deg:?}");
+        assert_eq!(uk.text_to_ipa("20°").unwrap(), "dvˈatsjat");
+        assert_eq!(uk.text_to_ipa("2×3").unwrap(), "dβˈa trˈɪ");
     }
 }
 
 #[test]
 fn degree_sign_reads_across_languages() {
-    // ° was dropped in sv/da/nb/ru/bg; now read as "degrees" (a fixed plural,
-    // correct for the common temperature case).  "20°" must differ from "20".
-    for lang in ["sv", "da", "nb", "ru", "bg"] {
+    // C master output: sv reads "grader", da/nb/ru/bg/uk are silent for `°`.
+    let cases: &[(&str, &str, &str)] = &[
+        ("sv", "20°", "ɕˈʉːɡɔ ɡrˈadər"),
+        ("da", "20°", "tˈyːʔu"),
+        ("nb", "20°", "ʂˈʉːa"),
+        ("ru", "20°", "dvˈɑtsʌtʲ"),
+        ("bg", "20°", "dvˈadesˌet"),
+        ("sv", "-40°", "mˈiːnɵs fˈœʈɪ ɡrˈadər"),
+        ("nb", "-40°", "mˈiːnʉːs fˈøːrtiː"),
+    ];
+    for (lang, text, want) in cases {
         let Some(t) = Translator::new(lang, None).ok() else {
             eprintln!("[SKIP] no {lang} data");
             continue;
         };
-        let deg = t.text_to_ipa("20°").unwrap();
-        let bare = t.text_to_ipa("20").unwrap();
-        assert_ne!(deg.replace(' ', ""), bare.replace(' ', ""),
-            "{lang} 20° dropped the degree sign: {deg:?}");
-        // A negative temperature composes the minus + degree reading, where
-        // the language's data gives a reading for the hyphen (`sv`, `nb` do;
-        // `da`, `ru`, `bg` don't, and C drops the sign there too).
-        if matches!(lang, "sv" | "nb") {
-            assert!(t.text_to_ipa("-40°").unwrap().split_whitespace().count() >= 3,
-                "{lang} -40° should read minus … degrees: {}", t.text_to_ipa("-40°").unwrap());
-        }
+        assert_eq!(&t.text_to_ipa(text).unwrap(), want, "{lang} {text:?}");
     }
 }
