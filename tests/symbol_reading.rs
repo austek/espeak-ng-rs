@@ -205,19 +205,19 @@ fn abbreviations_follow_the_dictionary() {
 fn unit_abbreviations_are_spelled_out() {
     let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
     let ipa = |s: &str| t.text_to_ipa(s).unwrap();
-    // A unit after a number reads as the full word (British spelling), pluralised
-    // unless the amount is one.  The abbreviation may abut the number or not.
+    // C does not expand units: the abbreviation is spelled letter by letter
+    // (C output for each case below).
     let cases: &[(&str, &str)] = &[
-        ("5km", "5 kilometres"),
-        ("1km", "1 kilometre"),   // singular
-        ("10 kg", "10 kilograms"),
-        ("500ml", "500 millilitres"),
-        ("20MB", "20 megabytes"),
-        ("100Hz", "100 hertz"),   // invariant plural
-        ("2.5km", "2.5 kilometres"),
+        ("5km", "fˈaɪv kˌeɪˈɛm"),
+        ("1km", "wˈɒn kˌeɪˈɛm"),
+        ("10 kg", "tˈɛn kˌeɪdʒˈiː"),
+        ("500ml", "fˈaɪvhˈʌndɹɪd ˌɛmˈɛl"),
+        ("20MB", "twˈɛnti ˌɛmbˈiː"),
+        ("100Hz", "wˈɒnhˈʌndɹɪd ˌeɪtʃzˈɛd"),
+        ("2.5km", "tˈuː pɔɪnt fˈaɪv kˌeɪˈɛm"),
     ];
-    for (abbr, spelled) in cases {
-        assert_eq!(ipa(abbr), ipa(spelled), "{abbr} should read as {spelled}");
+    for (abbr, want) in cases {
+        assert_eq!(ipa(abbr), *want, "{abbr}");
     }
     // A non-unit word after a number, or a unit with no number, is untouched.
     assert!(ipa("5 cats").contains("kˈats"), "5 cats unchanged");
@@ -228,22 +228,22 @@ fn unit_abbreviations_are_spelled_out() {
 
 #[test]
 fn units_in_other_languages() {
-    // The metric units read in the language's own words (de Kilometer, fr
-    // kilomètres, es kilómetros, it chilometri).
+    // C spells the abbreviation by letters except where the language's own
+    // dictionary lists it (fr km, kg); the values are C's output.
     let cases: &[(&str, &str, &str)] = &[
-        ("de", "5km", "5 kilometer"),
-        ("de", "10kg", "10 kilogramm"),
-        ("fr", "5km", "5 kilomètres"),
-        ("fr", "1km", "1 kilomètre"),
-        ("es", "5km", "5 kilómetros"),
-        ("it", "5km", "5 chilometri"),
+        ("de", "5km", "fˈʏnf kˌɑːˈɛm"),
+        ("de", "10kg", "tsˈeːn kˌɑːɡˈeː"),
+        ("fr", "5km", "sˈɛ̃k kilomˈɛtʁ"),
+        ("fr", "1km", "ˈœ̃ kilomˈɛtʁ"),
+        ("es", "5km", "θˈinko kˌaˈɛme"),
+        ("it", "5km", "tʃˈinkwe kˌapːaˈɛmme"),
     ];
-    for (lang, abbr, spelled) in cases {
+    for (lang, abbr, want) in cases {
         let Some(t) = Translator::new(lang, None).ok() else {
             eprintln!("[SKIP] no {lang} data");
             continue;
         };
-        assert_eq!(t.text_to_ipa(abbr).unwrap(), t.text_to_ipa(spelled).unwrap(), "{lang} {abbr} → {spelled}");
+        assert_eq!(t.text_to_ipa(abbr).unwrap(), *want, "{lang} {abbr}");
     }
 }
 

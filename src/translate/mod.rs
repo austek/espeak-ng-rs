@@ -7605,100 +7605,6 @@ fn apply_dimensions(tokens: &mut [Token], lang: &str) {
     }
 }
 
-/// Spell out a common, unambiguous unit abbreviation as `(singular, plural)` for
-/// the language.  Only multi-letter units are listed — single letters (`m`, `g`,
-/// `s`, `W`) are too ambiguous.  English uses British spelling (metre/litre); the
-/// continental languages get the regular metric words (data/frequency units,
-/// where "byte"/"octet" and forms differ more, stay English-only).
-fn unit_words(abbr: &str, lang: &str) -> Option<(&'static str, &'static str)> {
-    Some(match primary_bcp47_subtag(lang) {
-        "en" => match abbr {
-            "km" => ("kilometre", "kilometres"),
-            "cm" => ("centimetre", "centimetres"),
-            "mm" => ("millimetre", "millimetres"),
-            "kg" => ("kilogram", "kilograms"),
-            "mg" => ("milligram", "milligrams"),
-            "ml" => ("millilitre", "millilitres"),
-            "kb" => ("kilobyte", "kilobytes"),
-            "mb" => ("megabyte", "megabytes"),
-            "gb" => ("gigabyte", "gigabytes"),
-            "tb" => ("terabyte", "terabytes"),
-            "kw" => ("kilowatt", "kilowatts"),
-            "hz" => ("hertz", "hertz"),
-            "khz" => ("kilohertz", "kilohertz"),
-            "mhz" => ("megahertz", "megahertz"),
-            "ghz" => ("gigahertz", "gigahertz"),
-            "mph" => ("mile per hour", "miles per hour"),
-            _ => return None,
-        },
-        // German metric units are invariable (fünf Kilometer).
-        "de" => match abbr {
-            "km" => ("kilometer", "kilometer"),
-            "cm" => ("zentimeter", "zentimeter"),
-            "mm" => ("millimeter", "millimeter"),
-            "kg" => ("kilogramm", "kilogramm"),
-            "mg" => ("milligramm", "milligramm"),
-            "ml" => ("milliliter", "milliliter"),
-            _ => return None,
-        },
-        "fr" => match abbr {
-            "km" => ("kilomètre", "kilomètres"),
-            "cm" => ("centimètre", "centimètres"),
-            "mm" => ("millimètre", "millimètres"),
-            "kg" => ("kilogramme", "kilogrammes"),
-            "mg" => ("milligramme", "milligrammes"),
-            "ml" => ("millilitre", "millilitres"),
-            _ => return None,
-        },
-        "es" => match abbr {
-            "km" => ("kilómetro", "kilómetros"),
-            "cm" => ("centímetro", "centímetros"),
-            "mm" => ("milímetro", "milímetros"),
-            "kg" => ("kilogramo", "kilogramos"),
-            "mg" => ("miligramo", "miligramos"),
-            "ml" => ("mililitro", "mililitros"),
-            _ => return None,
-        },
-        "it" => match abbr {
-            "km" => ("chilometro", "chilometri"),
-            "cm" => ("centimetro", "centimetri"),
-            "mm" => ("millimetro", "millimetri"),
-            "kg" => ("chilogrammo", "chilogrammi"),
-            "mg" => ("milligrammo", "milligrammi"),
-            "ml" => ("millilitro", "millilitri"),
-            _ => return None,
-        },
-        _ => return None,
-    })
-}
-
-/// Read a unit abbreviation after a number as its full word (`5 km` → "five
-/// kilometres", `1 kg` → "one kilogram").  The unit may abut the number (`5km`)
-/// or be separated by a single space.  Languages without a table are unaffected.
-fn apply_units(tokens: &mut Vec<Token>, lang: &str) {
-    let after = |i: usize| if matches!(tokens.get(i + 1), Some(Token::Space | Token::WordJoin)) { i + 2 } else { i + 1 };
-    let mut out = Vec::with_capacity(tokens.len());
-    let mut i = 0;
-    while i < tokens.len() {
-        let bare = matches!(&tokens[i], Token::Number(NumberToken::Bare { .. }));
-        if let (Token::Number(n), false) = (&tokens[i], bare) {
-            let j = after(i);
-            if let Some(Token::Word(w)) = tokens.get(j) {
-                if let Some((sing, plur)) = unit_words(&w.to_lowercase(), lang) {
-                    let one = matches!(n, NumberToken::Cardinal(s) if s == "1");
-                    out.push(tokens[i].clone());
-                    out.push(Token::Word(if one { sing } else { plur }.to_string()));
-                    i = j + 1;
-                    continue;
-                }
-            }
-        }
-        out.push(tokens[i].clone());
-        i += 1;
-    }
-    *tokens = out;
-}
-
 /// English decades: a bare "s" right after a round-ten number is a spoken decade,
 /// not a letter — `1980s` → "nineteen eighties", `80s`/`'80s` → "eighties",
 /// `1900s` → "nineteen hundreds".  English-only.
@@ -9697,7 +9603,6 @@ impl Translator {
         apply_time_reading(&mut tokens, lang);
         apply_dash_reading(&mut tokens, lang);
         apply_decades(&mut tokens, lang);
-        apply_units(&mut tokens, lang);
         apply_dimensions(&mut tokens, lang);
         apply_space_grouping(&mut tokens, &self.options.number_grammar);
         apply_fractions(&mut tokens, lang);
