@@ -9501,9 +9501,8 @@ impl Translator {
         }
         let text = String::from_utf8_lossy(&entry.phonemes).into_owned();
         let words: Vec<&str> = text.trim_end_matches('\0').split_whitespace().collect();
-        let listed = lookup(&dict, words.first()?, &LookupCtx::default())
-            .is_some_and(|r| r.flags1.found());
-        listed.then(|| words.join(" "))
+        let listed = lookup(&dict, words.first()?, &LookupCtx::default()).is_some();
+        listed.then(|| if by_name { format!("_{c}") } else { words.join(" ") })
     }
 
     /// Translate free text to IPA and report how the last clause ended.
