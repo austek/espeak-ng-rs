@@ -55,11 +55,10 @@ fn math_and_degree_symbols_are_spoken() {
     // "or" links into the following vowel with the English linking r
     // (`IfNextVowelAppend(r-)` in the phoneme's own program), as upstream does.
     assert!(t.text_to_ipa("x≤5").unwrap().contains("ɔːɹ ˈiːkwəl"), "≤ → less than or equal");
-    // Temperature symbols (multi-word readings).
-    let cel = t.text_to_ipa("20℃").unwrap();
-    assert!(cel.contains("dɪɡɹˈiːz") && cel.contains("sˈɛlsɪəs"), "℃ → degrees celsius: {cel}");
-    let fah = t.text_to_ipa("72℉").unwrap();
-    assert!(fah.contains("dɪɡɹˈiːz") && fah.contains("fˈaɹənhˌaɪt"), "℉ → degrees fahrenheit: {fah}");
+    // The one-character temperature signs name nothing in espeak-ng master
+    // (f0fb11a8): only the number is spoken.
+    assert_eq!(t.text_to_ipa("20℃").unwrap(), "twˈɛnti");
+    assert_eq!(t.text_to_ipa("72℉").unwrap(), "sˈɛvənti tˈuː");
     // The two-character forms °C / °F say "degrees" and the letter, as upstream does.
     assert_eq!(t.text_to_ipa("20°C").unwrap(), "twˈɛnti dɪɡɹˈiːz sˈiː");
     assert_eq!(t.text_to_ipa("72°F").unwrap(), "sˈɛvənti tˈuː dɪɡɹˈiːz ˈɛf");
