@@ -34,6 +34,16 @@ fn a_closing_quote_after_a_comma_pauses_at_the_next_clause_start() {
 }
 
 #[test]
+fn a_pause_after_a_number_attaches_to_it() {
+    check(&[
+        ("ku", "5 - 3", "p'endZ_:_: s'e"),
+        ("ku", "3 - a", "s'e_:_: 'a"),
+        ("ku", "5 (b)", "p'endZ_:_: b'e"),
+        ("ku", "12 ( b", "danzd'E#_:_: b'e"),
+    ]);
+}
+
+#[test]
 fn a_dash_between_blanks_pauses_before_the_next_word() {
     check(&[
         ("en", "one - two three", "w'0n_:_: t'u: Tr'i:"),
