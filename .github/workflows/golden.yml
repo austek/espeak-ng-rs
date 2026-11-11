@@ -80,6 +80,7 @@ jobs:
           --test accent_removal
           --test spelled_replacement
           --test dutch_number_word_break
+          --test leading_zero_groups
           --test dutch_nonsyllabic_tonic
           --test dutch_short_stem_vowel_doubling
           --test dutch_prefix_confirmation

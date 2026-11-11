@@ -4350,6 +4350,35 @@ fn digit_groups<'a>(digits: &'a str, grammar: &NumberGrammar) -> Vec<&'a str> {
     starts.windows(2).map(|w| &digits[w[0]..w[1]]).collect()
 }
 
+/// The unstressed phonemes the translation rules give `word`.
+fn rules_phonemes(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(word.len() + 3);
+    buf.push(b' ');
+    buf.extend_from_slice(word.as_bytes());
+    buf.extend_from_slice(&[b' ', 0]);
+    let (mut vowels, mut stressed) = (0i32, 0i32);
+    crate::dictionary::rules::translate_rules(
+        dict,
+        &buf,
+        1,
+        0,
+        0,
+        &dict.letter_bits,
+        lang_opts.dict_condition,
+        &mut vowels,
+        &mut stressed,
+    )
+    .phonemes
+}
+
+/// How C speaks the dot it glues to a digit group that ends in the thousands
+/// separator: the list entry for ".", else the rules' reading of it.
+fn group_point_phonemes(dict: &Dictionary, lang_opts: &LangOptions) -> Vec<u8> {
+    let listed = lookup_num_phonemes(dict, ".");
+    let spoken = if listed.is_empty() { rules_phonemes(".", dict, lang_opts) } else { listed };
+    spoken.into_iter().take_while(|&b| b != 0).collect()
+}
+
 /// Each group of digits is one word, stressed on its own, with the digit
 /// names run together inside it.
 fn spelled_digit_groups(
@@ -4358,9 +4387,18 @@ fn spelled_digit_groups(
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     grammar: &NumberGrammar,
+    group_point: &dyn Fn() -> Vec<u8>,
 ) -> Vec<u8> {
     let mut out = Vec::new();
-    for group in digit_groups(digits, grammar) {
+    let groups = digit_groups(digits, grammar);
+    // C inserts the thousands separator after every group but the last; the
+    // rules then speak a dot glued to the group's digits.
+    let point = if grammar.group_separator == Some('.') && groups.len() > 1 {
+        group_point()
+    } else {
+        Vec::new()
+    };
+    for (ix, group) in groups.iter().enumerate() {
         let mut word = Pronunciation::default();
         for (ix, d) in group.bytes().enumerate() {
             let mut piece = trim_lookup(&lookup_num_phonemes(dict, &num_key(d - b'0'))).to_vec();
@@ -4372,8 +4410,15 @@ fn spelled_digit_groups(
             word.append_lookup_suffix(&piece);
         }
         let mut phonemes = word.finish();
+        let pointed = ix + 1 < groups.len() && !point.is_empty();
+        if pointed {
+            NumberTail { raw: point.clone(), fused: true }.append_to(&mut phonemes);
+        }
         set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
         out.extend(phonemes.iter().copied().take_while(|&b| b != 0));
+        if pointed {
+            out.push(PHON_END_WORD);
+        }
     }
     out.push(0);
     out
@@ -4581,8 +4626,9 @@ fn translate_number_token(
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     grammar: &NumberGrammar,
+    group_point: &dyn Fn() -> Vec<u8>,
 ) -> Option<WordResult> {
-    translate_number_token_with_tail(token, dict, phdata, stress_opts, grammar, None)
+    translate_number_token_with_tail(token, dict, phdata, stress_opts, grammar, group_point, None)
 }
 
 /// A point's raw phonemes that C's `TranslateNumber_1` appends to the number
@@ -4631,6 +4677,7 @@ fn translate_number_token_with_tail(
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     grammar: &NumberGrammar,
+    group_point: &dyn Fn() -> Vec<u8>,
     tail: Option<NumberTail>,
 ) -> Option<WordResult> {
     match token {
@@ -4642,8 +4689,8 @@ fn translate_number_token_with_tail(
             // — go through the rules and keep `found_in_list = false`.)
             .map(|wr| WordResult { found_in_list: true, ..wr }),
         NumberToken::Cardinal(digits) if reads_digit_by_digit(digits, grammar) => {
-            let phonemes = spelled_digit_groups(digits, dict, phdata, stress_opts, grammar);
-            Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0, late_suffix: Vec::new() })
+            let phonemes = spelled_digit_groups(digits, dict, phdata, stress_opts, grammar, group_point);
+            Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() })
         }
         _ => {
             // Over-long runs are bounded like C's word buffer; composed number words are not.
@@ -5408,7 +5455,14 @@ fn word_to_phonemes_inner(
     if rule_word_flags == 0 {
         if let Some(token) = NumberToken::parse(word, &lang_opts.number_grammar) {
             if let Some(result) =
-                translate_number_token(&token, dict, phdata, stress_opts, &lang_opts.number_grammar)
+                translate_number_token(
+                    &token,
+                    dict,
+                    phdata,
+                    stress_opts,
+                    &lang_opts.number_grammar,
+                    &|| group_point_phonemes(dict, lang_opts),
+                )
             {
                 return result;
             }
@@ -7272,7 +7326,7 @@ fn roman_number_phonemes(
     const NUM_ROMAN_AFTER: u32 = 0x0400_0000;
     let value = c_roman_value(word, roman_bounds(&dict.lang))?;
     let number = translate_number_token(
-        &NumberToken::Cardinal(value.to_string()), dict, phdata, stress_opts, grammar,
+        &NumberToken::Cardinal(value.to_string()), dict, phdata, stress_opts, grammar, &Vec::new,
     )?;
     let roman = trim_lookup(&lookup_num_phonemes(dict, "_roman")).to_vec();
     let digits = number.phonemes.iter().copied().filter(|&b| b != 0);
@@ -8553,6 +8607,7 @@ pub(crate) fn build_translate_entries(
                     phdata,
                     stress_opts,
                     &options.number_grammar,
+                    &|| group_point_phonemes(dict, options),
                     number_tail(tokens, token_ix, dict),
                 )
                 .unwrap_or_else(|| {
