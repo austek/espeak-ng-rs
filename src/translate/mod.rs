@@ -6699,17 +6699,35 @@ fn spell_unpronounceable<'a>(
     if posn == 0 {
         return None;
     }
-    let n_stress = out.iter().filter(|&&b| b == PHON_STRESS_P).count();
-    let mut count = 0;
-    for b in out.iter_mut() {
-        if *b == PHON_STRESS_P {
-            count += 1;
-            if count != n_stress && (count % 3 != 0 || count + 1 == n_stress) {
-                *b = PHON_STRESS_3;
-            }
+    set_spelling_stress(&mut out, stress_opts, posn);
+    Some((out, rest))
+}
+
+/// C's `SetSpellingStress`: reduce the primary stresses of spelled letter names.
+///
+/// With `spelling_stress` only the first stays primary; otherwise the last does,
+/// plus every third one.  A stress right after a language switch is left alone.
+fn set_spelling_stress(out: &mut [u8], stress_opts: &StressOpts, n_chars: usize) {
+    let is_counted = |ix: usize, b: u8| {
+        b == PHON_STRESS_P && !(ix > 0 && out[ix - 1] == crate::phoneme::PHON_SWITCH)
+    };
+    let counted: Vec<usize> =
+        (0..out.len()).filter(|&ix| is_counted(ix, out[ix])).collect();
+    if n_chars <= 1 {
+        return;
+    }
+    let n_stress = counted.len();
+    for (ix, &at) in counted.iter().enumerate() {
+        let count = ix + 1;
+        let reduce = if stress_opts.spelling_stress {
+            count > 1
+        } else {
+            count != n_stress && (count % 3 != 0 || count + 1 == n_stress)
+        };
+        if reduce {
+            out[at] = PHON_STRESS_3;
         }
     }
-    Some((out, rest))
 }
 
 /// Identity helper so `is_unpronounceable` can take the options by reference.
@@ -6909,17 +6927,7 @@ fn spell_word_letters(
     if out.is_empty() {
         return None;
     }
-    // `SetSpellingStress`: keep the last primary, reduce the others.
-    let n_stress = out.iter().filter(|&&b| b == PHON_STRESS_P).count();
-    let mut count = 0;
-    for b in out.iter_mut() {
-        if *b == PHON_STRESS_P {
-            count += 1;
-            if count != n_stress && (count % 3 != 0 || count == n_stress - 1) {
-                *b = PHON_STRESS_3;
-            }
-        }
-    }
+    set_spelling_stress(&mut out, stress_opts, chars.iter().filter(|c| c.is_alphanumeric()).count());
     Some(out)
 }
 

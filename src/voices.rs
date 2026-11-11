@@ -44,6 +44,8 @@ pub struct VoiceEntry {
     /// behaviour this way: `stressOpt 1 2 4 6` is
     /// `S_FINAL_DIM_ONLY | S_FINAL_NO_2 | S_2_TO_HEAVY`.
     pub stress_opt: Option<u32>,
+    /// `spellingStress` — spelled letters keep only their first primary stress.
+    pub spelling_stress: bool,
     /// `pitch <base> <range>` from the voice file — the two numbers C turns into
     /// `pitch_base = (base - 9) << 12` and `pitch_range = (range - base) * 108`,
     /// and from which it derives the voice's `formant_factor`.
@@ -224,6 +226,7 @@ fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
     let mut intonation: Option<u8> = None;
     let mut stress_length: Option<Vec<i32>> = None;
     let mut stress_opt: Option<u32> = None;
+    let mut spelling_stress = false;
     let mut stress_rule: Option<Vec<i32>> = None;
     let mut words: Option<Vec<i32>> = None;
     let mut replace: Vec<(u8, String, String)> = Vec::new();
@@ -285,6 +288,7 @@ fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
                     stress_opt = Some(bits);
                 }
             }
+            "spellingstress" | "spellingStress" => spelling_stress = true,
             "stresslength" | "stressLength" => {
                 let n: Vec<i32> = it.by_ref().filter_map(|x| x.parse().ok()).collect();
                 if !n.is_empty() {
@@ -332,7 +336,7 @@ fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
     let file = path.strip_prefix(root).ok()?.to_string_lossy().replace('\\', "/");
     Some(VoiceEntry {
         priority, language, other_languages, languages, name, file, gender, age,
-        intonation, stress_length, stress_opt, pitch, dictionary, stress_rule, words, replace,
+        intonation, stress_length, stress_opt, spelling_stress, pitch, dictionary, stress_rule, words, replace,
         phonemes,
         dict_rules,
         brackets,
@@ -404,6 +408,14 @@ pub fn voice_stress_opt(data_dir: &Path, lang: &str) -> Option<u32> {
         .into_iter()
         .find(|v| v.language.eq_ignore_ascii_case(lang))
         .and_then(|v| v.stress_opt)
+}
+
+/// Whether the language's voice file declares `spellingStress`.
+pub fn voice_spelling_stress(data_dir: &Path, lang: &str) -> bool {
+    list_voices(data_dir)
+        .into_iter()
+        .find(|v| v.language.eq_ignore_ascii_case(lang))
+        .is_some_and(|v| v.spelling_stress)
 }
 
 /// The `stressLength <l0…l7>` table a language's voice file declares, if any.

@@ -168,6 +168,10 @@ pub struct StressOpts {
     /// `LOPT_PREFIXES` — a removed prefix keeps a stress of its own, and the
     /// stem drops to secondary stress before the whole word is stressed.
     pub prefixes: bool,
+    /// `langopts.spelling_stress` — spelled letters keep only the first primary
+    /// stress.  Set per language in `tr_languages.c` and by the `spellingStress`
+    /// voice-file line (Estonian, Finnish).
+    pub spelling_stress: bool,
 }
 
 impl Default for StressOpts {
@@ -193,6 +197,7 @@ impl Default for StressOpts {
             word_gap: 0,
             reduce: 0,
             prefixes: false,
+            spelling_stress: false,
         }
     }
 }
@@ -309,6 +314,7 @@ impl StressOpts {
         if let Some(bits) = crate::voices::voice_stress_opt(data_dir, lang) {
             opts.stress_flags = bits;
         }
+        opts.spelling_stress |= crate::voices::voice_spelling_stress(data_dir, lang);
         opts
     }
 
@@ -328,6 +334,7 @@ impl StressOpts {
         };
 
         opts.prefixes = matches!(primary, "af" | "da" | "de" | "nl");
+        opts.spelling_stress = matches!(primary, "sr" | "hu" | "ltg" | "cs" | "si" | "smj" | "te");
 
         // `langopts.word_gap` — the language's own inter-word pause.
         opts.word_gap = match primary {

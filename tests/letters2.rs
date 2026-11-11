@@ -63,6 +63,17 @@ fn letters_of_an_abandoned_word_never_take_an_atend_entry() {
 }
 
 #[test]
+fn spelling_stress_keeps_only_the_first_primary() {
+    check(&[
+        ("hu", "QRT", "kˈuˌɛrrtˌeː", "k'u,ERRt,e:"),
+        ("hu", "BBC", "bˈeːbˌeːtsˌeː", "b'e:b,e:ts,e:"),
+        ("cs", "BBC", "bˈeːbˌeːtsˌeː", "b'e:b,e:ts,e:"),
+        ("fi", "QRT", "qˈuːˌærtˌeː", "q'u:,&rt,e:"),
+        ("fi", "BBC", "bˈeːbˌeːsˌeː", "b'e:b,e:s,e:"),
+    ]);
+}
+
+#[test]
 fn syllabic_marker_after_a_vowel_of_the_voice_table_is_not_written() {
     check(&[("ku", "ع", "(en)ˈaɹəbɪk(ku)ɔˈaːjn", "_:(en)'ar@bIk(ku)O'a:jn")]);
 }
