@@ -3290,6 +3290,10 @@ struct Pronunciation {
     /// Per word: C's number code starts it with an end-of-word marker (its
     /// tens and units, no hundreds, come first), see [`starts_with_word_break`].
     word_breaks: Vec<bool>,
+    /// C's `speak_missing_thousands`: after a scale word the language lacks,
+    /// the counter makes a later all-zero group name its scale (see
+    /// [`missing_scale_word`]).
+    missing_thousands: i8,
 }
 
 impl Pronunciation {
@@ -3377,9 +3381,9 @@ const MAX_GROUPED_DIGITS: usize = 32;
 const MAX_UNSPLIT_DIGITS: usize = 4;
 
 /// Three-digit groups, most significant first; scale `k` is 10^(3k). `digits` must be ASCII digits.
-fn split_scale_groups(digits: &str, dict: &Dictionary) -> Vec<ScaleGroup> {
+fn split_scale_groups(digits: &str) -> Vec<ScaleGroup> {
     let count = digits.len().div_ceil(3);
-    let mut groups: Vec<ScaleGroup> = digits
+    let groups: Vec<ScaleGroup> = digits
         .as_bytes()
         .rchunks(3)
         .rev()
@@ -3392,26 +3396,6 @@ fn split_scale_groups(digits: &str, dict: &Dictionary) -> Vec<ScaleGroup> {
             }
         })
         .collect();
-    // Fold any non-zero group whose scale word this language does not define
-    // down into the next-lower scale (×1000), so magnitude is still conveyed.
-    // A language that defines every scale word is untouched; one
-    // that stops earlier (French has no `_0M4` past "milliard") still reads
-    // 10^12 as "dix cent milliards" rather than dropping to a bare "un".
-    // Groups are ordered most-significant first, so each carry lands on a group
-    // processed later in the loop and can cascade further down if needed.
-    for i in 0..groups.len() {
-        let Some(scale) = groups[i].scale else { continue };
-        let val = groups[i].value;
-        if val == 0 {
-            continue;
-        }
-        let has_word = !lookup_num_phonemes(dict, &format!("_0M{scale}")).is_empty()
-            || !lookup_num_phonemes(dict, &format!("_1M{scale}")).is_empty();
-        if !has_word && i + 1 < groups.len() {
-            groups[i + 1].value = groups[i + 1].value.saturating_add(val.saturating_mul(1000));
-            groups[i].value = 0;
-        }
-    }
     groups
 }
 
@@ -3464,7 +3448,15 @@ fn append_scale_word(
                 SlavicThousands::Sk => count < 10,
                 _ => false,
             };
-        dst.push_pronunciation(&num3_phonemes_g(dict, count, false, grammar, feminine));
+        if scale_word.is_empty() {
+            let (word, counted) = missing_scale_word(dict, count, scale, dst);
+            if counted {
+                dst.push_lookup_word(&word);
+                return;
+            }
+            scale_word = word;
+        }
+        dst.push_pronunciation(&num3_phonemes_g(dict, count, false, grammar, feminine, false));
         dst.push_lookup_word(&scale_word);
         return;
     }
@@ -3493,6 +3485,16 @@ fn append_scale_word(
         return;
     }
 
+    let mut scale_word = scale_word;
+    if scale_word.is_empty() {
+        let (word, counted) = missing_scale_word(dict, group_value, scale, dst);
+        if counted {
+            dst.push_lookup_word(&word);
+            return;
+        }
+        scale_word = word;
+    }
+
     if scale == 1 && group_value == 1 && grammar.thousands.omit_one_prefix {
         dst.push_lookup_word(&scale_word);
         return;
@@ -3517,6 +3519,13 @@ fn append_cardinal_group(
     preceded: bool,
 ) {
     if group.value == 0 {
+        if let Some(scale) = group.scale.filter(|_| dst.missing_thousands == 1) {
+            let above = lookup_num_phonemes(dict, &format!("_0M{}", scale + 1));
+            if above.is_empty() {
+                dst.push_lookup_word(&lookup_num_phonemes(dict, &format!("_0M{scale}")));
+            }
+        }
+        dst.missing_thousands -= 1;
         return;
     }
 
@@ -3527,6 +3536,34 @@ fn append_cardinal_group(
         let and = lookup_num_phonemes(dict, "_0and");
         dst.insert_at(group_start, trim_lookup(&and));
     }
+    dst.missing_thousands -= 1;
+}
+
+/// C `LookupThousands` for a scale the language has no word for: the next
+/// scale down speaks when that exists too ("thousand" repeated, "billion"
+/// shown as "thousand million"), and `speak_missing_thousands` makes the
+/// all-zero groups after it name their scale.  The flag is true when the entry
+/// already names the count (`_1M1`), so the count is not spoken again.
+fn missing_scale_word(
+    dict: &Dictionary,
+    value: u32,
+    scale: u8,
+    dst: &mut Pronunciation,
+) -> (Vec<u8>, bool) {
+    let mut word = Vec::new();
+    if scale > 3 && lookup_num_phonemes(dict, &format!("_0M{}", scale - 1)).is_empty() {
+        word = lookup_num_phonemes(dict, "_0M2");
+        dst.missing_thousands = 3;
+    }
+    if word.is_empty() {
+        let counted = lookup_num_phonemes(dict, &format!("_{value}M1"));
+        dst.missing_thousands = 2;
+        if !counted.is_empty() {
+            return (counted, true);
+        }
+        word = lookup_num_phonemes(dict, "_0M1");
+    }
+    (word, false)
 }
 
 fn append_group_body(
@@ -3620,7 +3657,7 @@ fn num3_phonemes(
     suppress_null: bool,
     grammar: &NumberGrammar,
 ) -> Pronunciation {
-    num3_phonemes_g(dict, value, suppress_null, grammar, false)
+    num3_phonemes_g(dict, value, suppress_null, grammar, false, false)
 }
 
 /// [`num3_phonemes`] for a group that a *scale word* follows, so a bare digit
@@ -3631,25 +3668,19 @@ fn num3_phonemes_before_scale(
     value: u32,
     grammar: &NumberGrammar,
 ) -> Pronunciation {
-    if value < 20 {
-        let combining = unit_before_scale(dict, value);
-        if !combining.is_empty() && combining != lookup_num_phonemes(dict, &num_key(value)) {
-            let mut p = Pronunciation::default();
-            p.push_lookup_word(&combining);
-            return p;
-        }
-    }
-    num3_phonemes_g(dict, value, false, grammar, false)
+    num3_phonemes_g(dict, value, false, grammar, false, true)
 }
 
 /// Like [`num3_phonemes`], but with `feminine` gender for a trailing 1/2 unit
-/// (Slavic thousands agreement).
+/// (Slavic thousands agreement), and with `combining` the unit under twenty
+/// takes its `_<n>a` form because a scale word follows.
 fn num3_phonemes_g(
     dict: &Dictionary,
     value: u32,
     suppress_null: bool,
     grammar: &NumberGrammar,
     feminine: bool,
+    combining: bool,
 ) -> Pronunciation {
     let hundreds = value / 100;
     let tensunits = value % 100;
@@ -3704,7 +3735,11 @@ fn num3_phonemes_g(
         if tensunits < 20 {
             // For a bare 1/2 (the whole number is just the unit) use the feminine
             // form when required — "одна"/"две" before a feminine scale word.
-            let whole = unit_ph(dict, tensunits, feminine);
+            let whole = if combining && !feminine && tensunits > 0 {
+                unit_before_scale(dict, tensunits)
+            } else {
+                unit_ph(dict, tensunits, feminine)
+            };
             // Resolve the word for "ten": a dedicated `_10`, else the `_1X`
             // ten-prefix (Vietnamese "mười" has only `_1X`).
             let ten_word = || {
@@ -4114,7 +4149,7 @@ fn push_groups(
     split: bool,
 ) -> bool {
     let mut spoken = false;
-    for group in split_scale_groups(digits, dict).into_iter().take(count) {
+    for group in split_scale_groups(digits).into_iter().take(count) {
         let exact = scale_group_is_exact(digits, group.scale);
         let before = result.bytes.len();
         append_cardinal_group(result, group, dict, grammar, exact, spoken);
@@ -4318,7 +4353,7 @@ fn try_ordinal_number(
         set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, STRESS_UNBOUNDED);
         return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0 });
     }
-    let groups = split_scale_groups(digits, dict);
+    let groups = split_scale_groups(digits);
     // C makes every group of a long number a word of its own: the higher ones are
     // cardinals with their scale word, and only the last group takes the ordinal.
     if digits.len() > MAX_UNSPLIT_DIGITS {

@@ -55,6 +55,7 @@ jobs:
           --test number_empty_group_word
           --test number_separators_and_fractions
           --test degree_celsius_sign
+          --test number_missing_scale_words
           --test leading_zero_numbers
           --test arabic_thousand_and
           --test ordinal_unknown_suffix
