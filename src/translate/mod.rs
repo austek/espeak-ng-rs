@@ -1196,7 +1196,9 @@ pub enum NumberToken {
     /// last three digits are not all zero.  C splits that at the separator into
     /// a thousands word and a word for the rest, each stressed on its own.
     Grouped(String),
-    Decimal { integer: String, fractional: String },
+    /// `grouped`: the integer part is four digits written with a thousands
+    /// separator whose last three are not all zero (`1,234.56`).
+    Decimal { integer: String, fractional: String, grouped: bool },
     /// A decimal separator that opens the word (`.5`): not a number to C, whose
     /// rules speak the separator and then every digit on its own.
     Bare { separator: char, digits: String },
@@ -1230,6 +1232,7 @@ impl NumberToken {
                 return Some(NumberToken::Decimal {
                     integer: integer.to_string(),
                     fractional: fractional.to_string(),
+                    grouped: false,
                 });
             }
         }
@@ -1264,7 +1267,7 @@ impl NumberToken {
     fn surface(&self) -> String {
         match self {
             NumberToken::Cardinal(digits) | NumberToken::Grouped(digits) => digits.clone(),
-            NumberToken::Decimal { integer, fractional } => format!("{integer}.{fractional}"),
+            NumberToken::Decimal { integer, fractional, .. } => format!("{integer}.{fractional}"),
             NumberToken::Bare { separator, digits } => format!("{separator}{digits}"),
             NumberToken::Ordinal(ordinal) => ordinal.surface(),
         }
@@ -1532,7 +1535,7 @@ fn portuguese_cardinal_word(digits: &str) -> Option<String> {
 fn portuguese_number_word(token: &NumberToken) -> Option<String> {
     match token {
         NumberToken::Cardinal(digits) | NumberToken::Grouped(digits) => portuguese_cardinal_word(digits),
-        NumberToken::Decimal { integer, fractional } => {
+        NumberToken::Decimal { integer, fractional, .. } => {
             let mut s = portuguese_cardinal_word(integer)?;
             s.push_str(" vírgula");
             // Portuguese reads the fraction as one number when it is short
@@ -2022,7 +2025,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 continue;
             }
             tokens.push(Token::Number(if continued {
-                NumberToken::Decimal { integer: String::new(), fractional }
+                NumberToken::Decimal { integer: String::new(), fractional, grouped: false }
             } else {
                 NumberToken::Bare { separator: c, digits: fractional }
             }));
@@ -2147,9 +2150,11 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 }
             }
             if has_dot {
+                let grouped = separated && digits.len() == MAX_UNSPLIT_DIGITS;
                 tokens.push(Token::Number(NumberToken::Decimal {
                     integer: digits,
                     fractional,
+                    grouped,
                 }));
                 continue;
             }
@@ -4011,7 +4016,7 @@ fn number_token_to_phonemes(
         NumberToken::Cardinal(digits) | NumberToken::Grouped(digits) => {
             Some(cardinal_pronunciation(digits, dict, grammar)?.finish())
         }
-        NumberToken::Decimal { integer, fractional } => {
+        NumberToken::Decimal { integer, fractional, .. } => {
             // An empty integer is a continued decimal ("1.2.3" → "…point three"):
             // render just the point and the fractional digits, no leading cardinal.
             let mut pronunciation = if integer.is_empty() {
@@ -4019,26 +4024,35 @@ fn number_token_to_phonemes(
             } else {
                 cardinal_pronunciation(integer, dict, grammar)?
             };
-            let decimal_point = lookup_num_phonemes(dict, "_dpt");
-            if !decimal_point.is_empty() && !integer.is_empty() {
-                pronunciation.push_lookup_word(&decimal_point);
-            }
-            if grammar.fraction_suffix
-                && push_fraction(&mut pronunciation, fractional, dict, grammar)
-            {
-                return Some(pronunciation.finish());
-            }
-            let consumed = if grammar.fraction_digits_as_number > 0 || grammar.fraction_whole_number {
-                push_fraction_as_number(&mut pronunciation, fractional, dict, grammar)
-            } else {
-                0
-            };
-            for digit in fractional.bytes().skip(consumed) {
-                pronunciation.push_lookup_word(&lookup_num_phonemes(dict, &num_key(digit - b'0')));
-            }
+            push_decimal_part(&mut pronunciation, !integer.is_empty(), fractional, dict, grammar);
             Some(pronunciation.finish())
         }
         NumberToken::Ordinal(_) | NumberToken::Bare { .. } => None,
+    }
+}
+
+/// The decimal point (unless the number continues one) and the fractional digits.
+fn push_decimal_part(
+    pronunciation: &mut Pronunciation,
+    with_point: bool,
+    fractional: &str,
+    dict: &Dictionary,
+    grammar: &NumberGrammar,
+) {
+    let decimal_point = lookup_num_phonemes(dict, "_dpt");
+    if !decimal_point.is_empty() && with_point {
+        pronunciation.push_lookup_word(&decimal_point);
+    }
+    if grammar.fraction_suffix && push_fraction(pronunciation, fractional, dict, grammar) {
+        return;
+    }
+    let consumed = if grammar.fraction_digits_as_number > 0 || grammar.fraction_whole_number {
+        push_fraction_as_number(pronunciation, fractional, dict, grammar)
+    } else {
+        0
+    };
+    for digit in fractional.bytes().skip(consumed) {
+        pronunciation.push_lookup_word(&lookup_num_phonemes(dict, &num_key(digit - b'0')));
     }
 }
 
@@ -4733,6 +4747,24 @@ fn translate_number_token_with_tail(
             // whose numbers this port spells out as *text* instead — Portuguese
             // — go through the rules and keep `found_in_list = false`.)
             .map(|wr| WordResult { found_in_list: true, ..wr }),
+        NumberToken::Decimal { integer, fractional, grouped }
+            if (*grouped || (MAX_UNSPLIT_DIGITS + 1..=MAX_GROUPED_DIGITS).contains(&integer.len()))
+                && !integer.starts_with('0') =>
+        {
+            // C splits the integer at the separator into words of their own; the
+            // last one carries the decimal point and the fraction.
+            let mut pronunciation = grouped_pronunciation(integer, dict, grammar);
+            pronunciation.word_ends.pop();
+            let kept = pronunciation.trimmed_len();
+            pronunciation.bytes.truncate(kept);
+            push_decimal_part(&mut pronunciation, true, fractional, dict, grammar);
+            pronunciation.word_ends.push(pronunciation.bytes.len());
+            let mut phonemes = stress_each_word(pronunciation, phdata, stress_opts, STRESS_UNBOUNDED);
+            if let Some(tail) = tail.as_ref().filter(|t| t.fused) {
+                tail.append_to(&mut phonemes);
+            }
+            Some(WordResult { phonemes, dict_flags: 0, found_in_list: true, prefix: None, skip_words: 0, late_suffix: Vec::new() })
+        }
         NumberToken::Cardinal(digits) if reads_digit_by_digit(digits, grammar) => {
             let phonemes = spelled_digit_groups(digits, dict, phdata, stress_opts, grammar, speak_symbol);
             Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() })
@@ -5363,7 +5395,7 @@ fn word_to_phonemes_inner(
                     match t {
                         Token::Word(w) => parts.push(w.clone()),
                         Token::Number(NumberToken::Cardinal(n)) => parts.push(n.clone()),
-                        Token::Number(NumberToken::Decimal { integer, fractional }) => {
+                        Token::Number(NumberToken::Decimal { integer, fractional, .. }) => {
                             parts.push(format!("{integer}.{fractional}"))
                         }
                         Token::Space | Token::WordJoin | Token::ClauseBoundary(_) | Token::Punctuation(_) => {}
@@ -6282,7 +6314,7 @@ fn apply_space_grouping(tokens: &mut Vec<Token>, grammar: &NumberGrammar) {
                 // 3-digit integer part and keep the fraction on the whole number.
                 let mut fraction: Option<String> = None;
                 if matches!(tokens.get(j), Some(Token::Space | Token::WordJoin)) {
-                    if let Some(Token::Number(NumberToken::Decimal { integer, fractional })) =
+                    if let Some(Token::Number(NumberToken::Decimal { integer, fractional, .. })) =
                         tokens.get(j + 1)
                     {
                         if integer.len() == 3 && is_digits(integer) {
@@ -6296,7 +6328,8 @@ fn apply_space_grouping(tokens: &mut Vec<Token>, grammar: &NumberGrammar) {
                 if groups >= 1 {
                     let token = match fraction {
                         Some(fractional) => {
-                            NumberToken::Decimal { integer: merged, fractional }
+                            let grouped = merged.len() == MAX_UNSPLIT_DIGITS;
+                            NumberToken::Decimal { integer: merged, fractional, grouped }
                         }
                         None => NumberToken::separated(merged),
                     };
@@ -10376,7 +10409,7 @@ fn token_surface(token: &Token, grammar: &NumberGrammar) -> String {
         Token::Word(w) => w.clone(),
         // `NumberToken::surface` writes a decimal point; the source may have
         // used the language's own separator (`de "3,14"`).
-        Token::Number(NumberToken::Decimal { integer, fractional }) => {
+        Token::Number(NumberToken::Decimal { integer, fractional, .. }) => {
             format!("{integer}{}{fractional}", grammar.decimal_separator)
         }
         Token::Number(n) => n.surface(),
@@ -11648,7 +11681,7 @@ mod tests {
         // A decimal after a group still parses.
         assert_eq!(
             tokenize_opts("1,000.5", &en),
-            vec![Token::Number(NumberToken::Decimal { integer: "1000".into(), fractional: "5".into() })]
+            vec![Token::Number(NumberToken::Decimal { integer: "1000".into(), fractional: "5".into(), grouped: true })]
         );
         // Malformed groups (not exactly three digits) keep the comma as a boundary.
         assert!(
@@ -11865,11 +11898,11 @@ mod tests {
         );
         assert_eq!(
             tokenize_opts("3,14", &de),
-            vec![Token::Number(NumberToken::Decimal { integer: "3".into(), fractional: "14".into() })]
+            vec![Token::Number(NumberToken::Decimal { integer: "3".into(), fractional: "14".into(), grouped: false })]
         );
         assert_eq!(
             tokenize_opts("1.000,5", &de),
-            vec![Token::Number(NumberToken::Decimal { integer: "1000".into(), fractional: "5".into() })]
+            vec![Token::Number(NumberToken::Decimal { integer: "1000".into(), fractional: "5".into(), grouped: true })]
         );
 
         // English is the mirror image and stays as before.
@@ -11877,7 +11910,7 @@ mod tests {
         assert_eq!((en.decimal_separator, en.group_separator), ('.', Some(',')));
         assert_eq!(
             tokenize_opts("3.14", &en),
-            vec![Token::Number(NumberToken::Decimal { integer: "3".into(), fractional: "14".into() })]
+            vec![Token::Number(NumberToken::Decimal { integer: "3".into(), fractional: "14".into(), grouped: false })]
         );
     }
 

@@ -208,9 +208,10 @@ fn space_grouped_thousands_compose() {
         // "1234" = "mille deux cent trente-quatre"; "deux cent" drops the liaison
         // /z/ before consonant-initial "cent" (matches espeak-ng: "døsɑ̃").
         assert!(ipa("1000").contains("mˈil") && ipa("1234").contains("døsɑ̃"), "fr plain: {}", ipa("1234"));
-        // A trailing decimal group merges too: "1 234,56" == "1234,56" exactly
-        // (final space group is a 3-digit-integer decimal).
-        assert_eq!(ipa("1 234,56"), ipa("1234,56"), "fr grouped decimal");
+        // A trailing decimal group merges too, but C stresses the thousands word
+        // of "1 234,56" (C: mˈil døsɑ̃ tʁɑ̃tkatʁ viʁɡyl sɛ̃kɑ̃tsˈis) and not that
+        // of "1234,56" (C: mil døsɑ̃ …).
+        assert_eq!(ipa("1 234,56"), "mˈil døsɑ̃ tʁɑ̃tkatʁ viʁɡyl sɛ̃kɑ̃tsˈis", "fr grouped decimal");
         assert_eq!(ipa("1 234 567,89"), ipa("1234567,89"), "fr grouped decimal + millions");
         // Non-3-digit integer part is not merged ("12 34,5" stays split).
         assert!(ipa("12 34,5").contains("dˈuz") && ipa("12 34,5").contains("tʁɑ̃t"), "fr 12 34,5: {}", ipa("12 34,5"));

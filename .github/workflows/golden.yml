@@ -86,6 +86,7 @@ jobs:
           --test decimal_comma_repeated
           --test russian_fraction_word_break
           --test hungarian_thousand_break
+          --test grouped_decimal_words
           --test dutch_nonsyllabic_tonic
           --test dutch_short_stem_vowel_doubling
           --test dutch_prefix_confirmation
