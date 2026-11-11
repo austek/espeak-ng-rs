@@ -6030,6 +6030,28 @@ fn is_single_letter_word(w: &str) -> bool {
     matches!(chars.next(), Some(c) if c.is_alphabetic()) && chars.next().is_none()
 }
 
+/// Whether the codes since the last clause boundary are nothing but the pauses
+/// of a bracket, which belong to the word that follows.
+fn only_pauses_since_clause_start(codes: &[PhonemeCode]) -> bool {
+    let mut spoken = codes.iter().rev().filter(|c| c.marker.is_none());
+    let mut pauses = 0;
+    loop {
+        match spoken.next() {
+            Some(c) if c.code == crate::phoneme::PHON_PAUSE && !c.is_boundary => pauses += 1,
+            Some(c) => return pauses > 0 && c.is_boundary && c.code == 0,
+            None => return false,
+        }
+    }
+}
+
+/// A hyphen with a blank on each side (` - `) or doubled (`--`) is a dash that
+/// pauses before the next word.
+fn spaced_dash(tokens: &[Token], ix: usize) -> bool {
+    let before = ix > 0 && matches!(tokens[ix - 1], Token::Space);
+    let after = matches!(tokens.get(ix + 1), Some(Token::Space));
+    before && after
+}
+
 fn word_tail(word: Option<&str>) -> [u8; 8] {
     let mut out = [0u8; 8];
     let Some(w) = word else { return out };
@@ -9984,7 +10006,14 @@ impl Translator {
                                 .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
                                 .zip(entries[..token_ix].iter().rev())
                                 .any(|(_, e)| e.phonemes.iter().any(|&b| b != 0));
-                        if is_bracket(*c)
+                        let spoken_before = !tokens[..token_ix]
+                            .iter()
+                            .rev()
+                            .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
+                            .zip(entries[..token_ix].iter().rev())
+                            .all(|(_, e)| e.phonemes.iter().all(|&b| b == 0));
+                        let pause_dash = *c == '-' && spaced_dash(&tokens, token_ix) && spoken_before;
+                        if (is_bracket(*c) || pause_dash)
                             && !clause_initial_quote
                             && entry.phonemes.is_empty()
                             && word_follows
@@ -10247,7 +10276,7 @@ impl Translator {
                         .checked_sub(1)
                         .and_then(|k| entries.get(k))
                         .is_some_and(|e| e.no_word_gap);
-                    if !joined {
+                    if !joined && !only_pauses_since_clause_start(&codes) {
                         codes.push(PhonemeCode {
                             code:         15,
                             is_boundary:  true,

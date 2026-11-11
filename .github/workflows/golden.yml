@@ -99,6 +99,7 @@ jobs:
           --test dotted_phrase_entries
           --test dot_between_words
           --test hyphen_and_clause_stress
+          --test quote_and_dash_pauses
           --test vulgar_fractions
           --test dotted_ordinals
           --test german_ordinals
