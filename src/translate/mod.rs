@@ -8423,8 +8423,10 @@ pub(crate) fn build_translate_entries(
                 // The opening of the next word in the same clause, for the
                 // post-contexts that reach across the boundary.
                 let next_word = next_word_opening(tokens, token_ix + 1, &options.lang);
+                // C re-reads each letter of an abandoned word from a buffer outside
+                // the clause text, where `word_end < clause_end` always holds.
                 let expect = PosExpect {
-                    at_clause_end: at_end[token_ix],
+                    at_clause_end: at_end[token_ix] && spelled[token_ix].is_none(),
                     at_clause_start: at_start[token_ix],
                     first_upper: word.chars().next().is_some_and(char::is_uppercase),
                     all_upper: letters.clone().next().is_some()

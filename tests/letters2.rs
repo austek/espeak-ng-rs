@@ -54,6 +54,15 @@ fn a_word_starting_outside_every_alphabet_is_unpronounceable_and_its_rest_comes_
 }
 
 #[test]
+fn letters_of_an_abandoned_word_never_take_an_atend_entry() {
+    check(&[
+        ("en", "ʃab", "ˈɛʃ ɐ bˈiː", "'ES a# b'i:"),
+        ("en", "ʃa", "ˈɛʃ ɐ", "'ES a#"),
+        ("en", "ʃ a", "ˈɛʃ ˈeɪ", "'ES 'eI"),
+    ]);
+}
+
+#[test]
 fn syllabic_marker_after_a_vowel_of_the_voice_table_is_not_written() {
     check(&[("ku", "ع", "(en)ˈaɹəbɪk(ku)ɔˈaːjn", "_:(en)'ar@bIk(ku)O'a:jn")]);
 }
