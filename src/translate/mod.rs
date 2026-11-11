@@ -4764,7 +4764,12 @@ fn translate_number_token_with_tail(
                 NumberToken::Ordinal(_) | NumberToken::Bare { .. } => false,
             };
             let mut phonemes = number_token_to_phonemes(token, dict, grammar)?;
-            if leading_break {
+            // C's LookupNum3 writes `thousands-digit, break, "thousand", break`:
+            // an omitted "one" leaves the break in front.
+            let one = lookup_num_phonemes(dict, &num_key(1));
+            let omits_one = matches!(token, NumberToken::Cardinal(d)
+                if d.len() == 4 && d.starts_with('1') && !phonemes.starts_with(trim_lookup(&one)));
+            if leading_break || omits_one {
                 phonemes.insert(0, PHON_END_WORD);
             }
             // A `%` in a point's entry marks it unstressed (French `_.`): C
