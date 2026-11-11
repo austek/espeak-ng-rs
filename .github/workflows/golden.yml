@@ -84,6 +84,7 @@ jobs:
           --test number_before_dash_pause
           --test leading_decimal_point
           --test decimal_comma_repeated
+          --test russian_fraction_word_break
           --test dutch_nonsyllabic_tonic
           --test dutch_short_stem_vowel_doubling
           --test dutch_prefix_confirmation

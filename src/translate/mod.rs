@@ -4094,14 +4094,21 @@ fn push_fraction(
             };
             // `push_pronunciation` drops the trailing word marker, so the
             // feminine unit below joins the tens into one numeral.
-            pronunciation.push_pronunciation(&p);
+            if tens >= 100 {
+                pronunciation.append_lookup_suffix(&p.bytes[..p.trimmed_len()]);
+            } else {
+                pronunciation.push_pronunciation(&p);
+            }
         }
         let fem = lookup_num_phonemes(dict, if value % 10 == 1 { "_1f" } else { "_2f" });
         if fem.is_empty() {
             return false;
         }
         // Part of the same numeral, as every other tens+units pair is.
-        if tens > 0 {
+        if tens >= 100 && tens % 100 == 0 {
+            pronunciation.start_word();
+            pronunciation.append_lookup_suffix(&fem);
+        } else if tens > 0 {
             pronunciation.append_lookup_suffix(&fem);
         } else {
             pronunciation.push_lookup_word(&fem);
@@ -4110,7 +4117,15 @@ fn push_fraction(
         let Some(p) = cardinal_pronunciation(&value.to_string(), dict, grammar) else {
             return false;
         };
-        pronunciation.push_pronunciation(&p);
+        // C's LookupNum3 opens with a word break only below 100.
+        if value >= 100 {
+            pronunciation.append_lookup_suffix(&p.bytes[..p.trimmed_len()]);
+            if value % 100 == 0 {
+                pronunciation.start_word();
+            }
+        } else {
+            pronunciation.push_pronunciation(&p);
+        }
     }
 
     // C `strcat(ph_buf, buf1)`: the scale word joins the numerator *inside* one
