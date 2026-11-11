@@ -54,6 +54,14 @@ fn a_word_starting_outside_every_alphabet_is_unpronounceable_and_its_rest_comes_
 }
 
 #[test]
+fn the_rest_after_spelled_letters_starts_a_fresh_word_unless_it_opens_with_an_apostrophe() {
+    check(&[
+        ("en", "ʃxyz", "ˈɛʃzˈaɪz", "'ESz'aIz"),
+        ("en", "s's", "ˈɛsɪz", "'EsI2z"),
+    ]);
+}
+
+#[test]
 fn letters_of_an_abandoned_word_never_take_an_atend_entry() {
     check(&[
         ("en", "ʃab", "ˈɛʃ ɐ bˈiː", "'ES a# b'i:"),

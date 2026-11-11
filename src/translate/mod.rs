@@ -8617,7 +8617,12 @@ pub(crate) fn build_translate_entries(
                             // the letters already spelled stay available as a
                             // rule pre-context (`s's` → `'Es` + `s) 's` → `I2z`,
                             // not the bare `'s` → `z`).
-                            let spelled = &lower[..lower.len() - rest.len()];
+                            // C blanks the byte before the rest unless it opens with an apostrophe.
+                            let spelled = if rest.starts_with('\'') {
+                                &lower[..lower.len() - rest.len()]
+                            } else {
+                                ""
+                            };
                             let mut prev_letters = [0u8; 8];
                             let b = spelled.as_bytes();
                             let keep = b.len().min(prev_letters.len());
