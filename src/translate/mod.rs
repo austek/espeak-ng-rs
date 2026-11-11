@@ -1942,6 +1942,7 @@ fn split_overlong_clauses(tokens: Vec<Token>) -> Vec<Token> {
 
 pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     let text = normalize_number_symbols_except(text, &grammar.listed_symbols);
+    let text = ellipsis_for_dot_runs(text.as_ref());
     let text = text.as_ref();
     let mut tokens = Vec::new();
     let mut chars = text.chars().peekable();
@@ -6254,6 +6255,27 @@ where
         Some(c) if c.is_whitespace() => after.find(|c| !c.is_whitespace()).is_some_and(char::is_lowercase),
         _ => false,
     }
+}
+
+/// Three or more dots in a row read as one ellipsis (C `ReadClause`).
+fn ellipsis_for_dot_runs(text: &str) -> std::borrow::Cow<'_, str> {
+    if !text.contains("...") {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '.' {
+            out.push(c);
+            continue;
+        }
+        let run = 1 + std::iter::from_fn(|| chars.next_if_eq(&'.')).count();
+        match run {
+            1..=2 => out.extend(std::iter::repeat_n('.', run)),
+            _ => out.push('\u{2026}'),
+        }
+    }
+    std::borrow::Cow::Owned(out)
 }
 
 /// Whether an ASCII clause punctuation mark `c` ends the clause, given the
