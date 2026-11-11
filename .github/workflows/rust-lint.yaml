@@ -1,0 +1,90 @@
+name: Rust Lint
+
+on:
+  push:
+    branches:
+      - main
+      - dengjen
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clippy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Report-only: the tree currently carries 128+ clippy warnings, too many for a mechanical
+    # fix. Remove continue-on-error once they are cleared so -D warnings gates again.
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo install clippy-sarif sarif-fmt --locked
+      - name: cargo clippy
+        run: |
+          set -o pipefail
+          cargo clippy --all-targets --message-format=json -- -D warnings \
+            | clippy-sarif | tee clippy-results.sarif | sarif-fmt
+      - name: upload clippy SARIF
+        # Fork and Dependabot PRs get a read-only token, which the SARIF upload rejects.
+        if: always() && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]'))
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: clippy-results.sarif
+
+  semver-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: resolve baseline tag
+        id: baseline
+        run: |
+          tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD)
+          git worktree add "$RUNNER_TEMP/baseline" "$tag"
+          echo "root=$RUNNER_TEMP/baseline" >> "$GITHUB_OUTPUT"
+      - name: cargo semver-checks
+        uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
+        with:
+          rust-toolchain: manual
+          baseline-root: ${{ steps.baseline.outputs.root }}
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      checks: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # crossbeam-epoch 0.9.18 is transitive via rayon (criterion, parallel feature);
+          # the fix needs a Cargo.lock update outside this change.
+          # tokio AsyncFd I/O-safety unsoundness: the crate never calls AsyncFd.
+          ignore: RUSTSEC-2026-0204,RUSTSEC-2026-0386
