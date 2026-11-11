@@ -8176,6 +8176,23 @@ fn follow_text(tokens: &[Token], from: usize, lang: &str) -> [u8; 32] {
     out
 }
 
+/// Whether the symbol is the only thing its clause says — the case C reads
+/// as a single character by name instead of as a word of running text.
+fn symbol_stands_alone(tokens: &[Token], token_ix: usize) -> bool {
+    let start = tokens[..token_ix]
+        .iter()
+        .rposition(|t| matches!(t, Token::ClauseBoundary(_)))
+        .map_or(0, |i| i + 1);
+    let end = tokens[token_ix + 1..]
+        .iter()
+        .position(|t| matches!(t, Token::ClauseBoundary(_)))
+        .map_or(tokens.len(), |i| token_ix + 1 + i);
+    tokens[start..end]
+        .iter()
+        .enumerate()
+        .all(|(i, t)| start + i == token_ix || matches!(t, Token::Space))
+}
+
 pub(crate) fn build_translate_entries(
     tokens: &[Token],
     dict: &Dictionary,
@@ -8183,6 +8200,7 @@ pub(crate) fn build_translate_entries(
     stress_opts: &StressOpts,
     options: &LangOptions,
     english_has: &dyn Fn(char) -> bool,
+    english_word: &dyn Fn(char) -> Option<String>,
     spelled: &[Option<usize>],
 ) -> Vec<TranslateEntry> {
     let mut entries: Vec<TranslateEntry> = Vec::with_capacity(tokens.len());
@@ -8746,6 +8764,12 @@ pub(crate) fn build_translate_entries(
                         ..PosExpect::default()
                     },
                 );
+                let english_reading = (mode == SymbolName::Inline
+                    && phonemes.first() == Some(&crate::phoneme::PHON_SWITCH)
+                    && !dict_names_symbol(dict, *c, options.dict_condition)
+                    && !symbol_stands_alone(tokens, token_ix))
+                .then(|| english_word(*c));
+                let phonemes = if english_reading == Some(None) { Vec::new() } else { phonemes };
                 let phonemes = if max3 && repeat_of_symbol == Some(*c) {
                     repeat_count += 1;
                     if repeat_count > 3 { Vec::new() } else { phonemes }
@@ -8773,10 +8797,10 @@ pub(crate) fn build_translate_entries(
                         // fallback is C's `LookupCharName`, which reads the
                         // `_<char>` entry there (`he @` → English `_@` → "at
                         // sign").  Without either the marker leaked out as `_^_`.
-                        word_lower: Some(if dict_names_symbol(dict, *c, options.dict_condition) {
-                            c.to_string()
-                        } else {
-                            format!("_{c}")
+                        word_lower: Some(match &english_reading {
+                            Some(Some(word)) => word.clone(),
+                            _ if dict_names_symbol(dict, *c, options.dict_condition) => c.to_string(),
+                            _ => format!("_{c}"),
                         }),
                         no_word_gap: false, word_group: None,
                         // Phonemes from the dictionary are a *translation
@@ -9449,6 +9473,31 @@ impl Translator {
         None
     }
 
+    /// What C's `LookupLetter` makes of a symbol this language cannot name, when
+    /// English is asked to speak it inside running text: the symbol itself, or
+    /// the first word of its replacement text, and `None` when English's own
+    /// entry is missing or that word is not in its list.
+    pub(crate) fn symbol_switch_word(&self, c: char) -> Option<String> {
+        let dict_stem = resolve_dict_stem(&self.data_dir, &self.options.lang)?;
+        let dict_bytes = std::fs::read(dict_path(&self.data_dir, &dict_stem)?).ok()?;
+        let mut dict = Dictionary::from_bytes(&dict_stem, dict_bytes).ok()?;
+        dict.dict_condition = self.options.dict_condition;
+        let ctx = LookupCtx {
+            lookup_symbol: true,
+            dict_condition: self.options.dict_condition,
+            ..Default::default()
+        };
+        let entry = lookup(&dict, &c.to_string(), &ctx).filter(|r| r.flags1.found())?;
+        if !entry.flags1.textmode() {
+            return Some(c.to_string());
+        }
+        let text = String::from_utf8_lossy(&entry.phonemes).into_owned();
+        let words: Vec<&str> = text.trim_end_matches('\0').split_whitespace().collect();
+        let listed = lookup(&dict, words.first()?, &LookupCtx::default())
+            .is_some_and(|r| r.flags1.found());
+        listed.then(|| words.join(" "))
+    }
+
     /// Translate free text to IPA and report how the last clause ended.
     ///
     /// The Rust form of upstream's `espeak_TextToPhonemesWithTerminator`
@@ -9677,6 +9726,12 @@ impl Translator {
                 .as_ref()
                 .is_some_and(|en| en.char_name_phonemes(c).is_some())
         };
+        let english_word = |c: char| {
+            english
+                .get_or_init(|| Translator::new("en", Some(&self.data_dir)).ok())
+                .as_ref()
+                .and_then(|en| en.symbol_switch_word(c))
+        };
         let mut entries = build_translate_entries(
             &tokens,
             &dict,
@@ -9684,6 +9739,7 @@ impl Translator {
             &stress_opts,
             &self.options,
             &english_has,
+            &english_word,
             &spelled,
         );
         promote_translate_entries(&mut entries, &phdata, lang);

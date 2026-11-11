@@ -382,17 +382,16 @@ fn numero_sign_reads_number_word() {
     if let Some(t) = en() {
         assert!(t.text_to_ipa("№5").unwrap().contains("njˈuːmə"), "en №5 = numero five");
     }
-    // Other languages have no numero word of their own, so the character is
-    // named in the default voice — C's `LookupCharName` fallback, which it
-    // reaches as well, though its switch then loses the English reading
-    // (`$textmode`) and leaves nothing.  See GAPS.md §3c #62.
+    // Other languages have no numero word of their own, and C's switch to
+    // English finds no listed word for it, so the sign is silent (C master:
+    // `-v fr №5` is `sˈɛ̃k`, `-v es` `θˈinko`, `-v uk` `pjˈat`, `-v pl` `pʲˈɛɲtɕ`).
     for lang in ["fr", "es", "uk", "pl"] {
         let Some(t) = Translator::new(lang, None).ok() else {
             eprintln!("[SKIP] no {lang} data");
             continue;
         };
         let got = t.text_to_ipa("№5").unwrap();
-        assert!(got.contains("(en)") && got.contains("njˈuːmə"), "{lang} №5: {got}");
+        assert_eq!(got, t.text_to_ipa("5").unwrap(), "{lang} №5: {got}");
     }
 }
 
@@ -437,7 +436,7 @@ fn hebrew_and_ukrainian_operators() {
     // espeak-Hebrew can pronounce).  Ukrainian: ° was dropped.
     if let Some(he) = Translator::new("he", None).ok() {
         let two_three = format!("{} {}", he.text_to_ipa("2").unwrap(), he.text_to_ipa("3").unwrap());
-        for expr in ["2+3", "2×3", "10÷2", "20°"] {
+        for expr in ["2+3", "10÷2", "20°"] {
             let got = he.text_to_ipa(expr).unwrap();
             assert_ne!(got.replace(' ', ""), two_three.replace(' ', ""),
                 "he {expr} dropped the operator: {got:?}");

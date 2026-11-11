@@ -23,6 +23,36 @@ fn bracket_after_a_clause_break_keeps_the_break() {
 }
 
 #[test]
+fn comma_groups_thousands_unless_the_language_uses_a_decimal_comma() {
+    cases(
+        "ku",
+        "--ipa",
+        &[
+            ("1,000", "hɛzˈar"),
+            ("1,000,000", "mɪljˈon"),
+            ("12,345", "danzdˈɛ hɛzˈar usˈesˈɛdu tʃˈɪlupˈendʒ"),
+        ],
+    );
+}
+
+#[test]
+fn symbols_english_cannot_read_by_word_stay_silent_in_running_text() {
+    cases(
+        "ku",
+        "--ipa",
+        &[
+            ("a ° b", "a bˈe"),
+            ("a × b", "a bˈe"),
+            ("a © b", "a bˈe"),
+            ("36.6°", "sˈiuʃˈɛʃ xal ʃˈɛʃ"),
+            ("50 °C", "pendʒˈi dʒˈe"),
+            ("a ± b", "a (en)plˈʌs ɔː mˈaɪnəs(ku) bˈe"),
+            ("a ⅓ b", "a (en)wˈɒn θˈɜːd(ku) bˈe"),
+        ],
+    );
+}
+
+#[test]
 fn adjacent_brackets_pause_once() {
     cases(
         "ku",
