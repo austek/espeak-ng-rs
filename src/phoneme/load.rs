@@ -537,7 +537,7 @@ pub fn parse_phontab(data: &[u8]) -> Result<Vec<PhonemeTabList>> {
 
 fn read_file(dir: &Path, name: &str) -> Result<Vec<u8>> {
     let path = dir.join(name);
-    std::fs::read(&path).map_err(|e| Error::Io(e))
+    std::fs::read(&path).map_err(Error::Io)
 }
 
 // ---------------------------------------------------------------------------

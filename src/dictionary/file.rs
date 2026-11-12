@@ -197,7 +197,7 @@ impl Dictionary {
         let path = crate::translate::dict_path(data_dir, lang)
             .unwrap_or_else(|| data_dir.join(format!("{}_dict", lang)));
         let data = std::fs::read(&path)
-            .map_err(|e| Error::Io(e))?;
+            .map_err(Error::Io)?;
 
         Self::from_bytes(lang, data)
     }

@@ -189,7 +189,7 @@ pub struct Wavegen {
     pub out: Vec<i16>,
 }
 
-fn env_table<'a>(env: Env, phondata: &'a [u8]) -> &'a [u8] {
+fn env_table(env: Env, phondata: &[u8]) -> &[u8] {
     match env {
         Env::Builtin(ix) => &ENVELOPE_DATA[ix.min(ENVELOPE_DATA.len() - 1)][..],
         Env::Data(off) => phondata.get(off..off + 128).unwrap_or(&ENVELOPE_DATA[0][..]),

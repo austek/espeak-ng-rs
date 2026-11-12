@@ -516,7 +516,7 @@ mod tests {
     fn table_register_and_lookup() {
         let dir = std::env::temp_dir();
         let path = dir.join("espeak_rs_test_icon.wav");
-        std::fs::write(&path, make_wav(&vec![500i16; 50], 22_050, 1)).unwrap();
+        std::fs::write(&path, make_wav(&[500i16; 50], 22_050, 1)).unwrap();
 
         let mut table = SoundIconTable::new(22_050);
         let idx = table.register_punct('!', &path, &dir).unwrap();
@@ -530,7 +530,7 @@ mod tests {
     fn split_punctuation_icon() {
         let dir = std::env::temp_dir();
         let path = dir.join("espeak_rs_test_bell.wav");
-        std::fs::write(&path, make_wav(&vec![300i16; 20], 22_050, 1)).unwrap();
+        std::fs::write(&path, make_wav(&[300i16; 20], 22_050, 1)).unwrap();
 
         let mut table = SoundIconTable::new(22_050);
         let idx = table.register_punct('#', &path, &dir).unwrap();
@@ -547,7 +547,7 @@ mod tests {
     fn split_ssml_audio() {
         let dir = std::env::temp_dir();
         let path = dir.join("espeak_rs_test_audio.wav");
-        std::fs::write(&path, make_wav(&vec![100i16; 30], 22_050, 1)).unwrap();
+        std::fs::write(&path, make_wav(&[100i16; 30], 22_050, 1)).unwrap();
 
         let mut table = SoundIconTable::new(22_050);
         let src = path.to_string_lossy().to_string();

@@ -1750,13 +1750,8 @@ fn trace_push(entry: RuleTrace) {
 /// `group_chars` is the letter group the rule lives under, `rule` the compiled
 /// bytes from just after the group header up to (not including) `RULE_PHONEMES`.
 pub fn decode_rule(group_chars: &[u8], rule: &[u8], unpron_test: bool) -> String {
-    const SYMBOLS: [u8; 32] = [
-        b' ', b' ', b' ', b' ', b' ', b' ', b' ', b' ', b' ', b' ',
-        b'&', b'%', b'+', b'#', b'S', b'D', b'Z', b'A', b'L', b'!',
-        b' ', b'@', b'?', b'J', b'N', b'K', b'V', b'?', b'T', b'X',
-        b'?', b'W',
-    ];
-    const SYMBOLS_LG: [u8; 7] = [b'A', b'B', b'C', b'H', b'F', b'G', b'Y'];
+    const SYMBOLS: [u8; 32] = *b"          &%+#SDZAL! @?JNKV?TX?W";
+    const SYMBOLS_LG: [u8; 7] = *b"ABCHFGY";
 
     let mut buf: Vec<u8> = group_chars.to_vec();
     let mut buf_pre: Vec<u8> = Vec::new();

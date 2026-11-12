@@ -325,7 +325,7 @@ pub fn utf8_decode_one(buf: &[u8]) -> (u32, usize) {
 /// `buf` is too small.
 pub fn utf8_encode_one(cp: u32, buf: &mut [u8]) -> usize {
     if cp < 0x80 {
-        debug_assert!(buf.len() >= 1);
+        debug_assert!(!buf.is_empty());
         buf[0] = cp as u8;
         1
     } else if cp < 0x800 {

@@ -474,7 +474,7 @@ mod tests {
         let segs = parse_ipa("ˈhɛloʊ", &default_voice());
         let out = synthesize_segments(&segs, &default_voice());
         // The synthesizer clamps to ±32767; no sample should be i16::MIN.
-        assert!(out.iter().all(|&s| s >= i16::MIN + 1),
+        assert!(out.iter().all(|&s| s > i16::MIN),
             "unexpected i16::MIN in output");
     }
 

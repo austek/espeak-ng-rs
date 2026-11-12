@@ -2055,7 +2055,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             }
             tokens.push(Token::InlinePhonemes(content));
         } else if c == grammar.decimal_separator
-            && chars.peek().map_or(false, |d| d.is_ascii_digit())
+            && chars.peek().is_some_and(|d| d.is_ascii_digit())
         {
             // A decimal point with no integer part.  Standalone (".5") it reads
             // "zero point five"; but immediately after a number it is a *continued*
@@ -2205,8 +2205,8 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     let d3 = lookahead.next();
                     let three_digits = [d1, d2, d3]
                         .iter()
-                        .all(|c| c.map_or(false, |c| c.is_ascii_digit()));
-                    let more_digits = lookahead.peek().map_or(false, |c| c.is_ascii_digit());
+                        .all(|c| c.is_some_and(|c| c.is_ascii_digit()));
+                    let more_digits = lookahead.peek().is_some_and(|c| c.is_ascii_digit());
                     if three_digits && !more_digits {
                         chars.next(); // consume the separator; the 3 digits accumulate below
                         separated = true;
@@ -9285,7 +9285,7 @@ pub(crate) fn promote_translate_entries(
         let Some(w) = entries[i0].word_lower.as_deref() else {
             return;
         };
-        if !WH.iter().any(|&kw| kw == w) {
+        if !WH.contains(&w) {
             return;
         }
         if !entries[i1]

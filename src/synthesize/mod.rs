@@ -2000,7 +2000,7 @@ fn synthesize_phoneme_info(
                 if scaled_sum > 0 {
                     let scale256 = target_samples * 256 / scaled_sum.max(1);
                     for fr in &mut seq.frames[body_start..body_end-1] {
-                        let new_len = ((fr.length as usize * scale256 / 256).max(1) as u8).min(255);
+                        let new_len = (fr.length as usize * scale256 / 256).max(1) as u8;
                         fr.length = new_len;
                     }
                 }
@@ -2284,7 +2284,7 @@ mod tests {
         let pcm = s.synthesize("ðə").expect("should synthesise 'the'");
         // Must be non-empty; synthesizer clamps to ±32767 so no sample is i16::MIN.
         assert!(!pcm.is_empty());
-        assert!(pcm.iter().all(|&x| x >= i16::MIN + 1));
+        assert!(pcm.iter().all(|&x| x > i16::MIN));
     }
 
     #[test]
