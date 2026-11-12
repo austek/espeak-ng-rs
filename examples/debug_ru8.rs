@@ -24,17 +24,12 @@ fn main() {
     }
     
     println!("\nGroups3 entries populated:");
-    let mut count = 0;
-    for i in 0..128usize {
-        if dict.groups.groups3[i].is_some() {
-            count += 1;
-        }
-    }
+    let count = dict.groups.groups3.iter().take(128).filter(|g| g.is_some()).count();
     println!("  count = {count}");
-    
+
     println!("\nFirst 50 groups3 entries:");
-    for i in 0..50usize {
-        if let Some(off) = dict.groups.groups3[i] {
+    for (i, group) in dict.groups.groups3.iter().enumerate().take(50) {
+        if let Some(off) = *group {
             println!("  groups3[{i}] = offset {off}");
         }
     }

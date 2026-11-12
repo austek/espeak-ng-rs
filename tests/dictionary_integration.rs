@@ -634,8 +634,7 @@ fn find_hello_by_phonemes() {
     // Scan all buckets for entry with phonemes [65, 13, 55, 144] = [h, @, l, oU]
     let target_ph = [65u8, 13, 55, 144];
     
-    for h in 0..1024usize {
-        let bucket_start = dict.hashtab[h];
+    for (h, &bucket_start) in dict.hashtab.iter().enumerate().take(1024) {
         let mut pos = bucket_start;
         loop {
             if pos >= raw_data.len() { break; }
