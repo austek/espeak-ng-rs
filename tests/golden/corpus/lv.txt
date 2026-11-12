@@ -1,0 +1,286 @@
+a
+f
+k
+ō
+u
+α
+ι
+σ
+dž
+bet
+gan
+jel
+ko
+nedz
+pār
+projām
+tad
+tiklab
+un
+juo
+šuo
+kādam
+kuras
+kuŗa
+mēs
+paša
+savam
+šī
+tajā
+tevī
+viņai
+viņi
+itaida
+jius
+mes
+obejis
+sova
+šytei
+tovejais
+aizvien
+labrīt
+nekur
+patlaban
+vismaz
+as
+est
+na
+rpi
+utjpr
+apollo
+bendžo
+bruto
+domino
+euro
+galifē
+info
+kino
+lego
+maestoso
+mono
+ohaio
+otello
+polo
+rančo
+saldo
+sonera
+topgear
+veto
+bohēmisko
+informatīvo
+autortiesības
+pa kreisi vērsta izliekta bultiņa
+lejupvērsta baltā bultiņa
+neseko
+pa diagonāli šķērssvītroti aizpildīts kvadrāts
+vidējs melns kvadrāts
+balts aplis
+vektoriālais reizinājums
+globuss ar Ameriku
+sarkans ābols
+priedes dekorācija
+volejbola bumba
+mērkaķis
+kronis
+skūpsts
+saspraude
+pa kreisi vērsta lupa
+pulksten deviņi
+seja ar prieka asarām
+nedaudz bēdīga seja
+atkritumus mest aizliegts
+sarkans kvadrāts
+viskija glāze
+tītars
+sāls
+karogs: Debesbraukšanas sala
+karogs: Dominikāna
+karogs: Sentkitsa un Nevisa
+karogs: Palestīna
+karogs: Volisa un Futunas salas
+vantūzs
+burbuļi
+tiesnese
+sieviete supervarone
+sieviete ar bumbu
+ó
+ai
+aj
+č
+ebe
+enē
+etē
+eze
+ele
+ēse
+ēte
+i
+ī
+kaut
+l
+mm
+no
+ojo
+odže
+obo
+odo
+odod
+og
+oi
+okok
+okope
+oloj
+ompo
+omejo
+onn
+opo
+opon
+oro
+orno
+osto
+ost
+otot
+oz
+pus
+sh
+ū
+w
+ž
+г
+ё
+й
+н
+с
+ф
+ш
+ь
+0
+1
+3
+5
+7
+9
+10
+12
+14
+16
+18
+20
+30
+50
+70
+90
+101
+365
+1000
+1000000000
+1000000000000000
+1000000000000000000000
+1000000000000000000000000000
+1000000000000000000000000000000
+123
+14683
+6475328
+rūķīši
+čiepj
+Baha
+vākus.
+mit
+mits
+MIT
+CES
+ITX
+MIT's
+CES's
+AS
+SIA
+omejo tiklab savam
+н rpi informatīvo
+ō ebe nekur
+ele dž ēte
+oz bohēmisko sonera
+tajā labrīt mm
+ž vismaz tevī
+orno lego kino
+omejo opon otello
+mes mm г
+oloj galifē aj
+domino paša bohēmisko
+nedz, veto. ēse?
+ompo, euro. nedz?
+polo, ko. ё?
+okope, ost. kuŗa?
+galifē, rančo. σ?
+orno, savam. gan?
+г, aizvien. informatīvo?
+ojo, rančo. ojo?
+2
+4
+6
+8
+11
+13
+15
+17
+19
+21
+99
+100
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

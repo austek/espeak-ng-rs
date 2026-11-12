@@ -1,0 +1,185 @@
+a
+ī
+ŗ
+γ
+σ
+ar
+iz
+labad
+pār
+šo
+turpat
+kuo
+kādam
+kuŗam
+mūsu
+savs
+tajā
+to
+viņu
+juos
+obejis
+šytaida
+tuo
+mazliet
+patlaban
+nivīna
+lp
+st
+apollo
+brno
+eko
+go
+kino
+loto
+mož
+otto
+rančo
+solo
+tvnet
+fizioloģisko
+autortiesības
+aizzīmes operators
+aplis ar aizpildītu augšējo labo kvadrantu
+vektoriālais reizinājums
+suši
+vidējs ādas tonis
+skūpsts
+cipari
+saviebta seja
+sarkans kvadrāts
+ķengurs
+karogs: Kongo (Brazavila)
+karogs: Palestīna
+koks
+vīrietis ar plīvuru
+ó
+ā
+ee
+eme
+ego
+ēte
+ie
+klāt
+ne
+odže
+odo
+ogo
+okako
+omo
+ongo
+opon
+orno
+oto
+ozo
+ū
+а
+з
+п
+ч
+0
+3
+7
+10
+14
+18
+30
+70
+101
+1000
+1000000000000000
+1000000000000000000000000000
+123
+6475328
+čiepj
+vākus.
+mits
+CES
+MIT's
+AS
+odo kādam šo
+ó to ŗ
+šytaida а odže
+ŗ ч ego
+а otto а
+eko mož fizioloģisko
+loto, šytaida. opon?
+klāt, oto. brno?
+odže, mūsu. tuo?
+tvnet, eme. omo?
+1
+2
+4
+5
+6
+8
+9
+11
+12
+13
+15
+16
+17
+19
+20
+21
+99
+100
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

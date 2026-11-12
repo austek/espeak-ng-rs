@@ -1,0 +1,253 @@
+b
+č
+e
+g
+j
+l
+n
+p
+s
+t
+z
+q
+x
+ć
+ä
+ö
+ß
+б
+г
+е
+ж
+и
+к
+м
+п
+с
+у
+х
+ч
+щ
+ю
+ћ
+ќ
+bom
+za
+če
+ter
+sem
+je
+sta
+ste
+bil
+bili
+agrft
+atp
+dutb
+ekg
+hdmi
+it
+itm
+kpk
+rk
+nsi
+oecd
+oks
+ozn
+rbg
+sfrj
+trr
+ui
+url
+zda
+zssr
+devet
+koš
+izhod
+osem
+sedem
+šel
+žena
+avtorske pravice
+puščica desno, ki se ukrivlja v levo
+votla puščica navzdol
+je podmnožica množice
+črn majhen kvadrat
+črn srednje majhen kvadrat
+krsta
+manjše od s poševnim enačajem
+globus z Evropo in Afriko
+rdeče jabolko
+okrasitev bora
+hokej na travi
+petelin
+ženski klobuk
+par s srčkom
+ravnilo
+zaprta ključavnica s ključem
+poldne
+smejoči obraz z odprtimi usti in trdno zaprtimi očmi
+oseba, ki kaže NE
+oseba na kolesu
+škrlaten kvadrat
+bronasta medalja
+morski pes
+vafelj
+zastava: Albanija
+zastava: Zahodna Sahara
+zastava: Libanon
+zastava: Srbija
+zastava: Zimbabve
+plakat
+kazalec usmerjen v opazovalca
+sodnik
+superjunakinja
+ženska z žogo
+a
+c
+d
+dz
+dž
+ee
+f
+h
+i
+k
+lj
+m
+nj
+o
+qu
+r
+rr
+sch
+š
+u
+ue
+v
+w
+y
+ž
+á
+é
+ê
+è
+í
+ó
+ô
+ò
+ú
+đ
+ř
+ü
+Hišničin
+bratec
+vzgaja
+polže
+pod
+fikusom.
+ß g bil
+y nj w
+l ter и
+q x č
+e ú q
+ö b itm
+q z f
+ü ř l
+q v š
+x ò šel
+šel í m
+l ò ß
+u, ć. sch?
+rbg, d. ee?
+dutb, b. koš?
+ќ, у. ó?
+rbg, e. zssr?
+п, q. sfrj?
+ú, devet. t?
+sem, q. r?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

@@ -1,0 +1,214 @@
+a
+b
+c
+d
+e
+f
+g
+h
+j
+k
+l
+m
+n
+o
+p
+q
+r
+s
+t
+u
+v
+x
+w
+y
+z
+bona
+yona
+wena
+nna
+ene
+lona
+rona
+lenna
+waka
+gaka
+tshaka
+dilo
+mole
+naya
+wa
+ya
+la
+fa
+kwa
+mo
+kgolo
+konte
+kwala
+le
+kana
+ao
+mme
+ntswa
+kuwa
+letshwao la thekiso
+letsatsi
+sutu ya pelo
+seketswana
+letshwao la ntsha le le boima
+konopo ya Sejapane ya phatlatiro
+sefatlhego sa ngwedi o mošwa
+letlhare la maple
+tlhapi e e dirilweng kuku ka swirl
+bolo ya confetti
+dikarata tsa go tshameka ka dithunya
+kara ya bothubalebelo
+folaga e ntsho
+khukhwana
+tsebe
+mosetsana
+modiri wa tsa botsogo wa mosadi
+batho ka ditsebe tsa mmutla mo moletlong
+mosadi yo o bonang tshidilo
+ragoga
+kgorometsaphine e kgolokwe
+founo ya mobaele
+gokaganya
+konopo ya godimo
+leteketifi la mosadi
+tora ya Tokyo
+sefatlhego sa kgalefo
+motho yo o reng NNYAA ka puo ya matsogo
+bese e e tlang
+metsi a a kgonang go tshwarwa
+sireletsa
+sefatlhego sa go bua maaka
+mosadi yo o tshamekang bolo ya letsogo
+borokholi
+motho mo kamoreng ya metsi a a belang
+aa
+ch
+dh
+ee
+gh
+hl
+i
+ii
+kh
+ny
+ng'
+oo
+rr
+sh
+se
+th
+tsen
+tlh
+tl
+uu
+f lenna p
+o u th
+t tsen v
+m e k
+a sh fa
+tl le ao
+yona t aa
+j hl ya
+hl ene f
+kgolo x th
+lona aa aa
+ntswa w e
+sh, la. rr?
+e, g. p?
+ii, ng'. kh?
+p, v. z?
+fa, m. p?
+q, uu. z?
+lona, h. wena?
+bona, t. q?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

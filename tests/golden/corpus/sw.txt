@@ -1,0 +1,232 @@
+b
+c
+f
+g
+j
+k
+n
+q
+r
+t
+v
+x
+z
+li
+yu
+zi
+ni
+ku
+tu
+nawe
+naye
+nanyi
+nao
+sisi
+nyinyi
+yeye
+hii
+hilo
+yake
+zake
+ya
+cha
+vya
+pa
+kwa
+bi
+min
+toka
+kuanzia
+tangu
+baada
+hadi
+huko
+kwalo
+kwao
+kwaye
+mwenye
+yenye
+vyenye
+zenye
+na
+ama
+au
+bali
+ila
+badalaya
+basi
+ilikwamba
+ijapo
+ingawa
+japo
+kama
+kusudi
+kuwa
+lakini
+pamoja
+panapo
+taraa
+wala
+mantiki
+ishara ya hakimiliki
+mshale wa kushoto unaopinda kulia
+kishale wazi kinachoelekea chini
+seti ndogo ya
+mraba wenye kunguru za mraba
+mraba wa wastani mweusi
+mduara mweupe
+alama ya jumlisha ikiwa na mbili chini
+wimbi la maji
+limau
+mapambo ya sherehe
+pikipiki
+farasi
+mkono wa kuonyesha mambo yako shwari
+alama ya busu
+chati inayoshuka
+spika
+saa kumi na moja
+ramani ya japani
+uso wa paka uliobibidua midomo
+sigara iliyowashwa
+mduara wa manjano
+ua lililonyauka
+kiatu kisicho na kisigino
+kiti cha magurudumu kisicho na mota
+sabuni
+bendera: Ujerumani
+bendera: Kirigizistani
+bendera: Pakistani
+bendera: Venezuela
+ngazi
+kuuma mdomo
+rubani wa kiume
+shujaa wa kiume
+mwanamke aliye na mpira
+a
+ch
+d
+dh
+e
+gh
+h
+i
+kh
+l
+m
+ny
+ng
+o
+p
+rr
+s
+sh
+th
+u
+w
+y
+zi dh ilikwamba
+t au hilo
+e zi ny
+au u au
+li baada g
+z kwao kuwa
+o tangu e
+huko mwenye y
+t x kuanzia
+g s kwao
+na mantiki h
+ku toka yeye
+a, vyenye. naye?
+f, yenye. j?
+toka, th. v?
+au, r. t?
+t, ni. u?
+t, p. q?
+b, ng. zake?
+i, sh. dh?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

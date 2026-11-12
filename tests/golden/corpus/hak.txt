@@ -1,0 +1,160 @@
+a
+i
+u
+â
+î
+û
+n̂
+à
+ì
+ù
+á
+í
+ú
+ń
+ai
+am
+ang
+au̍
+ch
+d
+eu
+e̍r
+f
+ii
+iì
+i̍
+iîn
+iín
+ia
+iau
+ie
+io
+j
+kh
+m
+n
+g
+o̍a
+oa̍i
+o̍e
+o̍i
+om
+p
+q
+s
+th
+ung
+u̍i
+w
+y
+ya̍
+yau
+ye̍
+yi̍
+yu
+q ye̍ au̍
+ì a i
+q am iì
+p í ya̍
+ye̍ ang s
+à iau yu
+i d o̍a
+u á u̍i
+am á e̍r
+f iín yi̍
+q om q
+ung u iín
+iîn, f. ye̍?
+u̍i, iau. e̍r?
+y, p. m?
+ang, û. yi̍?
+ung, ie. ń?
+f, s. ai?
+p, n̂. oa̍i?
+y, w. ì?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

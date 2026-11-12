@@ -1,0 +1,235 @@
+b
+c
+d
+f
+g
+h
+j
+k
+l
+m
+n
+p
+q
+r
+t
+v
+w
+x
+y
+z
+a
+an
+am
+na
+nan
+nam
+gun
+gu
+gum
+gur
+mi
+thu
+tu
+e
+i
+sinn
+sibh
+iad
+mo
+do
+ar
+ur
+á
+ag
+sa
+san
+bu
+còir-lethbhreac
+saighead dheas a’ lùbadh dhan taobh chlì
+saighead fhalamh sìos
+nach eil a’ leantainn air
+ceàrnag le tar-ghreannachadh trastanach
+ceàrnag mheadhanach dhubh
+cearcall geal
+crois-thoradh vector
+stuagh
+liomaid
+bragadair pàrtaidh
+motar-baidhg
+each
+math fhèin
+litir gaoil
+cairt-bhàraichean
+glaodhaire a’ cur a-mach fuaim àrd
+còig uairean
+mapa dhen t-Seapan
+aodann cait le gàire cham
+toirmisgte
+cearcall buidhe
+masg-daoibhigidh
+bròg
+cathair-chuibhle a làimh
+siabann
+bratach: A’ Ghearmailt
+bratach: Cìorgastan
+bratach: A’ Phòlainn
+bratach: Eileanan Breatannach na Maighdinn
+uinneag
+aodann le crathadh air
+britheamh boireann
+sàr-ghaisgeach boireann
+boireannach a’ bocadh bàla
+ai
+aoi
+amh
+adh
+aidh
+à
+ài
+ái
+ea
+eagh
+ei
+eò
+eòi
+è
+èa
+éi
+io
+iogh
+iu
+iùi
+ìo
+o
+oibh
+oimh
+oi
+òi
+ói
+ua
+uai
+uimh
+ùi
+chd
+cn
+dh
+gh
+ll
+nn
+rr
+rt
+s
+th
+Mus
+d’fhàg
+Cèit-Ùna
+ròp
+Ì
+le
+ob.
+cn mo ll
+gu i ll
+y y f
+p ài rt
+tu f ag
+sa g oimh
+èa chd g
+aidh ur w
+p iad tu
+aidh c f
+z gh oibh
+ua f n
+oimh, j. bu?
+i, cn. ea?
+ái, iogh. chd?
+mi, d. r?
+ll, oimh. z?
+t, c. iogh?
+nn, cn. b?
+q, q. p?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

@@ -1,0 +1,163 @@
+Jan
+Feb
+Mar
+Apr
+Maj
+Jun
+Jul
+Ago
+Sept
+Okt
+Nov
+Dec
+la
+ne
+ka
+kad
+a
+ar
+au
+b
+c
+ch
+d
+e
+eu
+f
+g
+h
+i
+ir
+ia
+ie
+ii
+io
+j
+k
+l
+m
+n
+o
+or
+p
+q
+qu
+r
+s
+sh
+t
+u
+ua
+ue
+ui
+uo
+v
+w
+x
+y
+z
+k ue Maj
+ie eu d
+Ago n eu
+ia Nov r
+Okt Mar v
+Dec Ago ui
+ia ir w
+k r ne
+l io ie
+o Mar ar
+Feb ne z
+eu a j
+j, r. Jan?
+v, b. Jul?
+qu, kad. Okt?
+l, Jan. sh?
+c, i. l?
+d, Jun. z?
+a, q. ar?
+ar, Nov. ia?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

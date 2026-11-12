@@ -1,0 +1,265 @@
+a
+c
+f
+i
+l
+o
+ü
+r
+u
+x
+š
+sina
+teie
+sa
+te
+selle
+nende
+neil
+kelle
+mida
+ja
+ning
+ei
+oled
+olete
+olin
+olime
+veidi
+yoghurt
+ad
+oü
+AP
+AüE
+EN
+MA
+SEJ
+apr
+ca
+dB
+dl
+EKG
+ha
+IQ
+jms
+jne
+jrk
+kd
+knd
+kpl
+Kü
+mh
+ml
+mnt
+Mrs
+nr
+okt
+pr
+prof
+rbl
+rtj
+sek
+snd
+st
+tlk
+veebr
+vt
+õp
+lill
+põll
+sitt
+autoriõigus
+kaardus nool vasakule
+seest tühi allanool
+pärisalamhulk
+väike must ruut
+väiksem must ruut
+kirst
+loogiline või kahekordne allkriips
+Euroopa ja Aafrika gloobusel
+punane õun
+väravamänd
+maahoki
+ahv
+kroon
+kimp
+kolmnurkne joonlaud
+suletud lukk võtmega
+kell kaksteist
+avatud suu ja suletud silmadega naerunägu
+eitav žest
+jalgrattur
+lilla ruut
+poksikinnas
+öökull
+vahvel
+lipp: Albaania
+lipp: Lääne-Sahara
+lipp: Liibanon
+lipp: Serbia
+lipp: Inglismaa
+kivi
+südant moodustavad käed
+naiskohtunik
+naissuperkangelane
+naine palliga
+aa
+ai
+ae
+b
+ch
+e
+eo
+h
+ii
+jj
+jazz
+k
+kamba
+kimbu
+ll
+n
+oa
+oi
+p
+q
+qu
+rr
+s
+sh
+sombu
+t
+tambu
+tumba
+uu
+v
+vembu
+w
+õõ
+õo
+õi
+ä
+ää
+äo
+äe
+öö
+öi
+öa
+üü
+ümbri
+xx
+y
+yi
+zh
+Põdur
+Zagrebi
+tšellomängija-följetonist
+Ciqo
+külmetas
+kehvas
+garaažis.
+e ää yi
+ha q ca
+dB u eo
+ch vt kd
+c ml põll
+kimbu ae l
+MA olete te
+prof yoghurt jazz
+r ning oi
+mida selle kamba
+mida b rbl
+kd tlk zh
+jrk, rr. te?
+õp, o. ümbri?
+sitt, t. r?
+u, k. veebr?
+q, jrk. äo?
+Mrs, ae. oi?
+lill, mh. oa?
+uu, äe. y?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

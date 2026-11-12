@@ -1,0 +1,266 @@
+b
+d
+f
+h
+k
+m
+p
+r
+u
+x
+z
+ḃ
+ḋ
+ġ
+ṗ
+a
+abhaile
+ag
+aige
+acu
+arsa
+agus
+amach
+amuigh
+hamháin
+anaithnid
+ann
+anso
+anuas
+aodha
+arís
+aschurtha
+baill
+beadh
+beidh
+bhuel
+cathair
+clainne
+chun
+chrainn
+de
+dhaoibh
+do
+domhnaigh
+euro
+faide
+feadh
+féin
+gan
+gur
+in
+ins
+iontach
+is
+iúl
+le
+mhuigh
+maith
+mhaithe
+mo
+ná
+níorbh
+nolaig
+orthu
+rabh
+raidió
+rímhaith
+seo
+dot
+dash
+cóipcheart
+saighead dheas ag dul ar chlé
+saighead tholl síos
+ní thagann sé i ndiaidh
+cearnóg líonadh trasnánach tras-haitseála
+meánchearnóg bheag bhán
+ciorcal bán
+táirge tras veicteoir
+bolcán
+líomóid
+confetti
+cruicéad
+gabhar
+bualadh bos
+geamchloch
+tacóid ordóige
+pluga leictreach
+8 an chloig
+straoiseog gháire le súile & miongháire
+straoiseog cait thuirseach
+ná caitear bruscar
+ciorcal donn
+gloine
+turcaí
+cístín cupa
+bratach: Oileán na Deascabhála
+bratach: an Phoblacht Dhoiminiceach
+bratach: San Críostóir-Nimheas
+bratach: na Críocha Palaistíneacha
+bratach: Samó
+buicéad
+lámh ar dheis
+píolóta fireann
+ban-sárlaoch
+bean le liathróid
+amhl
+abhar
+am
+agh
+aoi
+amhna
+á
+ái
+aill
+bha
+bpríomh
+chabhr
+comhar
+d'fh
+dheirfiúr
+dícheall
+eighea
+eogha
+éa
+eamh
+eabhra
+fo
+fíor
+gheobh
+ghearr
+i
+ioml
+iú
+íomh
+l
+mí
+nn
+omh
+odha
+oí
+oi
+oir
+oinse
+ramh
+sain
+taine
+uai
+uinti
+uachai
+ú
+j
+véarsa
+D’fhuascail
+Íosa
+Úrmhac
+na
+hÓighe
+Beannaithe
+pór
+Éava
+Ádhaimh
+do anaithnid rabh
+oinse gur mhaithe
+faide nn sain
+dash f orthu
+d gur hamháin
+acu ann amuigh
+r am mhuigh
+clainne aodha beidh
+h oir amhl
+b eabhra eamh
+ú véarsa arsa
+aschurtha b maith
+do, ins. b?
+mhaithe, ái. eogha?
+ġ, clainne. a?
+z, u. amhna?
+de, gur. ghearr?
+dheirfiúr, agus. ġ?
+mhaithe, a. u?
+arsa, a. le?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

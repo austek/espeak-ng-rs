@@ -1,0 +1,220 @@
+imladris
+menegroþ
+nargoþrond
+ach
+ah
+ir
+sui
+am
+an
+ben
+bo
+dan
+na
+ned
+nef
+nu
+o
+or
+os
+pen
+vi
+x
+ch
+dh
+th
+k
+a
+ae
+ai
+au
+á
+â
+b
+bb
+c
+d
+dd
+ð
+e
+ei
+é
+ê
+f
+g
+gg
+h
+hw
+i
+í
+l
+lh
+m
+n
+ng
+oe
+ó
+ô
+p
+pp
+ph
+q
+r
+s
+t
+tt
+þ
+ty
+u
+ui
+û
+ú
+v
+w
+y
+ý
+alph
+Aman
+Amarth
+Aragorn
+Arnoediad
+Arvedui
+Boromir
+Bragollach
+Brithombar
+Bruinen
+Cair
+Celebrían
+Crissaegrim
+Denethor
+dûn
+Ecthelion
+Eriador
+Fëanor
+Finduilas
+Fingolfin
+Finarfin
+Forochel
+Galadriel
+Grond
+hwand
+Iarwain
+Imladris
+Ithilien
+lhûn
+Lothlórien
+Mitheithel
+Mithrandir
+Moria
+Nargothrond
+Orophin
+Palantír
+Palantíri
+Pelennor
+rhûn
+Silivren
+f ned pen
+ch ô o
+bo û ð
+v ty k
+am e o
+á á ae
+x th þ
+dan nu dan
+ach á t
+b w menegroþ
+hw ý i
+ben au i
+ae, ð. ph?
+th, ch. lh?
+ben, ý. menegroþ?
+o, v. na?
+q, ph. pp?
+d, th. pp?
+lh, sui. th?
+ir, an. lh?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

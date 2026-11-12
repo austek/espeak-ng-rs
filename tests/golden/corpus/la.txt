@@ -1,0 +1,221 @@
+a
+c
+e
+h
+k
+n
+p
+s
+u
+x
+ib
+Idib
+quī
+quod
+quibus
+quam
+nostrum
+mihi
+tibi
+tē
+eōrum
+eōs
+eum
+eās
+ea
+se
+ac
+ab
+ex
+apud
+contra
+erga
+inter
+iuxta
+per
+post
+praeter
+prope
+proximus
+sine
+subter
+trans
+versus
+at
+autem
+enim
+etiam
+etsi
+nam
+nec
+prout
+quamquam
+quemadmodum
+sum
+est
+sunt
+erās
+erātis
+erō
+erimus
+erunt
+fuit
+fuīstis
+fueram
+fuerāmus
+fuērunt
+fuerit
+fuerītis
+esto
+sunto
+â
+ê
+î
+ô
+û
+ae
+au
+ā
+æ
+bb
+cc
+cch
+ch
+dd
+eu
+ē
+f
+g
+gg
+ggu
+gu
+ī
+kk
+l
+ll
+mm
+nn
+o
+oe
+pp
+pph
+ph
+qu
+rr
+ss
+t
+tt
+th
+ū
+v
+vv
+y
+yy
+z
+zz
+j
+fueram tt û
+ā â p
+sunt h iuxta
+versus e n
+fueram ib nn
+pp k t
+quamquam tē eās
+eōs nec trans
+a u est
+th prope tē
+qu h contra
+fuerit ch versus
+ab, ab. au?
+gg, Idib. e?
+erō, e. fuerāmus?
+u, apud. y?
+autem, cch. erō?
+gu, mihi. gg?
+ggu, kk. mm?
+subter, eum. t?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

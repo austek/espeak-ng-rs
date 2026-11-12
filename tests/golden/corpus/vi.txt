@@ -1,0 +1,254 @@
+b
+c
+d
+đ
+f
+g
+h
+j
+k
+l
+m
+n
+p
+q
+r
+s
+t
+v
+w
+x
+z
+bị
+bởi
+các
+cái
+chẳng
+cho
+chưa
+con
+còn
+của
+dẫu
+dù
+đang
+đã
+đến
+để
+được
+hoặc
+khi
+khoảng
+không
+là
+lúc
+mà
+mọi
+mỗi
+nên
+nếu
+như
+nhưng
+những
+phải
+sẽ
+thì
+tới
+từ
+và
+vẫn
+vì
+với
+internet
+bản quyền
+mũi tên phải cong sang trái
+mũi tên hướng xuống bên trái mũi tên hướng lên
+tập con bằng
+hình vuông nhỏ màu trắng
+hình tam giác dưới bên phải
+bình đựng tro cốt
+nhỏ hơn hoặc nghiêng bằng
+quả cầu châu Âu-châu Phi
+táo đỏ
+trang trí cây thông
+khúc côn cầu trên cỏ
+khỉ
+vương miện
+bó hoa
+thước thẳng
+kính lúp nghiêng sang phải
+mười giờ
+mặt cười miệng há mắt cười
+mặt lộn ngược
+nước không uống được
+hình vuông màu cam
+huy chương vàng
+vịt
+tỏi
+cờ: Afghanistan
+cờ: Ecuador
+cờ: Quần đảo Cayman
+cờ: Paraguay
+cờ: Mayotte
+bẫy chuột
+bàn tay hướng sang bên trái
+thẩm phán nữ
+nữ siêu anh hùng
+người phụ nữ chơi bóng
+à
+ẵ
+ẻ
+ì
+ọ
+ỡ
+ứ
+ð
+giếng
+ngh
+quô
+sh
+aĩ
+aó
+aụ
+áy
+ãi
+ă
+ây
+ẩy
+eo
+èo
+ê
+ễu
+iã
+iù
+iểu
+ỉ
+o
+òe
+ỏe
+ọc
+ố
+ỗng
+ời
+ỡ
+uí
+uạ
+uồi
+uỹu
+úa
+ũa
+ướ
+ưỡi
+ừ
+ữ
+yá
+yễ
+ỹa
+έ
+λ
+τ
+đến lúc ừ
+ứ khoảng ữ
+ỗng l f
+k không o
+ỡ ð bởi
+áy ữ bị
+p vẫn ưỡi
+chẳng z nên
+với yễ v
+còn iù iã
+o h từ
+khi ỉ d
+o, khoảng. con?
+ỹa, ẻ. uạ?
+khi, f. v?
+sh, ời. ẵ?
+không, ũa. tới?
+ưỡi, ướ. là?
+ãi, mà. ngh?
+z, ỹa. thì?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

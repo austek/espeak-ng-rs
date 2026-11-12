@@ -1,0 +1,221 @@
+b
+c
+d
+f
+g
+j
+k
+p
+s
+t
+v
+x
+z
+h
+q
+w
+cai
+cu'i
+ru'e
+sai
+nai
+na
+ja'a
+ma
+mo
+xo
+cu'e
+ba'e
+za'e
+po'e
+zo'e
+jo'u
+ce'u
+ke'a
+noi
+no'u
+po'u
+goi
+i
+ija
+ijanai
+ije
+ije'i
+ijenai
+ijo
+ijonai
+inaja
+a
+e
+o
+u
+ja
+je
+jo
+ju
+joi
+cu
+gi
+to
+lu
+tu'e
+ku
+boi
+ge'u
+lu'u
+li'u
+tu'u
+vau
+kei
+ku'o
+ai
+au
+dj
+ei
+l
+m
+n
+oi
+r
+tc
+y
+ˈ
+lo
+ro
+remna
+se
+jinzi
+ka
+zifre
+ckinydunsi'u
+ge
+nilselsinma
+krali
+.i
+ra
+zankai
+su'o
+da
+menli
+marde
+gi'e
+bilga
+fartra
+jai
+tasmi
+be
+nu
+tunbysi'u
+cilce
+.RAtatar.
+tolcanci
+mi
+rivli'a
+fa'a
+la
+.cfartseNEK.
+c oi ijonai
+d g c
+k f cai
+h ei tu'u
+t e x
+goi ijenai ija
+ba'e g v
+lu'u e sai
+no'u no'u s
+ma po'e h
+y cu z
+b w ijenai
+w, ijanai. lu?
+z, joi. q?
+au, z. cu'e?
+inaja, x. na?
+po'u, c. tu'e?
+ma, ja'a. e?
+joi, e. dj?
+w, y. p?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

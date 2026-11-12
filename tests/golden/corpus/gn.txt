@@ -1,0 +1,207 @@
+a
+ch
+g
+ĝ
+i
+j
+l
+m
+n
+nd
+nt
+ñ
+p
+r
+s
+t
+v
+y
+b
+c
+f
+q
+x
+z
+audácity
+english
+facebook
+firefox
+google
+hardware
+microsoft
+mozilla
+periscope
+skype
+spanish
+windows
+youtube
+txt
+gn
+chris
+américa
+asunción
+barcelona
+bolivia
+brasilia
+cagliari
+caracas
+colombia
+concepción
+cuba
+dominicana
+encarnación
+españa
+guatemala
+honduras
+lima
+lisboa
+méxico
+madrid
+milán
+misiones
+nicaragua
+ottawa
+paraguay
+república
+roma
+salvador
+tegucigalpa
+uruguay
+washington
+ʻ
+â
+î
+ô
+û
+ŷ
+ğ
+á
+ã
+e
+é
+ẽ
+ê
+í
+ĩ
+o
+ó
+u
+ú
+ũ
+ý
+ỹ
+h
+k
+rr
+mb
+ng
+ck
+d
+qu
+w
+wh
+gn ñ paraguay
+ñ rr ñ
+misiones t roma
+r república e
+ã concepción hardware
+i nicaragua cuba
+j ó y
+txt b ĝ
+nicaragua q t
+r ch a
+ã misiones audácity
+washington z ỹ
+ẽ, ottawa. q?
+ô, k. ô?
+r, î. bolivia?
+españa, w. windows?
+ñ, d. wh?
+concepción, ũ. skype?
+bolivia, m. w?
+ĝ, madrid. d?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

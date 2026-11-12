@@ -1,0 +1,175 @@
+b
+c
+đ
+f
+h
+j
+l
+m
+p
+q
+s
+v
+w
+z
+bị
+các
+cái
+cho
+chưa
+còn
+dẫu
+dù
+đã
+đến
+được
+hoặc
+khoảng
+không
+lúc
+mà
+mỗi
+nếu
+như
+những
+phải
+thì
+tới
+và
+vẫn
+với
+bản quyền
+biểu tượng vô cực
+nửa hình tròn bên phải đặc
+nhỏ hơn hoặc nghiêng bằng
+sushi
+màu da tối trung bình
+bó hoa
+nhập biểu tượng
+mặt có miệng há
+hình vuông màu cam
+hà mã
+cờ: Quần đảo Cook
+cờ: Paraguay
+tổ trống rỗng
+người đàn ông đội khăn voan
+à
+ẹ
+ỗ
+ỷ
+giềng
+ngh
+t
+aỷ
+àu
+ạo
+ẩy
+éo
+i
+iêu
+ịa
+ỏe
+ống
+ới
+uà
+uýu
+ũa
+ượi
+ự
+ýa
+ί
+s ạo i
+p i éo
+bị nếu w
+ỏe q với
+i chưa như
+i đến giềng
+t, ẩy. cho?
+uýu, h. và?
+i, dẫu. bị?
+khoảng, h. ạo?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

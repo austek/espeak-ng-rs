@@ -1,0 +1,179 @@
+a
+e
+i
+o
+u
+ē
+ī
+ō
+ai
+ae
+ao
+au
+ei
+eu
+iu
+oi
+ou
+ui
+h
+k
+l
+m
+n
+p
+w
+a'ela
+a'e
+akula
+aku
+'ana
+a'o
+ho'i
+'ia
+ia
+iā
+ihola
+iho
+ilelo
+kākou
+lākou
+lā
+maila
+mai
+mau
+nō
+'oe
+'o
+'oukou
+paha
+po'e
+pono
+pū
+ua
+wale
+wau
+â
+ê
+î
+ô
+û
+ʻ
+ā
+ū
+v
+b
+c
+d
+f
+g
+q
+r
+s
+t
+z
+a ī t
+m ê pono
+â ū s
+t ō ē
+a'e â l
+ao â mai
+mau iu ua
+a'ela lā iu
+c a'o â
+i l s
+f ao ô
+w aku w
+wale, h. ao?
+'oe, a. p?
+ao, â. wale?
+mau, d. oi?
+ei, au. ē?
+u, ui. c?
+maila, ae. ū?
+ē, n. s?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

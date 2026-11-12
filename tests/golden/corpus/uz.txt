@@ -1,0 +1,248 @@
+a
+b
+d
+e
+g
+h
+i
+k
+l
+m
+n
+p
+q
+r
+t
+u
+v
+x
+z
+oʻ
+gʻ
+ch
+ng
+atrofida
+bilan
+bular
+davomida
+ga
+haqida
+ichida
+ichidan
+ichiga
+yonida
+yonma-yon
+keyin
+lozim
+mobaynida
+oldin
+orasidan
+orqali
+orqasida
+o'y
+ostida
+o'stida
+o'xshab
+pastda
+qaramay
+qarama-qarshi
+qarshi
+sababida
+tagida
+tashqarida
+taxminan
+tepasida
+tomonidan
+uchun
+biz
+bizga
+bizniki
+bizning
+menga
+meniki
+mening
+senga
+sening
+senini
+ularga
+ularning
+unga
+uniki
+tugma qalpog'i
+tekis dumli chapga strelka
+nuqtali pastga strelka
+kichik emas
+boʻsh kvadrat ichidagi boʻyalgan kvadrat
+ichi boʻsh bullet
+tishli g'ildirak
+olovdagi yurak
+Bosniya va Gertsegovina
+Fransiya
+Liviya
+Muqaddas Yelena oroli
+kvadrat ichidagi mavjudlik iyeroglifi
+atirgul
+ko'za va piyola
+musiqiy klaviatura
+maktab
+tuya
+qiz bola
+oila ayol o'g'il bola
+erkak qo'l cho'zmoqda
+o'sayotgan iyena diagrammasi
+chaqmoqli kamera
+katta ko'k romb
+ramkali surat
+uyqusiragan yuz
+metro
+pardoz-andoz xonasi
+chimduvchi qoʻl
+shoʻngʻish niqobi
+tog' poyafzali
+salbiy erkak superqahramon
+nogironlar aravachasidagi odam o'ngga qaragan
+g'altak
+batareya kam
+а
+б
+ц
+д
+э
+ф
+г
+ҳ
+ж
+к
+л
+м
+о
+п
+қ
+р
+т
+у
+в
+х
+з
+ў
+ғ
+ш
+ю
+я
+ь
+ъ
+c
+f
+j
+o
+s
+sh
+y
+ó
+ǵ
+ş
+ichidan haqida г
+h o'y h
+p tagida t
+а ж taxminan
+o'stida g k
+senini uniki ng
+tagida ş ь
+ga x c
+v з ъ
+ю gʻ davomida
+o'xshab p v
+s yonma-yon davomida
+sababida, ъ. o'y?
+в, о. z?
+keyin, tepasida. ғ?
+g, tepasida. senini?
+у, meniki. taxminan?
+qaramay, x. sababida?
+f, я. biz?
+f, l. bizning?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

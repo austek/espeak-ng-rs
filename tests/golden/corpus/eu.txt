@@ -1,0 +1,260 @@
+b
+c
+f
+h
+k
+m
+ñ
+q
+r
+t
+w
+y
+á
+í
+ú
+ü
+baina
+zu
+zuek
+nire
+haren
+gure
+zuen
+beren
+honen
+hori
+hura
+zara
+dio
+die
+ak
+ean
+eko
+ko
+ra
+adib
+juan
+jose
+joaquín
+julian
+jacinto
+genaro
+san
+santo
+hume
+google
+moodle
+doodle
+nietztsche
+testu
+lehia
+kasu
+aerobiko
+aerodinamiko
+aerometro
+aeronauta
+aeronautiko
+aerosol
+aerostato
+aharraus
+aintzat
+akademi
+alajain
+alfanumeriko
+algebra
+aljebra
+alkalino
+alokutibo
+alprojakeri
+garaje
+copyright
+ezkerrera okertzen den eskuinera gezia
+beherako gezi hutsa
+ez da arrakastatsua
+karratua beteki marratu diagonalarekin
+karratu beltz ertaina
+tentsio handia
+gora okertzen den eskuinera gezia
+ortzadarra
+meloia
+bengala
+igerilaria
+barraskiloa
+mugitzen ari den eskua
+xiringa
+diagrama gorakorra
+bozgorailua itzalita
+hirurak
+tokioko dorrea
+begiak itxita dituen eta musuka ari den katu-aurpegia
+debekatuta
+zirkulu horia
+urpekari-maskara
+karramarroa
+hanka mekanikoa
+belaki
+bandera: Djibuti
+bandera: Kanbodia
+bandera: Saint-Pierre eta Mikelune
+bandera: Vietnam
+ispilua
+lerro etenarekin egindako aurpegia
+emakume epailea
+emakumezko superheroi
+baloi bat duen emakumea
+a
+au
+ari
+arekin
+arentzako
+ara
+atatik
+atarat
+atako
+arantz
+agana
+arenganaino
+atzat
+ch
+dd
+ei
+eu
+etatik
+erat
+etarantz
+entzat
+engatik
+ekiko
+etaz
+gana
+j
+ll
+n
+o
+p
+qw
+rr
+ren
+rat
+raino
+rentzako
+rengan
+rengandik
+s
+tt
+tz
+tara
+tik
+tu
+tzen
+u
+z
+é
+ó
+ç
+ari é t
+atatik zuen rr
+gana u ren
+raino ü ara
+alprojakeri ç ekiko
+k y tara
+arantz jose í
+au c s
+ko ren jose
+aintzat eko ra
+aerosol gana m
+gure garaje arekin
+arantz, qw. ren?
+ko, google. hura?
+hume, alkalino. ç?
+w, b. h?
+í, garaje. arantz?
+aharraus, etaz. erat?
+google, tzen. entzat?
+adib, ren. arantz?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

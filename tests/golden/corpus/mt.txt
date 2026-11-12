@@ -1,0 +1,251 @@
+a
+b
+ċ
+e
+g
+h
+i
+k
+m
+o
+q
+s
+t
+v
+x
+z
+jiena
+huwa
+aħna
+huma
+tiegħek
+tagħha
+tagħkom
+ta
+għal
+ġo
+mingħajr
+il-quddiem
+wara
+bejn
+viċin
+isfel
+permezz
+fuq
+fi
+quddiem
+fost
+qrib
+kif
+darba
+iżda
+minflok
+mindu
+kull
+waqt
+ikun
+qiegħed
+kienu
+mhumiex
+għandhom
+għandu
+jista
+għandha
+ikseb
+tmur
+mort
+tagħmilx
+għamilt
+poġġi
+issir
+biss
+issa
+xorta
+bosta
+dan
+dawn
+hemm
+mm
+km
+mg
+trade mark
+xemx
+taqsima tal-kwori
+lanċa
+sinjal minus grassett
+buttuna Ġappuniż post battal
+wiċċ ta’ qamar ġdid
+werqa tal-aġġru
+pulpetta tal-ħut innokklata
+ballun konfetti
+fjuri tal-karti tal-logħob
+tlielaq tal-karozzi
+bandiera sewda
+ħanfusa
+widna
+tifla
+mara fil-kura tas-saħħa
+persuni b’widnejn ta’ fenek jiddevertu
+mara tingħata massaġġ
+jaħrab ’l hemm
+pushpin tond
+mowbajl
+katina
+buttuna up
+ditektiv mara
+torri ta’ Tokjo
+wiċċ irrabjat
+persuna tagħmel sinjal ta’ LE
+xarabank ġejja ’l hawn
+ilma tax-xorb
+tarka
+wiċċ jigdeb
+mara tilgħab il-handball
+brokkoli
+persuna f’kamra tal-fwar
+aa
+ax
+be
+bi
+bie
+ċa
+ċi
+d
+dd
+eu
+ew
+ff
+gg
+gi
+għ
+ħ
+ħu
+iu
+j
+jo
+je
+ka
+ki
+ku
+ko
+n
+pp
+qe
+qo
+rie
+ra
+saqq
+saq
+tt
+ux
+xie
+yy
+yö
+ż
+ża
+żie
+għal ġo je
+saq saqq mingħajr
+m k aħna
+jiena m t
+km isfel pp
+g dan poġġi
+bejn aa bosta
+għal ħ s
+s i xorta
+be issir ta
+rie xie ko
+kull eu tt
+bi, ħ. v?
+qrib, għal. g?
+issa, dd. tagħha?
+d, z. g?
+n, ka. fi?
+n, a. poġġi?
+o, tmur. j?
+ko, a. wara?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

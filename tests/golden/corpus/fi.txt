@@ -1,0 +1,272 @@
+a
+c
+g
+j
+n
+p
+t
+w
+å
+minä
+me
+ne
+tätä
+tähän
+tänä
+tuota
+tuolla
+tuona
+näitä
+näillä
+näinä
+noissa
+noilla
+joka
+jossa
+jolle
+jotka
+joista
+joilta
+entä
+mutta
+emme
+olla
+olemme
+ole
+olit
+olivat
+olisi
+lienen
+lienemme
+lienneet
+luo
+aihe
+ihme
+näyte
+purje
+virke
+mene
+syö
+auteta
+pukea
+tulla
+kyösti
+posti
+päästi
+sähköposti
+viesti
+nalle
+polle
+wille
+janne
+konfutse
+okay
+ad
+ca
+ekr
+hiv
+jne
+nvda
+usb
+tekijänoikeusmerkki
+oikealle kääntyvä nuoli
+palkista alkava tyhjä nuoli ylös
+ylijoukko
+pieni musta neliö
+pienehkö musta neliö
+arkku
+looginen tai kaksoisalaviiva
+maapallo jossa näkyy Eurooppa ja Afrikka
+punainen omena
+puukoriste
+maahockey
+kukko
+naisen hattu
+pariskunta ja sydän
+viivoitin
+lukko ja kynä
+kello yksitoista
+hymy ja kylmänhiki
+silmien pyöritys
+ei polkupyörille
+vihreä neliö
+pronssimitali
+hai
+vohveli
+lippu: Albania
+lippu: Länsi-Sahara
+lippu: Libanon
+lippu: Serbia
+lippu: Englanti
+kivi
+sydänkuvio käsillä
+naistuomari
+naissupersankari
+pallotteleva nainen
+aa
+aii
+auu
+ää
+äii
+äyy
+bb
+cc
+city
+dd
+ee
+eii
+euu
+eyy
+h
+ii
+iuu
+iee
+iyy
+k
+l
+llekaan
+llekin
+llekö
+llepä
+nne
+oo
+oii
+ouu
+öö
+öii
+öyy
+pp
+qq
+rg
+s
+sh
+sti
+tt
+tse
+uu
+uii
+uoo
+xx
+yy
+yii
+yöö
+zz
+ü
+š
+tule
+tänne
+ja
+ruokaa
+Lorun
+sangen
+pieneksi
+hyödyksi
+jäivät
+suomen
+kirjaimet.
+abc
+aihe viesti lienemme
+me tänä päästi
+llekaan tähän euu
+a jotka yy
+purje w å
+öö g tulla
+iee llekin näinä
+eyy p l
+joilta iuu luo
+ole pp ad
+w päästi olla
+mutta äii jotka
+l, bb. aii?
+nne, bb. a?
+wille, llekin. eii?
+öyy, dd. sti?
+å, tt. nalle?
+wille, nalle. joista?
+olemme, sti. ekr?
+w, qq. hiv?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

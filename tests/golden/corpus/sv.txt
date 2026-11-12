@@ -1,0 +1,264 @@
+a
+n
+ett
+ditt
+era
+över
+är
+brukade
+barock
+dras
+grep
+klas
+per
+staden
+tom
+adobe
+frames
+link
+password
+unselected
+tisdagen
+oktober
+hjärta
+gärde
+sjöar
+operation
+kör
+kyrkogård
+värde
+elva
+sextio
+mm
+fortfarande
+Sverige
+öppna
+tangentbord
+dåligt
+skoldag
+tidningen
+linköping
+helsingborg
+avesta
+magnus
+mattias
+jalusi
+miljö
+karaktär
+värmland
+skövde
+sveg
+eriksson
+jakobsson
+sandberg
+holm
+pannkakor
+löjrom
+smartphone
+mjölk
+kakao
+trappa
+nyckelpiga
+kall
+ledsen
+våt
+rita
+hjälpa
+mobiltelefon
+solsken
+busshållplats
+kommunikation
+plus
+uppåtriktad dubbelhövdad pil
+nedåtriktat dubbelpilstreck
+större än över lika med
+fylld kvadrat
+fylld triangel nedtill vänster
+balansvåg
+divisionstecken
+regnbåge
+vattenmelon
+ballong
+person som spelar golf
+häst
+tummen upp
+kärleksbrev
+clipboard
+batteri
+klockan sju
+strålande ansikte med leende ögon
+uttröttat kattansikte
+släng inte skräp här
+röd kvadrat
+sked
+enhörningsansikte
+dryckeskartong
+flagga: Förenade Arabemiraten
+flagga: Ceuta och Melilla
+flagga: Kuwait
+flagga: Paraguay
+flagga: Mayotte
+tandborste
+handflatan nedåt
+manlig läkare
+fotgängare åt höger
+manlig zombie
+agera
+alkohol
+bevakn
+beslag
+cc
+d
+diske
+dator
+droger
+es
+ember
+esent
+formad
+gg
+gani
+guid
+hjälp
+i
+imag
+k
+kommun
+l
+lju
+människ
+minimera
+motor
+masken
+medborg
+network
+navig
+operat
+paket
+q
+rn
+rsk
+rediger
+risk
+sch
+stj
+segel
+service
+stått
+segla
+semest
+t
+te
+tagit
+u
+v
+verk
+wise
+z
+ö
+igheter
+navig staden beslag
+era sch per
+u mobiltelefon stått
+över är skövde
+tom ett alkohol
+värde rn helsingborg
+ö rediger barock
+bevakn esent nyckelpiga
+sextio sch våt
+löjrom frames imag
+adobe mattias v
+hjälp ledsen masken
+brukade, fortfarande. a?
+staden, droger. per?
+avesta, semest. karaktär?
+dator, helsingborg. öppna?
+es, ledsen. tangentbord?
+kommun, magnus. igheter?
+rediger, frames. frames?
+Sverige, ember. verk?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

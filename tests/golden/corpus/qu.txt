@@ -1,0 +1,202 @@
+a
+b
+chh
+ch
+ch'
+c
+d
+e
+f
+g
+h
+i
+y
+j
+kh
+k
+k'
+l
+ll
+m
+n
+ñ
+o
+ph
+p
+p'
+qh
+q
+q'
+r
+s
+th
+t
+t'
+u
+v
+w
+x
+z
+hayk'a
+ima
+imahina
+imapas
+imayna
+kay
+kikin
+llapan
+machka
+may
+nuqa
+pacha
+pay
+paykuna
+pi
+qam
+qamkuna
+sapay
+tukuy
+ñuqa
+ñuqanchik
+ñuqayku
+llavepa 0
+pañaman wayrawayra wachi
+uranman iskay wachi
+chantapas
+kawsaq tikuy
+huntasqa uranman ñawpiwan kimsakuchu
+chiqaqchay tawakuchu chimpuwan
+yana muyu
+sunqu exclamasion
+Japones mana qullqiyuq chaninpaq ñitina
+wayna mallki
+llampʼu helado
+noria qhatunapi
+motocicleta
+yana misi
+ukumari
+tata wayk’uq
+kuraq ayllu warmi warmi warma warmi warma
+runa willakuy kitipi
+qulli qipi
+yaykumuq carta
+latina hatun sananpakuna yaykuy
+pusaq chaymanta kimsa chunkawan
+kusisqa uya hatun ñawikunawan
+uya phuyukunapi
+parada autobúspaq
+mayllakuna
+paru tawakuchu
+tata gimnasia ruwachkan
+pretzel
+mosquito
+qunqurisqa warmi
+warmi watuq
+sandalia
+cucaracha
+ʼ
+ñ t a
+b qamkuna y
+d ph p'
+y pay ima
+k' i pacha
+n m m
+w u ch'
+r imapas n
+u i tukuy
+n th ʼ
+ph m y
+kikin v d
+q', imahina. ch'?
+o, k'. pacha?
+ch', q'. b?
+k, imapas. v?
+i, kh. d?
+nuqa, f. kay?
+z, b. r?
+ima, pacha. e?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

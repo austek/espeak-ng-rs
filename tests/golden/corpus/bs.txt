@@ -1,0 +1,276 @@
+b
+dž
+k
+p
+w
+б
+ѕ
+х
+м
+ш
+ѓ
+ы
+µ
+abk
+acgm
+adp
+alg
+apj
+arj
+asx
+awb
+cda
+cpu
+dox
+ecp
+ems
+eur
+frm
+grrr
+hho
+hta
+idb
+img
+iq
+jrr
+mda
+mgi
+nco
+nrc
+nrm
+nsi
+obz
+ofx
+os
+pgi
+prf
+raw
+rcd
+rk
+rmt
+rs
+rtv
+sr
+udf
+url
+uup
+wax
+xam
+xsi
+yu
+mrs
+sl
+čega
+i
+si
+bio
+nije
+ima
+nema
+jpeg
+autorsko pravo
+strjelica desno zakrivljena nalijevo
+šuplja strelica udesno
+slijedi
+kvadrat s ispunom od gore desno dole lijevo
+bijeli kvadrat
+visoki napon
+strjelica desno zakrivljena prema dolje
+duga
+dinja
+vatromet
+osoba pliva
+kit
+pokazivanje kažiprstom udesno
+oznaka berbernice
+kalendar na kidanje
+dugme zatamni
+menora
+karta svijeta
+maca koja se ceri
+semafor
+skateboard
+žongliranje
+lice samo što ne zaplače
+zub
+predivo
+Zastava: Kuba
+Zastava: Island
+Zastava: Oman
+Zastava: Ujedinjene Nacije
+harmonika
+korjenasto povrće
+porodica: muškarac, djevojčica i dječak
+detektiv muško
+žena s loptom
+а
+в
+д
+ж
+и
+л
+н
+п
+с
+у
+ч
+ђ
+љ
+ћ
+џ
+č
+dz
+đ
+exe
+g
+lj
+n
+o
+qu
+rr
+š
+u
+y
+ž
+é
+ú
+ö
+ß
+ά
+γ
+ε
+ζ
+ή
+ι
+κ
+μ
+ξ
+π
+σ
+τ
+ύ
+χ
+ω
+Љубазни
+фењерџија
+чађавог
+лица
+хоће
+да
+ми
+покаже
+штос.
+Ljubazni
+fenjerdžija
+čađavog
+lica
+hoće
+da
+mi
+pokaže
+štos.
+čega ή hta
+abk čega exe
+acgm а i
+ѓ ѕ nrc
+p qu p
+ω g л
+γ abk bio
+jpeg udf exe
+idb ζ ы
+ems awb ω
+π p nrc
+č ά si
+τ, y. pgi?
+ž, w. ß?
+ш, κ. dz?
+cpu, х. nrc?
+abk, b. b?
+rmt, в. raw?
+rcd, asx. p?
+đ, rmt. i?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

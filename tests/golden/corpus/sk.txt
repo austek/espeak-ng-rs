@@ -1,0 +1,251 @@
+á
+b
+d
+e
+g
+i
+l
+ĺ
+ň
+ô
+r
+š
+u
+w
+y
+ě
+æ
+ƒ
+si
+k
+z
+pod
+so
+pri
+inak
+ale
+mimo
+aj
+nie
+som
+ste
+bol
+plch
+plť
+aktívni
+depresívni
+enter
+hodni
+ídee
+ídeou
+ídey
+init
+introvertní
+každej
+logistík
+mániou
+martin
+midi
+mladí
+negatívne
+okienečko
+onen
+ostatní
+peter
+podísť
+poučení
+predeň
+presvedčení
+prijatí
+samotní
+štatutárni
+teda
+televízne
+teraz
+tie
+únia
+únii
+vážení
+vinen
+vtedy
+copyright
+šípka doprava zakrivená doľava
+dutá šípka doprava
+nenasleduje
+štvorec s výplňou vpravo hore a vľavo dole
+stredný čierny štvorec
+transgenderový symbol
+plus s dolným indexom dva
+most v noci
+melón
+balónik
+vzpierajúci človek
+had
+mávajúca ruka
+tabletka
+stúpajúci graf
+vypnutý reproduktor
+tri hodiny
+tokijská veža
+smejúca sa mačacia tvár so srdiečkami
+trojuholníková zástava
+koliesková korčuľa
+vodné pólo
+laboratórny plášť
+ucho s načúvadlom
+metla
+zástava: Cyprus
+zástava: Jordánsko
+zástava: Papua-Nová Guinea
+zástava: Vatikán
+kongo
+salutujúca tvár
+rodina: žena, žena, dievča, chlapec
+stavbárka
+žena s loptou
+a
+ä
+bez
+c
+ch
+č
+dz
+ď
+é
+f
+h
+ia
+ie
+iu
+j
+m
+n
+na
+o
+ó
+p
+po
+pov
+q
+qu
+ŕ
+ř
+s
+tí
+te
+ť
+v
+vy
+wh
+x
+ý
+ž
+obed
+jedla
+12345
+☺
+blah
+l ale presvedčení
+vtedy ř l
+ě onen martin
+v ostatní okienečko
+bez onen enter
+ch l ô
+ó po som
+v b d
+d š n
+bol j bol
+pod dz ř
+plch ě plch
+prijatí, teda. ř?
+som, okienečko. ň?
+b, i. č?
+a, televízne. midi?
+ť, ž. vážení?
+z, tie. okienečko?
+i, ô. ä?
+init, f. enter?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

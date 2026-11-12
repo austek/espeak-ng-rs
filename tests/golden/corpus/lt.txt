@@ -1,0 +1,257 @@
+a
+ą
+b
+c
+č
+e
+ę
+ė
+f
+g
+i
+į
+j
+k
+l
+n
+o
+p
+r
+s
+t
+u
+ų
+ū
+v
+ž
+dz
+dž
+q
+w
+y
+aš
+tu
+jis
+ji
+tavęs
+savęs
+man
+tau
+sau
+jums
+mane
+tave
+save
+manimi
+savimi
+mumis
+jumis
+manyje
+tavyje
+mumyse
+jumyse
+ir
+bet
+btv
+gr
+liet
+lkl
+lot
+lnk
+ltv
+nr
+raj
+tūkst
+mln
+continue
+firefox
+magnifier
+reader
+screen
+autorių teisės
+rodyklė į dešinę, užlenkta į kairę
+tuščiavidurė rodyklė žemyn
+poaibis
+juodas mažas kvadratas
+juodas vidutiniškai mažas kvadratas
+juodas rutulys
+vidinė sandauga
+paukščių takas
+ananasas
+sukryžiuotos vėliavos
+tinklinio kamuolys
+avis
+atviros rankos
+bučinys
+sąvaržėlė
+didinimo stiklas į dešinę
+dešimt valandų
+besišypsantis išsižiojęs veidas
+šiek tiek besišypsantis veidas
+draudžiama gerti vandenį
+oranžinis kvadratas
+1-osios vietos medalis
+antis
+česnakas
+vėliava: Afganistanas
+vėliava: Ekvadoras
+vėliava: Kaimanų Salos
+vėliava: Kataras
+vėliava: Pietų Afrika
+pelėkautai
+į kairę rodanti ranka
+teisėja
+vyras superherojus
+moteris su kamuoliu
+ai
+au
+ch
+d
+ei
+gg
+h
+ia
+ie
+kk
+m
+mm
+nn
+pp
+rr
+sš
+š
+tt
+ui
+uo
+x
+z
+žž
+žš
+α
+γ
+δ
+ζ
+η
+ι
+κ
+μ
+ν
+ο
+π
+σ
+ς
+υ
+φ
+ψ
+Įlinkdama
+fechtuotojo
+špaga
+sublykčiojusi
+pragręžė
+apvalų
+arbūzą.
+gg n savimi
+magnifier gg lot
+ζ reader tavyje
+mumis o p
+v f mm
+man y v
+ζ c n
+c pp ė
+rr tavyje sš
+jis u t
+y jumis mumis
+ą o x
+v, sš. ū?
+o, o. b?
+jis, o. ji?
+f, ė. ζ?
+au, t. nn?
+ū, au. jums?
+t, ū. savęs?
+savimi, ž. w?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

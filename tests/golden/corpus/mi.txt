@@ -1,0 +1,171 @@
+kōrero
+raru
+raruraru
+urupā
+uhi pātuhi
+karaka pūoho
+Libra
+waka pere
+pere ake
+Pākina Wharo
+Hūta me Merera
+Inia
+Ngā Motu Mariana ki te Raki
+Ngā Motu Horomona
+Hato Wēneti me Keretīni
+ao whakakite Āhia-Ahitereiria
+kākati raihi
+pae tiokorete
+ngā puku mana
+mētara hākinakina
+pātaka taiwhanga maha
+ika pārūrū
+ringa pōhirihiri
+whānau tāne kōtiro tamatāne
+kaiaka mīhini wahine
+pani maikūkū
+pūangi whakaaro
+ngā pukapuka
+tukuoro kahaoro pāpaku
+porohita whero
+kaikimihara wahine
+kanohi menemene waha tuwhera me ngā karu menemene
+kanohi ūmere i te wehi
+toparere
+hikareti
+waka pūkaha
+māhunga pahū
+parāoa pakete
+kirikiti
+a
+ae
+ai
+ao
+au
+ā
+e
+ē
+i
+ī
+o
+oe
+oi
+ou
+ō
+u
+ū
+h
+k
+m
+n
+ng
+p
+r
+t
+w
+wh
+o ē ao
+n wh ou
+raru ai o
+n raru au
+oi ou p
+kōrero m k
+ae i ū
+ng ao ai
+ou raru o
+au a k
+r urupā ō
+raru raruraru n
+urupā, k. r?
+oe, p. raru?
+oi, h. m?
+ē, au. o?
+k, ao. raru?
+n, raru. raruraru?
+k, n. o?
+ā, ū. au?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

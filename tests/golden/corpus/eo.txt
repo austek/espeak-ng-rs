@@ -1,0 +1,228 @@
+v
+x
+anst
+bv
+Kg
+kp
+pĝ
+str
+uk
+Jan
+Mar
+Maj
+Jul
+Sept
+Dec
+la
+ĉu
+ia
+antaŭ
+ol
+da
+el
+ĝis
+je
+laŭ
+preter
+por
+pro
+sub
+dum
+eĉ
+plej
+ci
+ŝi
+ni
+ili
+si
+cia
+ŝia
+nia
+ilia
+miaj
+liaj
+ĝiaj
+viaj
+siaj
+estas
+estos
+povas
+povos
+devas
+devos
+iras
+iros
+metas
+metos
+havi
+havis
+eble
+kie
+kio
+kiuj
+kiujn
+tio
+ke
+ĉar
+sed
+se
+des
+ekde
+cx
+gx
+hx
+jx
+sx
+ux
+a
+aj
+aŭ
+b
+c
+ch
+d
+e
+ej
+eŭ
+f
+g
+gh
+h
+hh
+i
+j
+jh
+k
+l
+ll
+m
+o
+oj
+on
+p
+ph
+q
+qu
+r
+rr
+s
+sh
+t
+th
+ta
+u
+uj
+w
+wh
+y
+z
+ĉ
+ĝ
+ĥ
+ĵ
+ŝ
+Dec ĝiaj kiuj
+sx oj Maj
+kiujn havi e
+havis ĝ str
+on qu ŝi
+uj ci ĉ
+si hx ol
+x ni ci
+w v cx
+pro k preter
+ĝ gh p
+ekde kiuj Kg
+cx, l. ĵ?
+a, pĝ. havis?
+ilia, kie. a?
+d, aj. iros?
+havi, liaj. qu?
+Kg, Kg. la?
+j, ia. nia?
+ŝia, v. je?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

@@ -1,0 +1,244 @@
+b
+adipolyse
+alique
+analoge
+antialcoholic
+apogee
+ascendibile
+autocritic
+baseballista
+bisyllabe
+butyrometro
+cardiotonico
+cervice
+chromotypographic
+commissurotomia
+corruptibile
+cura-aures
+deistic
+didaxologo
+drainabile
+electrodynamic
+entomophage
+eschatologia
+explorabile
+focometric
+galvanoplastia
+gingivitis
+guillotinamento
+hematoscopia
+hispanomauresc
+hydrogeologia
+hypsometric
+impugnabile
+inextensibile
+invisibile
+kallima
+lethologic
+luetic
+manicheo
+mercuridi
+microphotometro
+monostrophic
+najas
+neuropsychiatric
+octagone
+orangiada
+oxymetria
+parametro
+pedogenesis
+phantasmagoric
+phtalic
+platinoide
+polyphilia
+procreabile
+psychometric
+quarz
+refrangibile
+ribovirus
+satan
+semideo
+siphonage
+spermiogenesis
+stomatologo
+synapsis
+teleonomia
+thermonastic
+trattoria
+typtologia
+vengiar
+westfalia
+clave
+clave 9
+tenge kazakh
+division
+Antarctica
+Bangladesh
+Bolivia
+Insulas Cocos Keeling
+Colombia
+Diego Garcia
+Sahara occidental
+Francia
+Gambia
+Hongkong R.A.S. de China
+Insula de Man
+Japon
+Insulas de Caiman
+Luxemburg
+Mali
+Maldivas
+Nicaragua
+Polynesia francese
+Palau
+Seychelles
+Senegal
+Insulas Turcos e Caicos
+Tonga
+Uruguay
+Samoa
+bandiera blanc
+persona con vela
+grande surriso con oculos semiclaudite
+non abandonar immunditias
+water-closet
+capillos blanc
+a
+ai
+au
+e
+ei
+eu
+i
+o
+oi
+u
+c
+ch
+d
+f
+g
+h
+j
+k
+l
+m
+n
+p
+ph
+q
+r
+s
+sh
+t
+th
+v
+w
+x
+y
+z
+explorabile invisibile focometric
+analoge typtologia y
+deistic ribovirus butyrometro
+lethologic z quarz
+parametro octagone satan
+entomophage b f
+polyphilia pedogenesis s
+focometric i ei
+apogee phantasmagoric c
+cardiotonico ai mercuridi
+ascendibile manicheo x
+s corruptibile electrodynamic
+procreabile, s. o?
+polyphilia, r. z?
+pedogenesis, corruptibile. apogee?
+eschatologia, cura-aures. focometric?
+a, luetic. l?
+impugnabile, drainabile. i?
+g, v. luetic?
+orangiada, microphotometro. d?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

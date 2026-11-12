@@ -1,0 +1,225 @@
+a
+d
+ğ
+j
+n
+q
+t
+y
+km
+men
+olar
+bizim
+ancaq
+ve
+qadar
+zarfında
+alabama
+andorra
+aydaho
+belli
+biriniñ
+bizge
+cengiz
+degil
+diagonal
+ekinci
+ellinci
+fenomenal
+formula
+gemil
+hronometr
+igor
+inglizce
+kaloriya
+karim
+kollegiya
+kollektsiya
+kombinat
+kometa
+komissarlıq
+kommuna
+kommunizm
+komplekt
+kongress
+konservirlemek
+konstatatsiya
+konstruktsiya
+kontakt
+kontributsiya
+kontsert
+kopirlemek
+korrespondentsiya
+lâkin
+milligramm
+minnesota
+monako
+nuri
+onkologik
+pensilvaniya
+putin
+registr
+santimetr
+sekizinci
+sovet
+şivesi
+tabiiy
+tilidir
+tsitata
+vanin
+vladimir
+av
+â
+bb
+bi
+c
+ce
+çç
+çe
+dd
+dir
+diy
+diya
+enko
+g
+gi
+h
+ıñız
+ik
+im
+ir
+iy
+iya
+iye
+iñiz
+k
+l
+li
+liy
+ñ
+o
+ovna
+p
+qq
+ri
+s
+siy
+sın
+skiy
+şiy
+ts
+tt
+tik
+u
+uv
+ü
+v
+viç
+yim
+zi
+w
+zi sovet av
+p ekinci onkologik
+inglizce degil tsitata
+kopirlemek vladimir nuri
+bizim qq aydaho
+ik ik ir
+formula onkologik ir
+k u sın
+j k kommunizm
+tik a korrespondentsiya
+y qadar kommunizm
+kombinat zi konstatatsiya
+kontakt, tik. bizge?
+putin, sovet. ve?
+çç, w. tilidir?
+kollektsiya, viç. belli?
+u, yim. qadar?
+q, kommuna. komissarlıq?
+n, belli. p?
+dd, sekizinci. ıñız?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

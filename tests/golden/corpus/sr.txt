@@ -1,0 +1,276 @@
+b
+dž
+k
+p
+w
+б
+ѕ
+х
+м
+ш
+ѓ
+ы
+µ
+abk
+acgm
+adp
+alg
+apj
+arj
+asx
+awb
+cda
+cpu
+dox
+ecp
+ems
+eur
+frm
+grrr
+hho
+hta
+idb
+img
+iq
+jrr
+mda
+mgi
+nco
+nrc
+nrm
+nsi
+obz
+ofx
+os
+pgi
+prf
+raw
+rcd
+rk
+rmt
+rs
+rtv
+sr
+udf
+url
+uup
+wax
+xam
+xsi
+yu
+mrs
+sl
+čega
+i
+si
+bio
+nije
+ima
+nema
+jpeg
+autorska prava
+strelica za polukružni okret udesno
+празна стрелица надоле
+подскуп
+mali crni kvadrat
+srednjemali beli kvadrat
+crni krug
+интерни производ
+mlečni put
+banana
+drvo tanabata
+kriket
+ovca
+rasklopljene šake
+dragulj
+čioda
+lupa usmerena nalevo
+devet sati
+lice sa suzama radosnicama
+lice koje se blago mršti
+voda za piće
+плави квадрат
+kašika
+lice jednoroga
+пиће у тетрапаку
+zastava: Ujedinjeni Arapski Emirati
+zastava: Seuta i Melilja
+zastava: Južna Koreja
+zastava: Palau
+zastava: Jemen
+кофа
+рука са прекрштеним палцем и кажипрстом
+žena sudija
+жена супер херој
+žena sa loptom
+а
+в
+д
+ж
+и
+л
+н
+п
+с
+у
+ч
+ђ
+љ
+ћ
+џ
+č
+dz
+đ
+exe
+g
+lj
+n
+o
+qu
+rr
+š
+u
+y
+ž
+é
+ú
+ö
+ß
+ά
+γ
+ε
+ζ
+ή
+ι
+κ
+μ
+ξ
+π
+σ
+τ
+ύ
+χ
+ω
+Љубазни
+фењерџија
+чађавог
+лица
+хоће
+да
+ми
+покаже
+штос.
+Ljubazni
+fenjerdžija
+čađavog
+lica
+hoće
+da
+mi
+pokaže
+štos.
+dox é ή
+os mgi prf
+b hta π
+udf hta n
+g ύ jrr
+prf é mda
+apj у b
+rmt rtv κ
+p sl ћ
+o xam nije
+awb д b
+dž cda nije
+p, μ. π?
+и, bio. rr?
+o, ß. jrr?
+k, б. š?
+qu, rmt. iq?
+sr, у. nema?
+asx, raw. ч?
+ú, b. ђ?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

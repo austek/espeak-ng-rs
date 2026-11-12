@@ -1,0 +1,195 @@
+ᎠᏚᎢᏍᏘᎠᎵᏚᎶ
+leftwards arrow from bar
+downwards dashed arrow
+not less-than
+hollow square containing filled square
+hollow bullet
+ᎬᏔᏅᏙᏗ
+ᎤᎾᏫ ᎠᎪᎲᏍᏗᏍᎪᎢ
+ᏉᏏᏂᎠ & ᎲᏤᎪᏫᎾ
+ᎦᎸᏥᏱ
+ᎵᏈᏯ
+ᎤᏓᏅᏘ ᎮᎵᎾ
+ᏣᏩᏂᏏ ᎠᏎᏭ ᏂᎨᏒᎾ ᎦᏗ
+ᎶᏏ
+ᎠᏗᏔᏍᏗ
+ᏗᎧᏃᎩᏍᏙᏗ ᏗᏐᏅᏍᏙᏗ
+ᏗᏕᎶᏆᏍᏗ
+ᎨᎻᎵ
+ᎠᎨᏳᏣ
+ᏏᏓᏁᎸᎢ ᎠᎨᏯ ᎠᏧᏣ
+ᎠᏍᎦᏯ ᎤᏘᏌᏗ ᎤᏬᏱ
+ᎧᏃᎮᏓ ᏓᏟᎶᏍᏛ ᎧᏁᏉᎬᎢ ᏣᏩᏂᏏ ᎠᏕᎳ
+ᏗᏓᏟᎶᏍᏙᏗ ᎤᏥᏍᏓᎷᎩ ᎠᏩᏠᏯᏍᏓ
+ᎤᏔᎾ ᏌᎪᏂ ᎦᎸᏉᏗ ᏅᏯ
+ᏗᏟᎶᏍᏔᏅᎢ ᎦᏘᏅᏔᏅᎢ
+ᎦᏢᏍᎩ ᎤᎧᏛ
+ᎤᏔᎾ ᏗᎦᏚᎲ
+ᎡᏓᏍᏗ
+ᏗᏓᏇᏄᎩᏍᏗ ᎤᏬᏰᏂ
+ᎠᏕᏛᏍᎦ ᎠᎵᎬᏚᎶᎢ
+ᎤᏨᏏᏰᏍᎬ ᎬᏩᎵᏲᏍᏗ
+ᎠᏍᎦᏯ ᏄᎬᏫᏳᏒᎩ ᎠᏍᎦᏂ
+ᏴᏫ ᎦᏆᏘᏗ ᎦᏍᎩᎶ ᎬᏗ ᎠᎦᏘᏏ ᎢᏗᏢ
+ᎠᏍᏘ
+ᎡᎳᏗ ᎠᎾᎦᎵᏍᎩ
+xb
+xc
+xcxd
+xd
+xdxf
+xfxd
+ɂ
+a
+axb
+axd
+axf
+as
+exb
+exc
+exf
+es
+i
+ixc
+ixd
+ixf
+o
+oxb
+oxc
+oxf
+os
+uxb
+uxc
+uxd
+us
+v
+vxb
+vxd
+vxf
+ạ
+ạs
+ẹ
+ị
+ịs
+ọ
+ụ
+ụs
+ṿ
+ch
+d
+g
+hn
+hy
+k
+l
+ls
+n
+s
+t
+wh
+y
+hn hn axd
+y t xd
+hy as ụs
+axd g ịs
+t xfxd ụ
+ẹ ɂ s
+exf vxb ụs
+ụ vxb exf
+xdxf vxb as
+ọ k ụ
+ɂ xd ạs
+ixc ị es
+n, axb. ṿ?
+axf, ixc. xc?
+g, ch. hy?
+os, xd. t?
+vxd, v. oxc?
+xb, ls. ụs?
+ch, us. i?
+ị, y. ị?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

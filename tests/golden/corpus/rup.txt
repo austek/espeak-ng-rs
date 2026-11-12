@@ -1,0 +1,212 @@
+b
+c
+dh
+f
+g
+j
+l
+n
+nj
+q
+t
+ts
+v
+x
+z
+aco
+amindoilji
+aoatsi
+auatsi
+ãlj
+dãs
+ea
+el
+elu
+eu
+ilj
+iou
+meu
+mi
+mini
+nesh
+nja
+njeu
+noauã
+nostru
+nã
+nãs
+nãsh
+nãsã
+ta
+ti
+tini
+tsi
+tsine
+tu
+che
+cum
+cã
+cãndu
+e
+icã
+ma
+nichi
+pãn
+shi
+ãn
+di
+disuprã
+ditru
+dupu
+fere
+la
+ninti
+nãinti
+nãnti
+pisti
+pristi
+prisuprã
+su
+trã
+a
+ai
+au
+ã
+â
+ch
+d
+dz
+ei
+ff
+gh
+h
+i
+ii
+k
+lj
+ll
+m
+mm
+nn
+o
+oa
+oi
+ou
+p
+pp
+r
+rr
+s
+sh
+th
+tt
+u
+ului
+w
+y
+zz
+eu trã ãlj
+cã zz q
+e v auatsi
+th th che
+shi aoatsi d
+z ãlj d
+gh z aco
+ninti nãnti dh
+nj gh r
+f nj ninti
+prisuprã ll ninti
+ff c tt
+h, ea. su?
+dh, ninti. a?
+y, p. nãinti?
+amindoilji, ti. q?
+ditru, pãn. c?
+nãsh, dãs. v?
+eu, zz. njeu?
+th, a. ãlj?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

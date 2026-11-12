@@ -1,0 +1,259 @@
+hinn
+hitt
+hinar
+hins
+ég
+hún
+þeir
+mig
+ykkur
+þetta
+þennan
+þessu
+sú
+því
+þeirra
+mín
+mínar
+míns
+minna
+þína
+sinn
+sínum
+vort
+vorar
+eftir
+í
+úr
+milli
+gegnum
+framhjá
+vegna
+en
+þegar
+þó
+meðan
+sem
+vera
+eruð
+var
+voru
+eigum
+átti
+áttu
+hefur
+hafði
+höfðu
+verðum
+varðst
+urðu
+getum
+gast
+gátu
+munuð
+munir
+mundir
+myndi
+mynduð
+færð
+fékk
+fenguð
+nokkuð
+nokkrir
+fram
+ð
+h
+m
+q
+t
+y
+þ
+höfundarréttarmerki
+sveigð ör til vinstri
+hol ör niður á við
+kemur ekki á eftir
+ferningur fylltur krossstrikum á ská
+hvítur meðalsmár ferningur
+hvítur hringur
+krossfeldi
+eldfjall
+sítróna
+veisluskraut
+mótorhjól
+hrútur
+þumall niður
+ástarbréf
+klippiborð
+rafhlaða
+klukkan sex
+glottandi andlit
+köttur í fýlu
+reykingar bannaðar
+brúnn hringur
+skál
+kalkúnn
+salt
+fáni: Ascension-eyja
+fáni: Dóminíska lýðveldið
+fáni: Sankti Kitts og Nevis
+fáni: Heimastjórnarsvæði Palestínumanna
+fáni: Samóa
+drullusokkur
+skjálfandi andlit
+karlkyns flugstjóri
+ofurkona
+kona með bolta
+x
+a
+au
+al
+b
+bb
+c
+dd
+e
+ei
+ey
+é
+ff
+fnd
+fnt
+g
+gj
+gn
+gt
+hj
+hl
+hr
+hv
+i
+k
+kj
+l
+ll
+mm
+n
+nn
+ngt
+nk
+o
+p
+pp
+rr
+rl
+rn
+s
+sh
+tt
+u
+ú
+v
+xz
+ý
+zz
+æ
+y gn sínum
+e vera framhjá
+q ð kj
+ey eigum hefur
+eftir þegar urðu
+hefur rl t
+q a þeir
+fenguð y x
+n mín hitt
+t é munuð
+urðu áttu þeirra
+b mynduð urðu
+þennan, eftir. zz?
+þeir, q. y?
+urðu, þeirra. gt?
+munuð, vorar. munuð?
+rr, ll. é?
+a, sem. t?
+nokkrir, sínum. fnd?
+s, milli. q?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

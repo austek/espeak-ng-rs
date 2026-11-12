@@ -1,0 +1,194 @@
+a
+b
+c
+d
+e
+f
+g
+h
+i
+j
+k
+l
+m
+n
+o
+p
+q
+r
+s
+t
+u
+v
+w
+x
+y
+z
+ch
+dh
+ny
+ph
+sh
+zy
+ts
+µ
+zeeroo
+iskuweerii giddugaleessa-xiqqoo gurraacha
+mallattoo marsaa
+qabduu mallattoo mirkanaa
+xiyya gadee
+aduu lixxu
+cheerii biloosam
+shiriimpii waadame
+borsaa dugdaa
+dhiira fiigu
+hoteela jaalalaa
+kanniisa dammaa
+dugda harkaa mirgatti akeeku
+maatii dhiira gurbaa gurbaa
+maatii dubartii dubara gurbaa
+intala mootii
+onnee naanna’u
+maxxansituu geengoo
+raadiyoo
+shugguxii bishaanii
+kudhaniif walakkaa
+Siidaa Bilisummaa
+fuula dadhabe
+nama mufate
+ijaarsa
+mana citaa
+fuula gowwaa
+nama waa ol daddarbatee qabatu
+sanduuqa
+iskuyiidii
+gurra gargaartuu dhageettii waliin
+nama ibidda dhaamsu
+poostaa diimaa
+uluullee
+hayaasiintii
+aa
+bb
+dd
+ee
+gg
+ii
+kk
+ll
+mm
+nn
+oo
+pp
+qq
+rr
+ss
+tt
+uu
+xx
+yy
+zz
+sh n c
+z z ll
+z dh y
+x µ f
+j w dd
+nn t k
+ee n j
+j zy ch
+ss q l
+j d l
+b a y
+ph t k
+x, r. r?
+o, q. ee?
+dd, b. w?
+j, k. h?
+h, h. b?
+d, y. ny?
+h, m. c?
+k, w. n?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

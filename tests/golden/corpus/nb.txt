@@ -1,0 +1,254 @@
+a
+b
+d
+g
+j
+l
+n
+q
+s
+v
+x
+é
+ooxml
+et
+jeg
+du
+hun
+dere
+meg
+ham
+oss
+denne
+disse
+det
+mi
+mine
+di
+dine
+hennes
+vår
+våre
+sin
+sitt
+i
+av
+etter
+foran
+in
+hos
+med
+mens
+ned
+over
+på
+til
+uten
+og
+men
+fordi
+hvis
+eller
+ikke
+er
+vært
+har
+hatt
+ble
+blitt
+kan
+kunnet
+skulle
+bør
+også
+screen
+cancel
+magnifier
+der
+kom
+noe
+office
+taster
+pil høyre med styrefjær
+stiplet pil høyre
+mellom
+hult kvadrat med avrundede hjørner
+fylt trekant med rett vinkel oppe til høyre
+destillerkolbe
+rødt hjerte
+Aserbajdsjan
+Færøyene
+Latvia
+Singapore
+fullt på japansk
+rose
+tekopp
+piano
+dagligvarebutikk
+dromedar
+gutt
+familie kvinne gutt
+hjelpende kvinne
+stigende diagram med yen
+kamera
+stort blått rutersymbol
+innrammet bilde
+søvnig
+tunnelbane
+toalettskilt
+hånd som klyper
+dykkermaske
+turstøvel
+mannlig superskurk
+person i manuell rullestol vendt mot høyre
+tråd
+lite batteri
+ai
+au
+ae
+be
+c
+ch
+e
+en
+ene
+es
+gg
+h
+hj
+ig
+k
+kk
+ll
+ld
+m
+nn
+nd
+o
+oe
+p
+qq
+r
+rs
+ss
+sch
+skj
+sk
+tt
+ti
+u
+ui
+vv
+w
+y
+z
+å
+åe
+ø
+øy
+ö
+g vår ned
+du ai du
+jeg skj g
+åe ikke ch
+nd på rs
+etter q et
+hj foran n
+kom å ch
+office i h
+med kunnet j
+ti ld mi
+ai ham di
+disse, sitt. g?
+i, vært. hennes?
+hj, med. é?
+d, au. eller?
+sk, ss. sin?
+og, kunnet. q?
+kan, mi. z?
+d, au. ch?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

@@ -1,0 +1,265 @@
+b
+p
+adam
+agy
+ajy
+alamat
+alýarsyň
+aragatnaşyk
+aşak
+atynça
+aýdyňlanmak
+azalmak
+ähtimal
+baglaýjy
+baryny
+bäri
+biçäre
+biparh
+bormy
+çal
+çiş
+darbazçy
+dälmişikmi
+dälmişmi
+diri
+dördünji
+dünýäde
+etrap
+gandarlyk
+garaköli
+gelägede
+gopbamsylyk
+gölemek
+göýä
+günälemek
+halkara
+haýran
+hor
+içaly
+inelge
+işimem
+işlemekçimişinler
+jahangir
+jellap
+jomart
+kär
+köl
+many
+minara
+myhman
+nälet
+okaýan
+otyr
+örän
+özüňe
+pyýada
+sazanda
+sorag
+şat
+täze
+türkmenistan
+weýran
+yrak
+ýanyna
+ýaşulular
+ýelpeýär
+ýönekeý
+zatlar
+görmek
+köönelen
+klawiş gapagy
+çyzykdan çep ok
+aşak arasy bölünýän ok
+-dan kiçi däl
+içinde doldurylan kwadrat bolan içi boş kwadrat
+içi boş belgi
+dişli
+ýanyp duran ýürek
+Bosniýa we Gersegowina
+Fransiýa
+Liwiýa
+Keramatly Ýelena adasy
+ýaponça mugt däl düwmesi
+bägül
+sake
+saz klawiaturasy
+mekdep
+düýe
+gyz
+maşgala zenan oglan
+elini açan erkek
+ýenli köpelýän grafik
+wspyşkaly kamera
+uly gök pişme
+çarçuwaly surat
+ukuly ýüz
+metro
+tualet
+çümmükleýän el
+çümüş maskasy
+ýöriş botinkasy
+erkek superbetpäl
+el bilen işleýän tigirçekli oturgyçdaky adam ýüzi saga
+ýüp
+batareý pes
+ñ
+ÿ
+aa
+amok
+anok
+aňzok
+anoklar
+ä
+äp
+äbermek
+baz
+bermek
+d
+dan
+daky
+dar
+e
+emok
+g
+h
+i
+ii
+jagaz
+jek
+keş
+lap
+läp
+ler
+mak
+mamak
+mazlyk
+mezlik
+my
+masammy
+mb
+n
+nb
+ň
+ňg
+oo
+öö
+rak
+s
+şç
+u
+uu
+üý
+w
+yy
+ý
+ýär
+ýäris
+ýärsiňiz
+zar
+🇧🇫
+gelägede my biparh
+yrak dälmişmi garaköli
+täze weýran gelägede
+okaýan e ýär
+ÿ i ýelpeýär
+w läp w
+täze inelge ä
+baz ýärsiňiz amok
+baz sorag öö
+jomart nb dar
+ýanyna özüňe işlemekçimişinler
+diri w halkara
+ýär, äbermek. sazanda?
+weýran, kär. bermek?
+äbermek, etrap. aragatnaşyk?
+aşak, jahangir. h?
+rak, d. baglaýjy?
+i, günälemek. agy?
+hor, göýä. masammy?
+weýran, lap. dälmişmi?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

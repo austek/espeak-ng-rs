@@ -1,0 +1,271 @@
+y
+yr
+ac
+er
+felly
+neu
+ond
+sy
+sydd
+yng
+ynddo
+â
+ar
+ap
+mewn
+tu
+heb
+ers
+nes
+dan
+blaen
+rhwng
+dros
+erbyn
+i
+e
+ni
+nhw
+honna
+hwn
+hwnnw
+hynny
+rheina
+taw
+Mai
+yna
+'ma
+fy
+ein
+shwd
+fel
+nag
+rhywfaint
+rhywrai
+yn
+fe
+rydw
+mae
+rydych
+dwy
+dach
+ryn
+roedd
+oes
+dyma
+cael
+gafodd
+gawson
+gas
+gesoch
+alla
+all
+allwch
+galla
+galli
+gallwn
+gallan
+neud
+cymraeg
+Hughes
+hawlfraint
+saeth i’r chwith yn troi i’r dde
+saeth wag i fyny o’r bar
+uwchset
+sgwâr bach gwyn
+triongl dde isaf
+arch
+is-res rhesymegol neu ddwbl
+y llwybr llaethog
+pinafal
+baneri â chroesau
+pêl-foli
+dafad
+dwylo agored
+cusan
+clip papur
+chwyddwydr yn wynebu’r dde
+deg o’r gloch
+wyneb yn gwenu â cheg agored a llygaid mawr
+wyneb ag ychydig o wên arni
+dwr na ellir ei foteli
+sgwâr oren
+medal aur
+hwyaden
+garlleg
+baner: Afghanistan
+baner: Ecuador
+baner: Ynysoedd Cayman
+baner: Qatar
+baner: De Affrica
+placard
+dwylo calon
+barnwres
+archarwr benywaidd
+menyw â phêl
+a
+aa
+ae
+a'i
+au
+b
+c
+cwn
+d
+ee
+ey
+eu
+f
+ff
+gwl
+gwn
+h
+iw
+j
+l
+ll
+m
+n
+o
+oo
+oi
+ou
+ph
+q
+r
+rh
+si
+t
+u
+uu
+v
+w
+wy
+x
+yw
+ê
+ô
+û
+ŷ
+à
+ì
+ò
+ẁ
+ỳ
+'ch
+'n
+Parciais
+jac
+codi
+baw
+hud
+llawn
+dŵr
+ger
+tŷ
+Mabon.
+au dan t
+a'i rhywfaint t
+yng yng nag
+x aa ê
+yn ac ond
+ô i au
+allwch oo ô
+ff fe oo
+au dan dyma
+ỳ ou gawson
+hwn all gafodd
+yn uu ein
+o, rheina. w?
+eu, i. yna?
+ỳ, dwy. felly?
+rydych, rydych. û?
+c, ey. galli?
+rhwng, shwd. galla?
+ou, hwn. allwch?
+'ma, galla. a?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

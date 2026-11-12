@@ -1,0 +1,222 @@
+b
+f
+l
+q
+v
+ch
+í
+ª
+a
+los
+ras
+se
+mos
+con
+por
+sin
+ers
+bel
+bellos
+quan
+per
+i
+abs
+acup
+aeci
+akp
+ap
+avl
+bce
+cav
+cee
+cidui
+csic
+dogc
+eb
+eln
+erc
+fapae
+fib
+iaaf
+iec
+inc
+ipc
+itv
+mibor
+ocde
+omc
+op
+pec
+pid
+raf
+rsa
+smi
+tpi
+uab
+ue
+uicn
+ump
+ups
+urv
+uveg
+witsa
+halma
+holio
+jazz
+at
+firefox
+iphone
+mozilla
+thunderbird
+aix
+ai
+au
+a'
+c'
+ck
+d
+d'
+de'
+eix
+ei
+eu
+ent'
+enta'
+g
+gü
+gh
+gu
+hu
+k
+m
+m'
+mo'
+ny
+ñ
+o
+oi
+oy
+p
+ps
+p'
+pe'
+qu
+r
+rr
+rs
+s'
+t
+tz
+ta'
+to'
+uix
+w
+y
+z
+á
+ó
+uicn ps avl
+ta' ei cav
+aeci avl aeci
+con akp p'
+s' uveg ei
+p halma ps
+pid f ta'
+op a at
+halma v eln
+se d' ue
+ó cidui se
+mos por rsa
+pe', to'. ó?
+ó, fapae. aeci?
+i, witsa. itv?
+avl, hu. o?
+itv, urv. v?
+eln, z. iaaf?
+m', ch. firefox?
+iphone, urv. tpi?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7

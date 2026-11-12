@@ -1,0 +1,196 @@
+b
+c
+d
+f
+g
+h
+j
+k
+l
+m
+n
+p
+q
+r
+s
+t
+v
+w
+x
+z
+varemærke
+halvlille hvidt kvadrat
+fisken
+kirke
+hvidt spørgsmålstegn
+ikke godt
+globus med nord- og sydamerika
+grantræ
+hamburger
+sake
+knapper
+ski
+ørken
+tiger
+pingvin
+venstre
+dommer
+kvindelig dommer
+kvindelig politibetjent
+læbestift
+vrede
+dokument
+pakke
+højttaler til
+teleskop
+kl.12
+trackball
+lettet ansigt
+ansigt med åben mund
+glad person
+bil
+mountainbikerytter
+motorbåd
+gravid kvinde
+kampsportsuniform
+a
+ak
+ap
+at
+aa
+aar
+aaq
+ai
+e
+ee
+ff
+gg
+hh
+i
+jj
+kk
+ll
+mm
+naa
+nn
+ng
+nng
+o
+oo
+pp
+rr
+rl
+ss
+tt
+tl
+ts
+uu
+vv
+y
+æ
+ø
+v nn w
+tl nn oo
+ai hh oo
+a k gg
+q q h
+z rr c
+c hh p
+t rl tl
+i w m
+s uu l
+m m p
+at x q
+vv, d. b?
+aa, f. q?
+k, c. f?
+z, j. ng?
+jj, r. ts?
+ap, n. ai?
+uu, ng. w?
+mm, g. ss?
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+30
+99
+100
+101
+1000
+1234
+2024
+12345
+1000000
+3.14
+0.5
+1,5
+1,000
+-5
++7
+50%
+$5
+€10
+1st
+2nd
+3rd
+4.
+1.
+12:30
+08:15
+25/12/2024
+2024-01-15
+1.1.2000
+a,b;c:d?e!
+(x)
+[y]
+{z}
+...
+—
+!?
+123abc
+abc123
+A.B.C.
+U.S.A.
+3x4
+10km
+5kg
+#1
+@home
+x=y+z
+100%
+½
+²
+20°
+Hello, world!
+a b c
+Dr. Smith
+etc.
+e.g. this
+No. 5
+a, b; c: d?
+"quoted" text
+tel. 555-1234
+It is 5 o'clock.
+Page 12 of 300.
+10.5 kg
+1 234 567
+3 + 4 = 7
