@@ -363,6 +363,8 @@ pub fn apply_echo(pcm: &mut [i16], delay: usize, amp: i32) {
 /// PCM output buffer (16-bit signed mono at 22050 Hz).
 pub type PcmBuffer = Vec<i16>;
 
+type PcmSink<'a> = Option<&'a mut dyn FnMut(&[i16], bool) -> bool>;
+
 /// Top-level synthesizer: takes an IPA phoneme string and produces PCM.
 ///
 /// ## Usage
@@ -686,7 +688,7 @@ impl Synthesizer {
         phdata: &crate::phoneme::PhonemeData,
         word_marks: &mut Vec<usize>,
         sentence_marks: &mut Vec<usize>,
-        sink: &mut Option<&mut dyn FnMut(&[i16], bool) -> bool>,
+        sink: &mut PcmSink<'_>,
     ) -> Result<PcmBuffer> {
         if codes.is_empty() {
             return Ok(Vec::new());
@@ -1024,7 +1026,7 @@ impl Synthesizer {
         dir: &std::path::Path,
         word_marks: &mut Vec<usize>,
         sentence_marks: &mut Vec<usize>,
-        sink: &mut Option<&mut dyn FnMut(&[i16], bool) -> bool>,
+        sink: &mut PcmSink<'_>,
     ) -> PcmBuffer {
         let mut held: Vec<i16> = Vec::new();
         let mut stopped = false;
@@ -1299,8 +1301,7 @@ fn annotate_codes(
                 let more_syllables = {
                     // Count vowels after this one before END_WORD / clause boundary
                     let mut has_more = false;
-                    for jj in i..n {
-                        let (c2, b2) = flat[jj];
+                    for &(c2, b2) in &flat[i..n] {
                         if b2 { break; } // END_WORD or pause boundary
                         if c2 == 0 || c2 == 15 { break; }
                         if (1..=7).contains(&c2) { continue; }
@@ -1519,7 +1520,7 @@ fn smooth_spect(frames: &mut [phondata::SpectFrame], centre: usize) {
     // centre), over a transition of `len` samples.  `break_lf` (FRFLAG_BREAK_LF)
     // keeps F1–F3 discontinuous (only smooth F4+).
     let limit = |frames: &mut [phondata::SpectFrame], cur: usize, anchor: usize, len: i32, break_lf: bool| {
-        for pk in 0..6 {
+        for (pk, rate) in FORMANT_RATE.iter().enumerate() {
             if break_lf && pk < 3 {
                 continue;
             }
@@ -1527,7 +1528,7 @@ fn smooth_spect(frames: &mut [phondata::SpectFrame], centre: usize) {
             let f2 = frames[cur].ffreq[pk] as i32;
             let diff = f2 - f1;
             let mut allowed = if diff > 0 { f1 * 2 + f2 } else { f1 + f2 * 2 };
-            allowed = allowed * FORMANT_RATE[pk] / 3000;
+            allowed = allowed * rate / 3000;
             allowed = allowed * len / 256;
             if diff > allowed {
                 frames[cur].ffreq[pk] = (f1 + allowed).clamp(0, i16::MAX as i32) as i16;
@@ -2099,12 +2100,7 @@ fn agc_clip(samples: &[i32]) -> Vec<i16> {
     for &z1 in samples {
         let z = (z1 as i64 * agc) >> 8;
 
-        if z >= 32768 {
-            let ov = if z1 != 0 { 8_388_608i64 / (z1 as i64).abs() - 1 } else { 0 };
-            if ov < agc { agc = ov.max(1); }
-            let z2 = (z1 as i64 * agc) >> 8;
-            out.push(z2.clamp(-32767, 32767) as i16);
-        } else if z <= -32768 {
+        if !(-32767..=32767).contains(&z) {
             let ov = if z1 != 0 { 8_388_608i64 / (z1 as i64).abs() - 1 } else { 0 };
             if ov < agc { agc = ov.max(1); }
             let z2 = (z1 as i64 * agc) >> 8;
@@ -2214,11 +2210,13 @@ mod tests {
     fn klatt_frame_run_auto_selects_cascade() {
         // A run of FRFLAG_KLATT frames must render through the Klatt cascade even
         // without the global `VoiceParams.klatt` flag, and still produce audio.
-        let mut fr = phondata::SpectFrame::default();
-        fr.frflags = phondata::FRFLAG_KLATT;
-        fr.ffreq = [120, 730, 1090, 2440, 3400, 4000, 4500];
-        fr.length = 20;
-        fr.rms = 40;
+        let fr = phondata::SpectFrame {
+            frflags: phondata::FRFLAG_KLATT,
+            ffreq: [120, 730, 1090, 2440, 3400, 4000, 4500],
+            length: 20,
+            rms: 40,
+            ..Default::default()
+        };
         let mut frames = vec![fr; 4];
         let mut amps = vec![1.0; 4];
         let mut pitch = vec![120.0; 4];
@@ -2330,8 +2328,10 @@ mod tests {
 
     #[test]
     fn synthesize_speed_affects_duration() {
-        let mut fast_voice = VoiceParams::default();
-        fast_voice.speed_percent = 200; // double speed → half duration
+        let fast_voice = VoiceParams {
+            speed_percent: 200, // double speed → half duration
+            ..VoiceParams::default()
+        };
 
         let s_normal = Synthesizer::new(VoiceParams::default());
         let s_fast   = Synthesizer::new(fast_voice);

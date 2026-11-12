@@ -365,19 +365,19 @@ impl Wavegen {
             }
         }
         let mut f: i32 = 0;
-        for h in 0..=hmax.max(0) as usize {
-            let x = htab[h] >> 15;
-            htab[h] = x.wrapping_mul(x) >> 8;
+        for slot in htab.iter_mut().take(hmax.max(0) as usize + 1) {
+            let x = *slot >> 15;
+            *slot = x.wrapping_mul(x) >> 8;
             let ix = f >> 19;
             if ix < N_TONE_ADJUST {
-                htab[h] = htab[h].wrapping_mul(self.voice.tone_adjust[ix as usize] as i32) >> 13;
+                *slot = slot.wrapping_mul(self.voice.tone_adjust[ix as usize] as i32) >> 13;
             }
             f = f.wrapping_add(pitch);
         }
         htab[1] = htab[1].wrapping_mul(self.option_harmonic1) / 8;
         if control & 1 != 0 {
-            for h in 1..N_LOWHARM {
-                self.harm_inc[h] = (htab[h] - self.hspect[self.harmspect][h]) >> 3;
+            for (h, inc) in self.harm_inc.iter_mut().enumerate().take(N_LOWHARM).skip(1) {
+                *inc = (htab[h] - self.hspect[self.harmspect][h]) >> 3;
             }
         }
         let n = (hmax.max(0) as usize + 1).min(MAX_HARMONIC);

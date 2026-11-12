@@ -532,8 +532,7 @@ impl<'a> Generator<'a> {
 
     fn append_seq2(&mut self, frames: &mut Vec<FrameRef>, addr: u32) {
         let seq2 = self.load_seq(addr);
-        let mut nf = frames.len() - 1;
-        for (ix, f) in seq2.iter().enumerate() {
+        for (nf, (ix, f)) in (frames.len() - 1..).zip(seq2.iter().enumerate()) {
             if nf >= frames.len() {
                 frames.push(FrameRef { frame: f.frame, frflags: f.frflags, length: f.length });
             }
@@ -542,7 +541,6 @@ impl<'a> Generator<'a> {
                 frames[nf].frame = f.frame;
                 frames[nf].frflags = f.frflags;
             }
-            nf += 1;
         }
     }
 
@@ -721,7 +719,7 @@ impl<'a> Generator<'a> {
 
     fn limit_formants(&mut self, frame1: usize, frame: usize, len: i32, skip_lf: bool) -> Option<usize> {
         let mut copy: Option<usize> = None;
-        for pk in 0..6 {
+        for (pk, rate) in FORMANT_RATE.iter().enumerate().take(6) {
             if skip_lf && pk < 3 {
                 continue;
             }
@@ -729,7 +727,7 @@ impl<'a> Generator<'a> {
             let f2 = self.frames[frame].ffreq[pk] as i32;
             let diff = f2 - f1;
             let base = if diff > 0 { f1 * 2 + f2 } else { f1 + f2 * 2 };
-            let allowed = (base * FORMANT_RATE[pk]) / 3000;
+            let allowed = (base * rate) / 3000;
             let allowed = (allowed * len) / 256;
             if diff > allowed || diff < -allowed {
                 let c = *copy.get_or_insert_with(|| self.copy_frame(frame, false));
