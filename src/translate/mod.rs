@@ -6627,67 +6627,6 @@ fn char_script(c: char) -> Option<Script> {
     })
 }
 
-/// Does upstream's `alphabets[]` table set `AL_WORDS` for this script — "use the
-/// language to speak words"?
-///
-/// Only these scripts switch translator for a whole word.  Everything else
-/// (Cyrillic, Hebrew, Thai, Han, Kana, …) is **spelled** letter by letter in the
-/// current language: `en "хорошо"` reads out the Cyrillic letter names rather
-/// than switching to Russian.  Taken from `tr_languages.c`, minus Greek: its row
-/// also carries `AL_DONT_NAME | AL_NOT_LETTERS`, and upstream is observed to
-/// spell Greek in an English voice (`αβγ` → `'alf@_b'i:t@_g'am@_`) rather than
-/// switch, so it belongs with the spelled scripts here.
-fn script_uses_words(script: Script) -> bool {
-    matches!(
-        script,
-        Script::Armenian
-            | Script::Arabic
-            | Script::Devanagari
-            | Script::Bengali
-            | Script::Gurmukhi
-            | Script::Gujarati
-            | Script::Tamil
-            | Script::Kannada
-            | Script::Malayalam
-            | Script::Sinhala
-            | Script::Georgian
-            | Script::Hangul
-    )
-}
-
-/// The default voice for a script — upstream picks the alternate translator from
-/// the `alphabets[]` table's `language` field the same way.  (Upstream #2479:
-/// the automatic switch target is hardcoded there too; here it can be overridden
-/// per language by [`alt_alphabet_voice`].)
-fn script_voice(script: Script) -> &'static str {
-    match script {
-        Script::Latin => "en",
-        Script::Cyrillic => "ru",
-        Script::Greek => "el",
-        Script::Arabic => "ar",
-        Script::Hebrew => "he",
-        Script::Armenian => "hy",
-        Script::Georgian => "ka",
-        Script::Devanagari => "hi",
-        Script::Bengali => "bn",
-        Script::Gurmukhi => "pa",
-        Script::Gujarati => "gu",
-        Script::Oriya => "or",
-        Script::Tamil => "ta",
-        Script::Telugu => "te",
-        Script::Kannada => "kn",
-        Script::Malayalam => "ml",
-        Script::Sinhala => "si",
-        Script::Thai => "th",
-        Script::Myanmar => "my",
-        Script::Ethiopic => "am",
-        Script::Cherokee => "chr",
-        Script::Hangul => "ko",
-        Script::Kana => "ja",
-        Script::Han => "cmn",
-    }
-}
-
 /// The scripts a voice reads natively.  Anything not listed reads Latin, which
 /// matches the shipped voices (the large majority are Latin-script languages).
 ///
@@ -6726,16 +6665,6 @@ fn native_scripts(lang: &str) -> &'static [Script] {
         "ja" => &[Script::Kana, Script::Han],
         "cmn" | "yue" | "hak" | "zh" => &[Script::Han],
         _ => &[Script::Latin],
-    }
-}
-
-/// Per-language override of the fallback voice for a script — upstream's
-/// `langopts.alt_alphabet` / `alt_alphabet_lang` (#2511).  Arabic nominates
-/// Mandarin for Han ideographs so they are read rather than spelled out.
-fn alt_alphabet_voice(lang: &str, script: Script) -> Option<&'static str> {
-    match (primary_bcp47_subtag(lang), script) {
-        ("ar", Script::Han) => Some("cmn"),
-        _ => None,
     }
 }
 
@@ -6836,62 +6765,6 @@ fn split_abandoned_words(
     }
     *tokens = out;
     letters_at
-}
-
-/// Whether the language's **own letter rules** can read this word.
-///
-/// C never switches translator by script — its `alphabets[]` table nominates a
-/// language only for *naming* an unknown letter — and several voices carry
-/// rules for a second script: Serbo-Croatian is digraphic, Macedonian and Uzbek
-/// have Latin transliterations (and Uzbek a Cyrillic one), Lingua Franca Nova a
-/// Cyrillic orthography.  A word those rules cover must therefore stay in the
-/// language, instead of being routed to whatever voice owns the script:
-/// `mk "Dzidarski"` is `dz'id&Rsk,I`, not `d'@ z'@ I_:…`, and `uz "Ўзбекча"` is
-/// `o:zb'ektS&`, not Russian.
-fn rules_know_word(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
-    if word.is_empty() || dict.rules().is_empty() {
-        return false;
-    }
-    // C reads the clause in lower case, so a capital never reaches the rules.
-    let word = lowercase_for_lang(word, &lang_opts.lang);
-    let mut buf = Vec::with_capacity(word.len() + 3);
-    buf.push(b' ');
-    buf.extend_from_slice(word.as_bytes());
-    buf.push(b' ');
-    buf.push(0);
-    let (mut vowels, mut stressed) = (0i32, 0i32);
-    let r = crate::dictionary::rules::translate_rules(
-        dict,
-        &buf,
-        1,
-        0,
-        0,
-        &dict.letter_bits,
-        lang_opts.dict_condition,
-        &mut vowels,
-        &mut stressed,
-    );
-    // `spellword` means a letter had no rule at all — that is the case where the
-    // word really is foreign to this language.
-    !r.spellword && r.phonemes.iter().any(|&b| b != 0)
-}
-
-/// If `word` is written in a script the `lang` voice doesn't read (a Cyrillic or
-/// Greek word inside an English clause, a Latin word inside a Russian one, Han
-/// ideographs inside Arabic, …), return a voice that does, so the word is
-/// re-translated instead of dropped.
-fn foreign_script_voice(word: &str, lang: &str) -> Option<&'static str> {
-    let script = word.chars().find_map(char_script)?;
-    if native_scripts(lang).contains(&script) {
-        return None; // the current voice already reads this script
-    }
-    // A language explicitly nominated by `alt_alphabet` wins over the AL_WORDS
-    // rule (upstream checks `langopts.alt_alphabet` first).
-    if let Some(alt) = alt_alphabet_voice(lang, script) {
-        return Some(alt);
-    }
-    // Otherwise only an `AL_WORDS` script switches; the rest get spelled.
-    script_uses_words(script).then(|| script_voice(script))
 }
 
 /// C's `Unpronouncable2`: no start-of-word rule matches the word, or the one
@@ -7278,98 +7151,6 @@ fn spell_word_letters(
     Some(out)
 }
 
-/// The dictionary key of the name `TranslateLetter` announces for a script
-/// (`alphabets[].name`); Greek is `AL_DONT_NAME`.
-fn alphabet_name_key(script: Script) -> Option<&'static str> {
-    Some(match script {
-        Script::Armenian => "_hy",
-        Script::Hebrew => "_he",
-        Script::Arabic => "_ar",
-        Script::Devanagari => "_hi",
-        Script::Bengali => "_bn",
-        Script::Gurmukhi => "_gur",
-        Script::Gujarati => "_gu",
-        Script::Oriya => "_or",
-        Script::Tamil => "_ta",
-        Script::Telugu => "_te",
-        Script::Kannada => "_kn",
-        Script::Malayalam => "_ml",
-        Script::Sinhala => "_si",
-        Script::Thai => "_th",
-        Script::Myanmar => "_my",
-        Script::Georgian => "_ka",
-        Script::Ethiopic => "_eth",
-        Script::Kana => "_ja",
-        Script::Han => "_zh",
-        _ => return None,
-    })
-}
-
-/// As [`alphabet_name_key`], plus Cyrillic: a letter handed to another voice
-/// (`it м` → `_^_RU`) is announced as "cirillico", whereas a Cyrillic letter the
-/// dictionary lists as a word (`en х`) never reaches `TranslateLetter`.
-fn switched_alphabet_name_key(script: Script) -> Option<&'static str> {
-    match script {
-        Script::Cyrillic => Some("_cyr"),
-        other => alphabet_name_key(other),
-    }
-}
-
-/// Spell a word the current voice can't read: one letter name per character,
-/// looked up in this language's own dictionary (`х` → `x'a:` in English).
-///
-/// This is upstream's `FLAG_SPELLWORD` path — an unrecognised letter inside a
-/// word aborts the translation and the word is spelled instead.  Returns `None`
-/// when no character has a name, so the caller can fall back.
-fn spell_foreign_word(
-    word: &str,
-    dict: &Dictionary,
-    phdata: &PhonemeData,
-    stress_opts: &StressOpts,
-    options: &LangOptions,
-) -> Option<Vec<u8>> {
-    let mut out: Vec<u8> = Vec::new();
-    for c in word.chars() {
-        // Combining marks have no name of their own.
-        if matches!(c as u32, 0x0300..=0x036F) {
-            continue;
-        }
-        // Letter names are listed lower-case (`_х`), so a capital spells the
-        // same as its lower-case form.
-        let lower = c.to_lowercase().to_string();
-        let mut wr = word_to_phonemes(&format!("_{lower}"), dict, phdata, stress_opts, options);
-        if wr.phonemes.iter().all(|&b| b == 0) || !wr.found_in_list {
-            wr = word_to_phonemes(&lower, dict, phdata, stress_opts, options);
-        }
-        // A name has to come from the *dictionary* (`_х` → "kha").  Letter-to-
-        // sound rules will happily produce phonemes for any character, which is
-        // not a name — if even one letter has none, the language can't spell
-        // this word and the caller falls back to switching voice.
-        if wr.phonemes.is_empty() || !wr.found_in_list {
-            return None;
-        }
-        // `TranslateLetter` says the alphabet's name (`_he`) ahead of every
-        // letter it spells from another script.
-        let alphabet = char_script(c)
-            .and_then(alphabet_name_key)
-            .and_then(|key| raw_list_entry(key, dict, phdata, stress_opts, options))
-            .map(|(ph, _)| ph);
-        // Each spelled letter is its own word (`x'a: 'o: 'Er …`) — unless the
-        // name already ends in a pause, as the Greek letter names do
-        // (`'alf@_b'i:t@_`), where upstream runs them together.
-        if !out.is_empty() && (alphabet.is_some() || !out.last().is_some_and(|&c| is_pause_code(c))) {
-            out.push(crate::phoneme::PHON_END_WORD);
-        }
-        if let Some(name) = alphabet {
-            out.extend(name);
-        }
-        // Strip any 0 terminator: it ends the *whole* sequence for the IPA
-        // renderer, which would truncate the word after its first letter.
-        out.extend(wr.phonemes.iter().copied().filter(|&b| b != 0));
-    }
-    (!out.is_empty()).then_some(out)
-}
-
 /// C's `derived_letters` (`IsSuperscript`): the base character of a super- or
 /// subscript letter or digit.
 fn derived_letter(c: char) -> Option<char> {
@@ -7481,71 +7262,6 @@ fn superscript_name(
         name.push(0);
     }
     name
-}
-
-/// How `LetterFallback` says a letter the language cannot pronounce.
-pub(crate) struct LetterEntry {
-    pub(crate) phonemes: Vec<u8>,
-    pub(crate) word: String,
-}
-
-/// C's `TranslateLetter` for a lone letter the rules left silent.
-///
-/// The letter's own name first (a super- or subscript letter by its base
-/// letter's name), then — for a voice that is not English — the English name,
-/// which `english_has` vouches for, and last the word "letter" followed by the
-/// digits of the letter's code point.
-fn letter_fallback(
-    letter: char,
-    dict: &Dictionary,
-    phdata: &PhonemeData,
-    stress_opts: &StressOpts,
-    options: &LangOptions,
-    english_has: &dyn Fn(char) -> bool,
-) -> Option<LetterEntry> {
-    use crate::phoneme::{PHON_PAUSE, PHON_PAUSE_VSHORT, PHON_SWITCH};
-    let (mut letter, mut name) = (letter, Vec::new());
-    for candidate in std::iter::once(letter).chain(derived_letter(letter)) {
-        letter = candidate;
-        name = letter_name(letter, dict, phdata, stress_opts, options);
-        if !name.is_empty() {
-            break;
-        }
-    }
-    let entry = |mut phonemes: Vec<u8>, word: String| {
-        phonemes.push(0);
-        Some(LetterEntry { phonemes, word })
-    };
-    if !name.is_empty() {
-        return entry(name, letter.to_string());
-    }
-    if primary_bcp47_subtag(&options.lang) != "en" && english_has(letter) {
-        let mut switch = vec![PHON_SWITCH];
-        switch.extend_from_slice(b"en");
-        return entry(switch, format!("_{letter}"));
-    }
-    // C's `alphabets[]` hands 0xa700..0xd7ff to Korean, which has no name and
-    // does not speak a code.
-    if (0xa700..=0xd7ff).contains(&(letter as u32)) {
-        return None;
-    }
-    let own = |key: &str| raw_list_entry(key, dict, phdata, stress_opts, options).map(|(ph, _)| ph);
-    let mut out = Some(letter)
-        .filter(|c| c.is_alphabetic())
-        .and_then(|_| own("_?A"))
-        .or_else(|| (!letter.is_whitespace()).then(|| own("_??")).flatten())
-        .unwrap_or_else(|| parse_inline_phonemes("l'et@", phdata));
-    const HEX_NAMES: [&str; 6] = ["'e:j", "b'i:", "s'i:", "d'i:", "'i:", "'ef"];
-    for digit in format!("{:x}", letter as u32).chars() {
-        out.push(PHON_PAUSE_VSHORT);
-        let mut spelled = letter_name(digit, dict, phdata, stress_opts, options);
-        if spelled.first().is_none_or(|&b| b == PHON_SWITCH) && digit >= 'a' {
-            spelled = parse_inline_phonemes(HEX_NAMES[(digit as u8 - b'a') as usize], phdata);
-        }
-        out.extend(spelled);
-    }
-    out.push(PHON_PAUSE);
-    entry(out, letter.to_string())
 }
 
 /// C's `TranslateRoman` validity scan over a lower-case word: `ix`, `xxi` and
