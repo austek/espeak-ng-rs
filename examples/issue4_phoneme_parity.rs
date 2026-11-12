@@ -78,7 +78,7 @@ fn main() -> std::io::Result<()> {
     let data_dir = dir.as_path();
 
     println!("Using data dir: {}", data_dir.display());
-    let _ = try_set_espeak_data_path_for_cli(data_dir);
+    try_set_espeak_data_path_for_cli(data_dir);
 
     let samples = [
         "When choices cease",

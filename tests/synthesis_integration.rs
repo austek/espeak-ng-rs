@@ -111,8 +111,7 @@ fn klatt_path_renders_and_differs_from_harmonic() {
         .synthesize_codes(&codes, &phdata)
         .expect("harmonic");
     // Opt-in Klatt path.
-    let mut vp = VoiceParams::default();
-    vp.klatt = true;
+    let vp = VoiceParams { klatt: true, ..VoiceParams::default() };
     let klatt = Synthesizer::new(vp).synthesize_codes(&codes, &phdata).expect("klatt");
 
     assert!(!klatt.is_empty(), "Klatt produced no audio");
@@ -202,11 +201,9 @@ fn spoken_duration_scales_with_speed() {
     let translator = Translator::new_default("en").expect("translator");
     let codes = translator.translate_to_codes("hello").expect("codes");
 
-    let mut normal_voice = VoiceParams::default();
-    normal_voice.speed_percent = 100;
+    let normal_voice = VoiceParams { speed_percent: 100, ..VoiceParams::default() };
 
-    let mut fast_voice = VoiceParams::default();
-    fast_voice.speed_percent = 200; // double speed
+    let fast_voice = VoiceParams { speed_percent: 200, ..VoiceParams::default() }; // double speed
 
     let normal = Synthesizer::new(normal_voice).synthesize_codes(&codes, &phdata).unwrap();
     let fast   = Synthesizer::new(fast_voice).synthesize_codes(&codes, &phdata).unwrap();

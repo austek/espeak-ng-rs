@@ -74,12 +74,12 @@ fn rule_level_switch_retranslates_the_whole_word() {
 
 #[test]
 fn rule_level_switch_in_other_languages() {
-    if let Some(af) = Translator::new("af", None).ok() {
+    if let Ok(af) = Translator::new("af", None) {
         assert_eq!(af.text_to_ipa("light").unwrap(), "(en)lˈaɪt(af)");
     }
     // A symbol whose entry is nothing *but* a switch (`fr ©`) re-translates the
     // character itself in the target language.
-    if let Some(fr) = Translator::new("fr", None).ok() {
+    if let Ok(fr) = Translator::new("fr", None) {
         assert_eq!(fr.text_to_ipa("©").unwrap(), "(en)kˈɒpɪɹˌaɪt(fr)");
     }
 }

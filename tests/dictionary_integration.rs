@@ -778,8 +778,8 @@ fn debug_raw_bytes_around_4377() {
     let raw_data = &dict.data[..];
     
     // Print raw bytes at pos 4370..4450
-    for pos in 4370..4450 {
-        print!("{} ", raw_data[pos]);
+    for byte in &raw_data[4370..4450] {
+        print!("{} ", byte);
     }
     println!();
     

@@ -58,7 +58,7 @@ fn cyrillic_languages_beyond_russian_read_words() {
         assert!(!t.text_to_ipa(word).unwrap().trim().is_empty(), "{lang} {word:?} should not be empty");
     }
     // Serbian is Latin-primary in espeak — its Latin reading must still work.
-    if let Some(t) = Translator::new("sr", None).ok() {
+    if let Ok(t) = Translator::new("sr", None) {
         assert!(t.text_to_ipa("zdravo").unwrap().contains("zdrˈavo"), "sr Latin still reads");
     }
 }

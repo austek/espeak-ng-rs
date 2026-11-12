@@ -43,10 +43,10 @@ fn consonant_initial_units_are_not_elided() {
 #[test]
 fn other_languages_unaffected() {
     // English and Spanish keep their (non-eliding) composition.
-    if let Some(t) = Translator::new("en", None).ok() {
+    if let Ok(t) = Translator::new("en", None) {
         assert_eq!(t.text_to_ipa("31").unwrap(), "θˈɜːti wˈɒn");
     }
-    if let Some(t) = Translator::new("es", None).ok() {
+    if let Ok(t) = Translator::new("es", None) {
         assert!(t.text_to_ipa("31").unwrap().contains("tɾˌeɪnta"), "{}", t.text_to_ipa("31").unwrap());
     }
 }

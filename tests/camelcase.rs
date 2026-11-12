@@ -76,7 +76,7 @@ fn dutch_keeps_initial_ij_digraph_whole() {
     if let Some(en) = &ipa_en {
         assert!(en.contains(' '), "en should split IJssel: {en:?}");
     }
-    if let Some(t) = Translator::new("nl", None).ok() {
+    if let Ok(t) = Translator::new("nl", None) {
         let nl = t.text_to_ipa("IJssel").unwrap();
         assert!(!nl.contains(' '), "nl keeps IJssel whole: {nl:?}");
     } else {

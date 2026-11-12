@@ -454,7 +454,7 @@ fn plus_minus_sign_reads_across_languages() {
 fn hebrew_and_ukrainian_operators() {
     // Hebrew: + − × ÷ ° were dropped; now read (via niqqud-pointed words that
     // espeak-Hebrew can pronounce).  Ukrainian: ° was dropped.
-    if let Some(he) = Translator::new("he", None).ok() {
+    if let Ok(he) = Translator::new("he", None) {
         assert_eq!(he.text_to_ipa("2+3").unwrap(), "ʃtˈajim (en)plˈʌs(he) ʃalˈoʃ");
         assert_eq!(he.text_to_ipa("10÷2").unwrap(), "ˈeser ʃtˈajim");
         // A leading `-` before a number is an *operator*: it is read from the
@@ -465,7 +465,7 @@ fn hebrew_and_ukrainian_operators() {
         assert_eq!(he.text_to_ipa("−").unwrap(), "sˈimnə mˈinvs");
         assert_eq!(he.text_to_ipa("20°").unwrap(), "esrˈim");
     }
-    if let Some(uk) = Translator::new("uk", None).ok() {
+    if let Ok(uk) = Translator::new("uk", None) {
         assert_eq!(uk.text_to_ipa("20°").unwrap(), "dvˈatsjat");
         assert_eq!(uk.text_to_ipa("2×3").unwrap(), "dβˈa trˈɪ");
     }
