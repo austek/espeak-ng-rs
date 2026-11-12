@@ -10359,7 +10359,10 @@ impl Translator {
         if self.options.word_gap == 0 {
             insert_word_gaps(&mut out, phdata, stress_opts.vowel_pause, stress_opts.word_gap);
         }
-        promote_clause_tonics(&mut out, phdata, &self.options.lang, stress_opts.stress_flags);
+        let outer_continues = self.options.switched && !self.options.switched_last;
+        if !outer_continues {
+            promote_clause_tonics(&mut out, phdata, &self.options.lang, stress_opts.stress_flags);
+        }
 
         // Boundary coordinates back into indices.  A token's codes run from its
         // own first code to the *next* token's, so the separator's boundary and
