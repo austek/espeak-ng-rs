@@ -9050,10 +9050,11 @@ fn apply_tone_sandhi(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang:
                     if new != 0 {
                         entries[pe].phonemes[pp] = new;
                     }
-                    if joins {
-                        // 214 + 214 → 35 + 214 binds the two syllables into one
-                        // word: upstream drops both the inter-word gap and the
-                        // first syllable's stress (`ni35X'Au214_|`).
+                    if joins && pe != ei {
+                        // 214 + 214 → 35 + 214 across two entries binds them into
+                        // one word: upstream drops both the inter-word gap and the
+                        // first syllable's stress (`ni35X'Au214_|`). Inside one
+                        // entry it keeps both (`tS;'iou35_|tS;'iou21`).
                         entries[pe].no_word_gap = true;
                         entries[pe]
                             .phonemes

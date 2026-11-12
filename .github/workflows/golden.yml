@@ -53,6 +53,7 @@ jobs:
           --test ru_voice_replace
           --test unspaced_ascii_punctuation
           --test dot_run_ellipsis
+          --test robustness_tone_sandhi
           --test number_apostrophe_suffix
           --test tr_phoneme_program_context
           --test tr_next_phoneme_word_end
