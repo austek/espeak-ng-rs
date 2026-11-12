@@ -69,6 +69,6 @@ fn compile_phonemes_missing_source_errors() {
         .expect("run");
     assert!(!out.status.success(), "missing source should fail");
     let err = String::from_utf8_lossy(&out.stderr);
-    assert!(err.contains("not found"), "clear error expected: {err}");
+    assert!(err.contains("No such file or directory"), "C's error expected: {err}");
     assert!(!dir.join("phontab").exists(), "no phontab written on failure");
 }

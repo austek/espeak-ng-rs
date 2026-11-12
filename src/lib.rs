@@ -81,6 +81,7 @@ pub mod translate;
 pub mod synthesize;
 pub mod soundicon;
 pub mod voices;
+pub mod getopt;
 pub mod async_synth;
 #[cfg(feature = "tokio-runtime")]
 pub mod tokio_synth;

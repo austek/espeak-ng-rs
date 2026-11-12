@@ -33,6 +33,8 @@ jobs:
           --test cli_data_path
           --test cli_voice_path
           --test cli_voices_list
+          --test cli_getopt
+          --test cli_messages
           --test dictionary_bounds
           --test english_letter_group_y
           --test italian_rule_stress

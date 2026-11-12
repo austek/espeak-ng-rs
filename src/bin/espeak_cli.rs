@@ -1,10 +1,11 @@
 // Shared CLI implementation for `espeak-ng` and `espeak-ng-rs` binaries.
 
 use std::ffi::OsString;
-use std::io::{IsTerminal, Read, Write as _};
+use std::io::{Read, Write as _};
 use std::path::{Path, PathBuf};
 
 use espeak_ng::engine::{EspeakNg, Parameter};
+use espeak_ng::getopt::{self, HasArg, LongOpt};
 use espeak_ng::phoneme::PhonemeData;
 use espeak_ng::translate::ipa_table::{
     PHON_LENGTHEN, PHON_STRESS_2, PHON_STRESS_3, PHON_STRESS_P, PHON_STRESS_P2,
@@ -76,16 +77,31 @@ struct Cli {
     /// no playback, so it is never used.
     device: Option<String>,
     positionals:   Vec<OsString>,
-    had_unknown:   Option<String>,
+    /// A message for stderr and the exit status, set where C leaves `getopt`.
+    error_exit:    Option<(String, i32)>,
+    /// Set by `--tie` and `--ipa=2|3`; only then does `sep` hold a tie.
+    tie_mode:      bool,
+    /// `-l <n>`: accepted for parity; this port has no line-length clauses.
+    line_length:   Option<u32>,
+    /// `--compile-intonations`.
+    compile_intonations: bool,
 }
 
 fn argv0_display() -> String {
     std::env::args_os()
         .next()
-        .as_ref()
-        .and_then(|p| Path::new(p).file_name())
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "espeak-ng-rs".to_string())
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "espeak-ng".to_string())
+}
+
+/// The version `espeak_Info` reports in the C reference this port tracks.
+const REFERENCE_VERSION: &str = "1.53.0";
+
+fn version_line(data_dir: &Path) -> String {
+    format!(
+        "eSpeak NG text-to-speech: {REFERENCE_VERSION}  Data at: {}",
+        data_dir.display()
+    )
 }
 
 fn main() {
@@ -97,27 +113,25 @@ fn main() {
 
 fn run() -> std::io::Result<()> {
     let mut cli = parse_args(std::env::args_os().skip(1).collect());
-    if let Some(flag) = cli.had_unknown.clone() {
-        eprintln!("{}: unrecognized option '{flag}'", argv0_display());
-        return Ok(());
+    if let Some((message, status)) = cli.error_exit.take() {
+        eprintln!("{message}");
+        std::process::exit(status);
     }
     if cli.print_help {
-        print_help();
+        println!("\n{}", version_line(&resolved_data_dir(cli.path_override.as_deref())));
+        print!("{HELP_TEXT}");
         return Ok(());
     }
     if cli.print_version {
-        let data = resolved_data_dir(cli.path_override.as_deref());
-        println!(
-            "{}  (Rust port {})\nData at: {}",
-            argv0_display(),
-            EspeakNg::version(),
-            data.display()
-        );
+        println!("{}", version_line(&resolved_data_dir(cli.path_override.as_deref())));
         return Ok(());
     }
     if cli.list_voices {
         print_voices(&cli);
         return Ok(());
+    }
+    if cli.compile_intonations {
+        return run_compile_intonations(&cli);
     }
     if let Some(lang_arg) = cli.compile.clone() {
         return run_compile(&lang_arg, &cli);
@@ -132,6 +146,11 @@ fn run() -> std::io::Result<()> {
     // Its `language` (or `dictionary`) picks the translation, and its `pitch`
     // line reaches the synthesizer below; the rest of a language's settings
     // still come from the data directory.
+    create_phonout(&cli);
+    let text_outputs = cli.trace_rules || cli.pho || cli.ipa || cli.x_mnem;
+    if plays_audio(&cli) && !text_outputs {
+        fail_with(ENS_AUDIO_ERROR);
+    }
     let mut loaded_pitch = None;
     let mut loaded_voice = None;
     if cli.load_voice {
@@ -145,14 +164,7 @@ fn run() -> std::io::Result<()> {
                 cli.voice = espeak_ng::translate::resolve_dict_stem(&data, &want)
                     .unwrap_or(want);
             }
-            None => {
-                eprintln!(
-                    "{}: can't read a voice definition from '{}'",
-                    argv0_display(),
-                    path.display()
-                );
-                return Ok(());
-            }
+            None => fail_with(ENS_VOICE_NOT_FOUND),
         }
     } else {
         // Resolve a voice *name* (e.g. "French (France)") to a language tag; a
@@ -163,26 +175,19 @@ fn run() -> std::io::Result<()> {
             Some(_) => resolve_voice(&spelled, &data),
             None => resolve_voice(&cli.voice, &data),
         };
+        if !voice_exists(&cli.voice, &data) {
+            fail_with(ENS_VOICE_NOT_FOUND);
+        }
     }
 
-    let text = gather_text(&cli)?;
+    let texts = gather_texts(&cli)?;
+    let text = texts.concat();
 
-    if cli.trace_rules {
-        trace_output(&cli, &text)?;
-        return Ok(());
+    if cli.trace_rules || cli.pho || cli.ipa || cli.x_mnem {
+        return texts.iter().try_for_each(|t| text_output(&cli, t));
     }
 
-    if cli.pho {
-        pho_output(&cli, &text)?;
-        return Ok(());
-    }
-
-    if cli.ipa || cli.x_mnem {
-        phoneme_output(&cli, &text)?;
-        return Ok(());
-    }
-
-    if cli.quiet && cli.wave_out.is_none() && !cli.stdout_wav {
+    if cli.quiet {
         return Ok(());
     }
 
@@ -266,15 +271,19 @@ fn run() -> std::io::Result<()> {
         if cli.stdout_wav {
             std::io::stdout().write_all(&buf)?;
         } else if let Some(ref p) = cli.wave_out {
-            std::fs::write(p, &buf)?;
+            write_wave_file(p, &buf);
         }
         return Ok(());
     }
 
-    eprintln!(
-        "espeak-ng (Rust): speech playback is not implemented; use --stdout or -w <file.wav>"
-    );
-    Ok(())
+    fail_with(ENS_AUDIO_ERROR)
+}
+
+/// C reports an unwritable `-w` target and still exits 0.
+fn write_wave_file(path: &Path, bytes: &[u8]) {
+    if std::fs::write(path, bytes).is_err() {
+        eprintln!("Can't write to: '{}'", path.display());
+    }
 }
 
 /// Speak through the external MBROLA binary: translate, build the `.pho`, hand
@@ -340,14 +349,52 @@ fn speak_mbrola(
         if cli.stdout_wav {
             std::io::stdout().write_all(&buf)?;
         } else if let Some(ref p) = cli.wave_out {
-            std::fs::write(p, &buf)?;
+            write_wave_file(p, &buf);
         }
         return Ok(());
     }
-    eprintln!(
-        "espeak-ng (Rust): speech playback is not implemented; use --stdout or -w <file.wav>"
-    );
-    Ok(())
+    fail_with(ENS_AUDIO_ERROR)
+}
+
+/// Without `-q`, `-w` or `--stdout`, C plays the audio.
+fn plays_audio(cli: &Cli) -> bool {
+    !cli.quiet && cli.wave_out.is_none() && !cli.stdout_wav
+}
+
+/// One `espeak_Synth` call's phoneme output; `-q` silences `--pho`.
+fn text_output(cli: &Cli, text: &str) -> std::io::Result<()> {
+    if cli.trace_rules {
+        trace_output(cli, text)
+    } else if cli.pho {
+        if cli.quiet { Ok(()) } else { pho_output(cli, text) }
+    } else {
+        phoneme_output(cli, text)
+    }
+}
+
+/// `fopen(--phonout, "w")` at start-up, so an empty result still leaves a file.
+fn create_phonout(cli: &Cli) {
+    if let Some(path) = cli.phonout.as_ref().filter(|p| std::fs::File::create(p).is_err()) {
+        eprintln!("Can't write to: {}", path.display());
+        std::process::exit(1);
+    }
+}
+
+const ENS_VOICE_NOT_FOUND: &str = "The specified espeak-ng voice does not exist";
+const ENS_AUDIO_ERROR: &str = "Cannot initialize the audio device";
+
+/// C's `espeak_ng_PrintStatusCodeMessage` followed by `exit(EXIT_FAILURE)`.
+fn fail_with(status_message: &str) -> ! {
+    eprintln!("Error: {status_message}.");
+    std::process::exit(1);
+}
+
+/// Whether `voice` (with any `+variant` removed) names a language with data or
+/// an MBROLA voice.
+fn voice_exists(voice: &str, data_dir: &Path) -> bool {
+    let (base, _) = espeak_ng::translate::split_voice_variant(voice);
+    espeak_ng::translate::resolve_dict_stem(data_dir, base).is_some()
+        || espeak_ng::voices::load_mbrola_voice(data_dir, base).is_some()
 }
 
 /// Resolve a `-v` value to a language tag.  A value that already resolves as a
@@ -389,6 +436,22 @@ fn resolve_voice(value: &str, data_dir: &Path) -> String {
             .unwrap_or_else(|| v.language.clone()),
         None => value.to_string(),
     }
+}
+
+/// `--compile-intonations`: C reads `<data>/../phsource/intonation`; this port
+/// has no intonation compiler, so a present source is reported as unsupported.
+fn run_compile_intonations(cli: &Cli) -> std::io::Result<()> {
+    let data = resolved_data_dir(cli.path_override.as_deref());
+    let source = data.join("../phsource/intonation");
+    if source.exists() {
+        eprintln!("Error: The requested functionality has not been built into espeak-ng.");
+    } else {
+        eprintln!(
+            "Error processing file '{}': No such file or directory.",
+            source.display()
+        );
+    }
+    std::process::exit(1);
 }
 
 /// `--compile[=<lang>]`: compile `<lang>`'s dictsource (`<data>/<lang>_list` +
@@ -462,16 +525,19 @@ fn run_compile_phonemes(src_arg: &str, cli: &Cli) -> std::io::Result<()> {
     use espeak_ng::phoneme::table::compile_phontab;
 
     let data_dir = resolved_data_dir(cli.path_override.as_deref());
-    let src_path = if src_arg.is_empty() {
-        data_dir.join("phonemes")
-    } else {
-        PathBuf::from(src_arg)
+    let given = PathBuf::from(src_arg);
+    let src_path = match () {
+        _ if src_arg.is_empty() => data_dir.join("phonemes"),
+        _ if given.is_file() => given,
+        _ => given.join("phonemes"),
     };
+    println!("Compiling phoneme data: {}", src_path.display());
     if !src_path.exists() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            format!("phoneme source not found: {}", src_path.display()),
-        ));
+        eprintln!(
+            "Error processing file '{}': No such file or directory.",
+            src_path.display()
+        );
+        std::process::exit(1);
     }
 
     let source = std::fs::read_to_string(&src_path)?;
@@ -803,12 +869,19 @@ fn trace_output(cli: &Cli, text: &str) -> std::io::Result<()> {
     out.push_str(&format_x(&codes, &phdata, cli.sep, cli.tie, &data_dir, translator.options.lang.as_str()));
     out.push('\n');
 
-    if let Some(ref path) = cli.phonout {
-        std::fs::write(path, &out)?;
-    } else {
-        std::io::stdout().write_all(out.as_bytes())?;
+    emit(cli, &out)
+}
+
+/// Write phoneme output to `--phonout` (created empty at start-up) or stdout.
+fn emit(cli: &Cli, text: &str) -> std::io::Result<()> {
+    match cli.phonout {
+        Some(ref path) => std::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(path)?
+            .write_all(text.as_bytes()),
+        None => std::io::stdout().write_all(text.as_bytes()),
     }
-    Ok(())
 }
 
 /// `--pho`: write the MBROLA `.pho` script (phoneme, duration, pitch targets)
@@ -870,12 +943,7 @@ fn pho_output(cli: &Cli, text: &str) -> std::io::Result<()> {
     let synth = Synthesizer::new(voice);
     let out = write_pho(&table.translate(&synth.mbrola_phonemes(&codes, &phdata)));
 
-    if let Some(ref path) = cli.phonout {
-        std::fs::write(path, &out)?;
-    } else {
-        std::io::stdout().write_all(out.as_bytes())?;
-    }
-    Ok(())
+    emit(cli, &out)
 }
 
 fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
@@ -938,13 +1006,7 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
         format_x(&codes, &phdata, cli.sep, cli.tie, &data_dir, translator.options.lang.as_str())
     };
 
-    let line_with_nl = format!("{line}\n");
-    if let Some(ref path) = cli.phonout {
-        std::fs::write(path, &line_with_nl)?;
-    } else {
-        std::io::stdout().write_all(line_with_nl.as_bytes())?;
-    }
-    Ok(())
+    emit(cli, &format!("{line}\n"))
 }
 
 
@@ -1120,36 +1182,59 @@ fn input_encoding(b: Option<u32>) -> (espeak_ng::Encoding, espeak_ng::DecodeMode
     }
 }
 
-fn gather_text(cli: &Cli) -> std::io::Result<String> {
+/// `fgets(buf, 1000)` over `bytes`: lines up to and including `\n`, at most 999
+/// bytes each.
+fn fgets_chunks(bytes: &[u8]) -> Vec<&[u8]> {
+    let mut rest = bytes;
+    let mut out = Vec::new();
+    while !rest.is_empty() {
+        let limit = rest.len().min(999);
+        let end = rest[..limit].iter().position(|&b| b == b'\n').map_or(limit, |p| p + 1);
+        out.push(&rest[..end]);
+        rest = &rest[end..];
+    }
+    out
+}
+
+fn read_stdin() -> std::io::Result<Vec<u8>> {
+    let mut buf = Vec::new();
+    std::io::stdin().read_to_end(&mut buf)?;
+    Ok(buf)
+}
+
+fn read_input_file(path: &Path) -> Vec<u8> {
+    if std::fs::metadata(path).is_err() {
+        eprintln!("Failed to stat() file '{}'", path.display());
+        std::process::exit(1);
+    }
+    std::fs::read(path).unwrap_or_else(|_| {
+        eprintln!("Failed to read file '{}'", path.display());
+        std::process::exit(1);
+    })
+}
+
+/// The pieces of text C hands to `espeak_Synth`: the `-f` file or the bulk
+/// `--stdin` as one, the first word of the command line as one, otherwise one
+/// per line of stdin.
+fn gather_texts(cli: &Cli) -> std::io::Result<Vec<String>> {
     let (enc, mode) = input_encoding(cli.input_encoding);
-    let decode = |bytes: Vec<u8>| -> String {
-        espeak_ng::TextDecoder::new(&bytes, enc, mode)
+    let decode = |bytes: &[u8]| -> String {
+        espeak_ng::TextDecoder::new(bytes, enc, mode)
             .map(|mut d| d.decode_to_string())
-            .unwrap_or_else(|_| String::from_utf8_lossy(&bytes).into_owned())
+            .unwrap_or_else(|_| String::from_utf8_lossy(bytes).into_owned())
     };
 
     if let Some(ref path) = cli.file_input {
-        return Ok(decode(std::fs::read(path)?));
+        return Ok(vec![decode(&read_input_file(path))]);
     }
-    if cli.stdin_all || (cli.positionals.is_empty() && !std::io::stdin().is_terminal()) {
-        let mut buf = Vec::new();
-        std::io::stdin().read_to_end(&mut buf)?;
-        return Ok(decode(buf));
+    if let (Some(first), false) = (cli.positionals.first(), cli.stdin_all) {
+        return Ok(vec![first.to_string_lossy().into_owned()]);
     }
-    if !cli.positionals.is_empty() {
-        let mut s = String::new();
-        for (i, os) in cli.positionals.iter().enumerate() {
-            if i > 0 {
-                s.push(' ');
-            }
-            s.push_str(&os.to_string_lossy());
-        }
-        return Ok(s);
+    let input = read_stdin()?;
+    if cli.stdin_all {
+        return Ok(if input.is_empty() { Vec::new() } else { vec![decode(&input)] });
     }
-    Err(std::io::Error::new(
-        std::io::ErrorKind::InvalidInput,
-        "espeak-ng: no text provided (pass text as arguments, use -f, or pipe stdin)",
-    ))
+    Ok(fgets_chunks(&input).into_iter().map(decode).collect())
 }
 
 fn resolved_data_dir(path_arg: Option<&Path>) -> PathBuf {
@@ -1225,297 +1310,227 @@ fn write_wav_16_mono(w: &mut Vec<u8>, samples: &[i16], sample_rate: u32) -> std:
     Ok(())
 }
 
-fn parse_args(args: Vec<OsString>) -> Cli {
-    let mut cli = Cli {
-        voice: "en".to_string(),
-        ..Default::default()
+const SHORT_OPTIONS: &str = "a:b:Dd:f:g:hk:l:mp:P:qs:v:w:xXz";
+
+const fn long(name: &'static str, has_arg: HasArg, abbreviable: bool) -> LongOpt {
+    LongOpt { name, has_arg, abbreviable }
+}
+
+/// C's `long_options` order, which fixes the order of an "ambiguous" listing.
+/// `compile-mbrola` is only accepted spelled out: the reference build leaves
+/// it out of its option table.
+const LONG_OPTIONS: &[LongOpt] = &[
+    long("help", HasArg::No, true),
+    long("stdin", HasArg::No, true),
+    long("compile-debug", HasArg::Optional, true),
+    long("compile", HasArg::Optional, true),
+    long("punct", HasArg::Optional, true),
+    long("voices", HasArg::Optional, true),
+    long("stdout", HasArg::No, true),
+    long("split", HasArg::Optional, true),
+    long("path", HasArg::Required, true),
+    long("phonout", HasArg::Required, true),
+    long("pho", HasArg::No, true),
+    long("ipa", HasArg::Optional, true),
+    long("version", HasArg::No, true),
+    long("sep", HasArg::Optional, true),
+    long("tie", HasArg::Optional, true),
+    long("compile-mbrola", HasArg::Optional, false),
+    long("compile-intonations", HasArg::No, true),
+    long("compile-phonemes", HasArg::Optional, true),
+    long("load", HasArg::No, true),
+    long("ssml-break", HasArg::Required, true),
+];
+
+fn nonneg(n: i32) -> Option<u32> {
+    u32::try_from(n).ok()
+}
+
+fn positive(n: i32) -> Option<u32> {
+    nonneg(n).filter(|&v| v > 0)
+}
+
+/// `sscanf("%d")`: the leading integer, if the text starts with one.
+fn scan_int(s: &str) -> Option<i32> {
+    let t = s.trim_start().trim_start_matches(['-', '+']);
+    t.starts_with(|c: char| c.is_ascii_digit()).then(|| getopt::atoi(s))
+}
+
+/// Fold `-b <n>` into the encoding flags: `n <= 4` is OR-ed in, anything else
+/// means 8-bit.
+fn add_encoding_flag(current: Option<u32>, arg: &str) -> Option<u32> {
+    let flag = match scan_int(arg) {
+        Some(v) if v <= 4 => nonneg(v).unwrap_or(0),
+        _ => 2,
     };
-    let mut i = 0;
-    let mut posix_end = false;
-    // Upstream keeps one separator *character* (`phonemes_separator`) and a
-    // sticky tie *flag* (`espeakPHONEMES_TIE`): `--sep` and `--tie` both set the
-    // character, but only `--tie` sets the flag — and nothing clears it.  So
-    // `--tie --sep=.` ties with a dot, while `--sep=. --tie` ties with U+0361.
-    // `cli.sep` holds the character until the end of parsing.
-    let mut tie_mode = false;
-    while i < args.len() {
-        let arg = &args[i];
-        if posix_end {
-            cli.positionals.push(arg.clone());
-            i += 1;
-            continue;
+    Some(current.unwrap_or(0) | flag).filter(|&f| f != 0)
+}
+
+fn parse_args(args: Vec<OsString>) -> Cli {
+    let words: Vec<String> = args.iter().map(|a| a.to_string_lossy().into_owned()).collect();
+    let parsed = getopt::parse(&words, SHORT_OPTIONS, LONG_OPTIONS);
+    let mut cli = Cli { voice: "en".to_string(), ..Default::default() };
+    for opt in &parsed.opts {
+        if apply_option(&mut cli, opt) {
+            return cli;
         }
-        let s = arg.to_string_lossy();
-        if s == "--" {
-            posix_end = true;
-            i += 1;
-            continue;
-        }
-        if s == "-" {
-            cli.positionals.push(arg.clone());
-            i += 1;
-            continue;
-        }
-        if s.starts_with("--") {
-            if let Some(rest) = s.strip_prefix("--path=") {
-                cli.path_override = Some(PathBuf::from(rest));
-            } else if s == "--path" {
-                if let Some(p) = args.get(i + 1) {
-                    cli.path_override = Some(PathBuf::from(p));
-                    i += 1;
-                }
-            } else if let Some(rest) = s.strip_prefix("--phonout=") {
-                cli.phonout = Some(PathBuf::from(rest));
-            } else if s == "--phonout" {
-                if let Some(p) = args.get(i + 1) {
-                    cli.phonout = Some(PathBuf::from(p));
-                    i += 1;
-                }
-            } else if let Some(rest) = s.strip_prefix("--sep=") {
-                cli.sep = parse_sep_value(rest);
-                cli.x_mnem = true; // `--sep`/`--tie` imply `-x`, as in C
-            } else if s == "--sep" {
-                // An *optional* argument only attaches with `=`, as getopt does:
-                // `--sep` on its own means a space, and the word that follows is
-                // text, not the separator.
-                cli.sep = Some(' ');
-                cli.x_mnem = true;
-            } else if let Some(rest) = s.strip_prefix("--ipa=") {
-                // The deprecated numeric forms: 1 = `_` between phonemes,
-                // 2 = a U+0361 tie, 3 = a ZWJ tie.  Anything else is plain IPA.
-                cli.ipa = true;
-                match rest.parse::<u32>().unwrap_or(0) {
-                    1 => cli.sep = Some('_'),
-                    2 => { cli.sep = Some('\u{361}'); tie_mode = true; }
-                    3 => { cli.sep = Some('\u{200d}'); tie_mode = true; }
-                    _ => {}
-                }
-            } else if s == "--split" {
-                // An *optional* argument, so a bare `--split` takes upstream's
-                // 30-minute default and the next word stays text.
-                cli.split_minutes = Some(30);
-            } else if let Some(rest) = s.strip_prefix("--split=") {
-                cli.split_minutes = Some(rest.parse().unwrap_or(0));
-            } else if s == "--load" {
-                cli.load_voice = true;
-            } else if let Some(rest) = s.strip_prefix("--ssml-break=") {
-                cli.ssml_break = rest.parse().ok();
-            } else if s == "--ssml-break" {
-                // A *required* argument, so the next word is the percentage.
-                if let Some(a) = args.get(i + 1) {
-                    cli.ssml_break = a.to_string_lossy().parse().ok();
-                    i += 1;
-                }
-            } else {
-                match s.as_ref() {
-                    "--help" => cli.print_help = true,
-                    "--version" => cli.print_version = true,
-                    "--ipa" => cli.ipa = true,
-                    "--markup" => cli.markup = true,
-                    "--stdout" => cli.stdout_wav = true,
-                    "--stdin" => cli.stdin_all = true,
-                    // --compile[=lang] / --compile-debug[=lang]: dictionary
-                    // compilation.  --compile-phonemes[=src]: phoneme-table
-                    // compilation.  Other --compile-* variants (mbrola/
-                    // intonation) are accepted as no-ops (no source ships).
-                    "--pho" => cli.pho = true,
-                    _ if s.starts_with("--compile-mbrola=") => {
-                        cli.compile_mbrola = Some(s["--compile-mbrola=".len()..].to_string());
-                    }
-                    "--compile-phonemes" => cli.compile_phonemes = Some(String::new()),
-                    _ if s.starts_with("--compile-phonemes=") => {
-                        cli.compile_phonemes = Some(s["--compile-phonemes=".len()..].to_string());
-                    }
-                    "--compile" | "--compile-debug" => cli.compile = Some(String::new()),
-                    _ if s.starts_with("--compile=") => {
-                        cli.compile = Some(s["--compile=".len()..].to_string());
-                    }
-                    _ if s.starts_with("--compile-debug=") => {
-                        cli.compile = Some(s["--compile-debug=".len()..].to_string());
-                    }
-                    _ if s.starts_with("--compile") => {}
-                    "--voices" => cli.list_voices = true,
-                    _ if s.starts_with("--voices=") => {
-                        cli.list_voices = true;
-                        cli.voices_filter = Some(s["--voices=".len()..].to_string());
-                    }
-                    // A tie goes *inside* a phoneme name, a separator between
-                    // phonemes; both write the same character slot.
-                    _ if s == "--tie" => {
-                        cli.sep = Some('\u{361}'); // combining double inverted breve
-                        tie_mode = true;
-                        cli.x_mnem = true;
-                    }
-                    _ if s.starts_with("--tie=") => {
-                        cli.sep = parse_tie_value(&s["--tie=".len()..]);
-                        tie_mode = true;
-                        cli.x_mnem = true;
-                    }
-                    "--punct" => cli.punct = Some(Vec::new()),
-                    _ if s.starts_with("--punct=") => {
-                        let chars = s["--punct=".len()..].trim_matches('"').chars().collect();
-                        cli.punct = Some(chars);
-                    }
-                    _ => {
-                        cli.had_unknown.get_or_insert(s.to_string());
-                    }
-                }
-            }
-            i += 1;
-            continue;
-        }
-        if s.starts_with('-') && s != "-" {
-            let mut idx = 1usize;
-            let bytes = s.as_bytes();
-            while idx < bytes.len() {
-                let c = bytes[idx] as char;
-                match c {
-                    'h' => cli.print_help = true,
-                    'q' => cli.quiet = true,
-                    'x' => cli.x_mnem = true,
-                    'm' => cli.markup = true,
-                    'v' => {
-                        if idx + 1 < bytes.len() {
-                            let voice = &s[idx + 1..];
-                            cli.voice = normalize_voice_tag(voice);
-                            cli.voice_raw = Some(voice.to_string());
-                            idx = bytes.len();
-                        } else if let Some(n) = args.get(i + 1) {
-                            let voice = n.to_string_lossy();
-                            cli.voice = normalize_voice_tag(&voice);
-                            cli.voice_raw = Some(voice.into_owned());
-                            i += 1;
-                        }
-                    }
-                    's' => {
-                        let (n, skip) = parse_trailing_u32(&s[idx + 1..]);
-                        if let Some(v) = n {
-                            cli.rate = Some(v);
-                            idx = bytes.len();
-                        } else if let Some(a) = args.get(i + 1) {
-                            if let Ok(v) = a.to_string_lossy().parse::<u32>() {
-                                cli.rate = Some(v);
-                                i += 1;
-                            }
-                        }
-                        let _ = skip;
-                    }
-                    'p' => {
-                        let (n, _) = parse_trailing_u32(&s[idx + 1..]);
-                        if let Some(v) = n {
-                            cli.pitch = Some(v);
-                            idx = bytes.len();
-                        } else if let Some(a) = args.get(i + 1) {
-                            if let Ok(v) = a.to_string_lossy().parse::<u32>() {
-                                cli.pitch = Some(v);
-                                i += 1;
-                            }
-                        }
-                    }
-                    'P' => {
-                        let (n, _) = parse_trailing_u32(&s[idx + 1..]);
-                        if let Some(v) = n {
-                            cli.range = Some(v);
-                            idx = bytes.len();
-                        } else if let Some(a) = args.get(i + 1) {
-                            if let Ok(v) = a.to_string_lossy().parse::<u32>() {
-                                cli.range = Some(v);
-                                i += 1;
-                            }
-                        }
-                    }
-                    'a' => {
-                        let (n, _) = parse_trailing_u32(&s[idx + 1..]);
-                        if let Some(v) = n {
-                            cli.amplitude = Some(v);
-                            idx = bytes.len();
-                        } else if let Some(a) = args.get(i + 1) {
-                            if let Ok(v) = a.to_string_lossy().parse::<u32>() {
-                                cli.amplitude = Some(v);
-                                i += 1;
-                            }
-                        }
-                    }
-                    'k' | 'g' | 'b' | 'l' => {
-                        // Numeric-argument options. `-k` (capitals) and `-g`
-                        // (word gap) are applied; `-b` (input encoding) and
-                        // `-l` (line length) are accepted for parity.
-                        let (n, _) = parse_trailing_u32(&s[idx + 1..]);
-                        let val = if let Some(v) = n {
-                            idx = bytes.len();
-                            Some(v)
-                        } else if let Some(a) = args.get(i + 1) {
-                            a.to_string_lossy().parse::<u32>().ok().inspect(|_| i += 1)
-                        } else {
-                            None
-                        };
-                        match c {
-                            'k' => cli.capitals = val,
-                            'g' => cli.word_gap = val,
-                            'b' => cli.input_encoding = val,
-                            _ => {} // -l: accepted, no effect
-                        }
-                    }
-                    'd' => {
-                        // Audio device: no playback here, so it is parsed (and
-                        // its argument consumed) but never used.
-                        if idx + 1 < bytes.len() {
-                            cli.device = Some(s[idx + 1..].to_string());
-                            idx = bytes.len();
-                        } else if let Some(a) = args.get(i + 1) {
-                            cli.device = Some(a.to_string_lossy().into_owned());
-                            i += 1;
-                        }
-                    }
-                    'z' => cli.no_final_pause = true,
-                    'D' => cli.deterministic = true,
-                    'X' => cli.trace_rules = true,
-                    'w' => {
-                        if idx + 1 < bytes.len() {
-                            cli.wave_out = Some(PathBuf::from(&s[idx + 1..]));
-                            idx = bytes.len();
-                        } else if let Some(a) = args.get(i + 1) {
-                            cli.wave_out = Some(PathBuf::from(a));
-                            i += 1;
-                        }
-                    }
-                    'f' => {
-                        if idx + 1 < bytes.len() {
-                            cli.file_input = Some(PathBuf::from(&s[idx + 1..]));
-                            idx = bytes.len();
-                        } else if let Some(a) = args.get(i + 1) {
-                            cli.file_input = Some(PathBuf::from(a));
-                            i += 1;
-                        }
-                    }
-                    _ => {
-                        cli.had_unknown.get_or_insert(format!("-{c}"));
-                        idx = bytes.len();
-                    }
-                }
-                idx += 1;
-            }
-            i += 1;
-            continue;
-        }
-        cli.positionals.push(arg.clone());
-        i += 1;
     }
-    // The character belongs to whichever mode the flag selected.
-    if tie_mode {
+    cli.positionals = parsed.positionals.into_iter().map(OsString::from).collect();
+    cli.error_exit = parsed.error.map(|m| (format!("{}: {m}", argv0_display()), 0));
+    // Upstream keeps one separator *character* and a sticky tie *flag*, so the
+    // character belongs to whichever mode the last of `--sep`/`--tie` selected.
+    if cli.tie_mode {
         cli.tie = cli.sep.take().or(Some('\u{361}'));
     }
     cli
 }
 
-fn parse_trailing_u32(rest: &str) -> (Option<u32>, ()) {
-    if rest.is_empty() {
-        return (None, ());
+/// Apply one option in command-line order; `true` means C would have left
+/// `getopt` at this option (help, version, voices, a compile action, an error).
+fn apply_option(cli: &mut Cli, opt: &getopt::Opt) -> bool {
+    let arg = opt.arg.as_deref().unwrap_or("");
+    match opt.short {
+        Some(c) => apply_short(cli, c, arg),
+        None => apply_long(cli, &opt.long, opt.arg.as_deref()),
     }
-    if let Ok(v) = rest.parse::<u32>() {
-        return (Some(v), ());
+}
+
+fn apply_short(cli: &mut Cli, c: char, arg: &str) -> bool {
+    let n = getopt::atoi(arg);
+    match c {
+        'a' => cli.amplitude = nonneg(n),
+        'b' => cli.input_encoding = add_encoding_flag(cli.input_encoding, arg),
+        'D' => cli.deterministic = true,
+        'd' => cli.device = Some(arg.to_string()),
+        'f' => cli.file_input = (!arg.is_empty()).then(|| PathBuf::from(arg)),
+        'g' => cli.word_gap = nonneg(n),
+        'h' => {
+            cli.print_help = true;
+            return true;
+        }
+        'k' => cli.capitals = nonneg(n),
+        'l' => cli.line_length = positive(n),
+        'm' => cli.markup = true,
+        'p' => cli.pitch = nonneg(n),
+        'P' => cli.range = nonneg(n),
+        'q' => cli.quiet = true,
+        's' => cli.rate = positive(n),
+        'v' => set_voice(cli, arg),
+        'w' => set_wave_out(cli, arg),
+        'x' => cli.x_mnem = true,
+        'X' => cli.trace_rules = true,
+        _ => cli.no_final_pause = true,
     }
-    (None, ())
+    false
+}
+
+fn set_voice(cli: &mut Cli, arg: &str) {
+    let name: String = arg.chars().take(39).collect();
+    cli.voice = normalize_voice_tag(&name);
+    cli.voice_raw = Some(name);
+}
+
+fn set_wave_out(cli: &mut Cli, arg: &str) {
+    cli.stdout_wav = arg == "stdout";
+    cli.wave_out = (!cli.stdout_wav).then(|| PathBuf::from(arg));
+}
+
+fn apply_long(cli: &mut Cli, name: &str, arg: Option<&str>) -> bool {
+    match name {
+        "help" => cli.print_help = true,
+        "version" => cli.print_version = true,
+        "voices" => {
+            cli.list_voices = true;
+            cli.voices_filter = arg.map(str::to_string);
+        }
+        "compile" | "compile-debug" => return set_compile(cli, name, arg),
+        // Deferred to the end of parsing so a later `--path` still applies.
+        "compile-mbrola" => {
+            cli.compile_mbrola = Some(arg.unwrap_or("").to_string());
+            return false;
+        }
+        "compile-intonations" => {
+            cli.compile_intonations = true;
+            return false;
+        }
+        "compile-phonemes" => {
+            cli.compile_phonemes = Some(arg.unwrap_or("").to_string());
+            return false;
+        }
+        _ => {
+            apply_plain_long(cli, name, arg);
+            return false;
+        }
+    }
+    true
+}
+
+fn set_compile(cli: &mut Cli, name: &str, arg: Option<&str>) -> bool {
+    match arg.filter(|a| !a.is_empty()) {
+        Some(voice) => {
+            cli.compile = Some(voice.to_string());
+            cli.quiet = true;
+            false
+        }
+        None => {
+            cli.error_exit = Some((format!("Voice name to '--{name}' not specified."), 1));
+            true
+        }
+    }
+}
+
+fn apply_plain_long(cli: &mut Cli, name: &str, arg: Option<&str>) {
+    match name {
+        "stdin" => cli.stdin_all = true,
+        "stdout" => set_wave_out(cli, "stdout"),
+        "punct" => cli.punct = Some(punct_list(arg)),
+        "split" => cli.split_minutes = Some(arg.map_or(30, |a| nonneg(getopt::atoi(a)).unwrap_or(0))),
+        "path" => cli.path_override = arg.map(PathBuf::from),
+        "phonout" => cli.phonout = arg.map(PathBuf::from),
+        "pho" => cli.pho = true,
+        "ipa" => set_ipa(cli, arg),
+        "sep" => set_sep(cli, arg),
+        "tie" => set_tie(cli, arg),
+        "load" => cli.load_voice = true,
+        _ => cli.ssml_break = arg.and_then(|a| positive(getopt::atoi(a))),
+    }
+}
+
+/// An empty `--punct=` list announces nothing; `U+0000` never occurs in text.
+fn punct_list(arg: Option<&str>) -> Vec<char> {
+    match arg {
+        None => Vec::new(),
+        Some("") => vec!['\0'],
+        Some(chars) => chars.chars().collect(),
+    }
+}
+
+/// The deprecated numeric forms: 1 = `_` between phonemes, 2 = a U+0361 tie,
+/// 3 = a ZWJ tie.  Anything else is plain IPA.
+fn set_ipa(cli: &mut Cli, arg: Option<&str>) {
+    cli.ipa = true;
+    match arg.map_or(0, getopt::atoi) {
+        1 => cli.sep = Some('_'),
+        2 => set_tie_char(cli, '\u{361}'),
+        3 => set_tie_char(cli, '\u{200d}'),
+        _ => {}
+    }
+}
+
+fn set_tie_char(cli: &mut Cli, c: char) {
+    cli.sep = Some(c);
+    cli.tie_mode = true;
+}
+
+fn set_sep(cli: &mut Cli, arg: Option<&str>) {
+    cli.sep = arg.map_or(Some(' '), parse_sep_value);
+    cli.x_mnem = true;
+}
+
+fn set_tie(cli: &mut Cli, arg: Option<&str>) {
+    cli.sep = arg.map_or(Some('\u{361}'), parse_tie_value);
+    cli.tie_mode = true;
+    cli.x_mnem = true;
 }
 
 /// `--tie[=<c>]`: no value means U+0361 (combining double inverted breve) and
@@ -1554,75 +1569,80 @@ fn parse_sep_value(s: &str) -> Option<char> {
     Some(c)
 }
 
-fn print_help() {
-    let prog = argv0_display();
-    println!(
-        "\
-{prog} — Rust port of eSpeak NG (subset of upstream CLI).
+const HELP_TEXT: &str = "
+espeak-ng [options] [\"<words>\"]
 
-{prog} [options] [\"text …\"]
+-f <text file>   Text file to speak
+--stdin    Read text input from stdin at once till to the end of a stream.
 
-Phonemes / IPA
-  --ipa[=1|2|3]    IPA to stdout (or --phonout).  The deprecated numeric forms
-                   are 1 = `_` between phonemes, 2 = a U+0361 tie, 3 = a ZWJ tie
-  -x               Phoneme mnemonics (Kirshenbaum-style)
-  -q               No audio (useful with --ipa / -x)
-  --sep[=<c>]      Separator between phonemes (none = space, `z` = U+200C)
-  --tie[=<c>]      Tie *inside* a phoneme (none = U+0361, `z` = U+200D).
-                   --sep and --tie share one slot: the last one given wins
-  --pho            MBROLA .pho phoneme/duration/pitch script to stdout
-  --phonout=<f>    Write phoneme output to file
-  -X               Trace the translation rules that match each letter
+If neither -f nor --stdin are provided, then <words> from arguments are spoken,
+or text is spoken from stdin, read separately one line by line at a time.
 
-Voice / data
-  -v <voice>       Voice / language tag (e.g. en-us, de, fr)
-  --load           Read the -v voice from a file path instead of the installed
-                   voices (its language and pitch are applied)
-  --voices[=<lang>]  List available voices (optionally filtered by language)
-  --path=<dir>     Parent of espeak-ng-data/ or data dir itself
-
-Speech (WAV only; playback not implemented)
-  -w <wav>         Write WAV
-  --stdout         WAV to stdout
-  --split[=<min>]  Split -w output into <name>_01, _02, … at the first sentence
-                   boundary past every <min> minutes (default 30)
-  -s -p -P -a      Speed, pitch, pitch range, amplitude (same ranges as upstream)
-  -g <n>           Word gap, in units of 10 ms
-  -z               No pause at the end of the text
-  -d <device>      Audio device (accepted; this port has no playback)
-
-Text
-  -f <file>        Input text file
-  --stdin          Read all stdin as one string
-  -m, --markup     Interpret SSML markup
-  --ssml-break=<n> Scale every SSML <break time=…> by <n> percent
-  --punct[=CHARS]  Announce punctuation by name (all, or only the given chars)
-  -k <n>           Announce capital letters: 1 = a tone, 2 = \"capital\", ≥3 = a
-                   pitch raise of <n> Hz
-  -b <n>           Input encoding: 1 = UTF-8, 2 = 8-bit, 4 = 16-bit
-  -l <n>           Line length (accepted for parity; no effect)
-
-Compile
-  --compile[=<lang>]  Compile <lang>_list + <lang>_rules (in the data dir) into
-                      <lang>_dict (default <lang> = the -v voice's language).
-                      --compile-debug[=<lang>] is accepted as the same thing
-  --compile-mbrola=<src>      Compile an MBROLA phoneme-translation source into
-                              <data>/mbrola_ph/<name>_phtrans
-  --compile-phonemes[=<src>]  Compile a phoneme-table source (default: the data
-                      dir's `phonemes`) into `phontab` (table only)
-
-Other
-  -D               Deterministic random mode (pin the unvoiced-noise seed)
-  -h, --help       This help
-  --version        Version and data directory
-
-Environment
-  ESPEAK_DATA_PATH   Directory containing en_dict, phontab, …
-
-Installation (cargo)
-  cargo install espeak-ng              # installs espeak-ng-rs + espeak-ng (default)
-  cargo install espeak-ng --no-default-features   # only espeak-ng-rs (keeps C espeak-ng on PATH)
-  cargo install espeak-ng --bin espeak-ng-rs     # install a single binary
-",
-    );
-}
+-a <integer>
+\t   Amplitude, 0 to 200, default is 100
+-d <device>
+\t   Use the specified device to speak the audio on. If not specified, the
+\t   default audio device is used.
+-g <integer>
+\t   Word gap. Pause between words, units of 10mS at the default speed
+-k <integer>
+\t   Indicate capital letters with: 1=sound, 2=the word \"capitals\",
+\t   higher values indicate a pitch increase (try -k20).
+-l <integer>
+\t   Line length. If not zero (which is the default), consider
+\t   lines less than this length as end-of-clause
+-p <integer>
+\t   Pitch adjustment, 0 to 99, default is 50
+-P <integer>
+\t   Pitch range adjustment, 0 to 99, default is 50
+-s <integer>
+\t   Speed in approximate words per minute. The default is 175
+-v <voice name>
+\t   Use voice file of this name from espeak-ng-data/voices
+-w <wave file name>
+\t   Write speech to this WAV file, rather than speaking it directly
+-b\t   Input text encoding, 1=UTF8, 2=8 bit, 4=16 bit\x20
+-m\t   Interpret SSML markup, and ignore other < > tags
+--ssml-break=<percentage>
+\t   Set SSML break time multiplier, default is 100
+-q\t   Quiet, don't produce any speech (may be useful with -x)
+-x\t   Write phoneme mnemonics to stdout
+-X\t   Write phonemes mnemonics and translation trace to stdout
+-z\t   No final sentence pause at the end of the text
+-D\t   Enable deterministic random mode
+--compile=<voice name>
+\t   Compile pronunciation rules and dictionary from the current
+\t   directory. <voice name> specifies the language
+--compile-debug=<voice name>
+\t   Compile pronunciation rules and dictionary from the current
+\t   directory, including line numbers for use with -X.
+\t   <voice name> specifies the language
+--compile-intonations
+\t   Compile the intonation data
+--compile-phonemes=<phsource-dir>
+\t   Compile the phoneme data using <phsource-dir> or the default phsource directory
+--ipa      Write phonemes to stdout using International Phonetic Alphabet
+--path=\"<path>\"
+\t   Specifies the directory containing the espeak-ng-data directory
+--pho      Write mbrola phoneme data (.pho) to stdout or to the file in --phonout
+--phonout=\"<filename>\"
+\t   Write phoneme output from -x -X --ipa and --pho to this file
+--punct=\"<characters>\"
+\t   Speak the names of punctuation characters during speaking.  If
+\t   =<characters> is omitted, all punctuation is spoken.
+--sep=<character>
+\t   Separate phonemes (from -x --ipa) with <character>.
+\t   Default is space, z means ZWJN character.
+--split=<minutes>
+\t   Starts a new WAV file every <minutes>.  Used with -w
+--stdout   Write speech output to stdout
+--tie=<character>
+\t   Use a tie character within multi-letter phoneme names.
+\t   Default is U+361, z means ZWJ character.
+--version  Shows version number and date, and location of espeak-ng-data
+--voices=<language>
+\t   List the available voices for the specified language.
+\t   If <language> is omitted, then list all voices.
+--load     Load voice from a file in current directory by name.
+-h, --help Show this help.
+";
