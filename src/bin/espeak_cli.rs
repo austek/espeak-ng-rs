@@ -178,7 +178,7 @@ fn run() -> std::io::Result<()> {
         let spelled = cli.voice_raw.clone().unwrap_or_else(|| cli.voice.clone());
         let wanted = match espeak_ng::voices::voice_file_entry(&data, split_variant_base(&spelled)) {
             Some(_) => spelled,
-            None => cli.voice.clone(),
+            None => with_spelled_variant(&cli.voice, &spelled),
         };
         let compiling_without_voices =
             cli.compile.is_some() && espeak_ng::voices::list_catalog(&data).is_empty();
@@ -423,6 +423,16 @@ fn select_voice_by_name<'a>(voices: &'a [Voice], name: &str) -> Option<&'a Voice
 
 fn split_variant_base(value: &str) -> &str {
     espeak_ng::translate::split_voice_variant(value).0
+}
+
+/// `base`, with the `+variant` as the user spelled it: C splits the variant
+/// off before it lowercases the voice name, and variant files are named in
+/// mixed case (`!v/AnxiousAndy`).
+fn with_spelled_variant(base: &str, spelled: &str) -> String {
+    match espeak_ng::translate::split_voice_variant(spelled).1 {
+        Some(v) => format!("{}+{v}", split_variant_base(base)),
+        None => base.to_string(),
+    }
 }
 
 /// The voice a `-v` value selects the way `espeak_ng_SetVoiceByName` and then

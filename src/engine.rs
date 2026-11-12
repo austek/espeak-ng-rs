@@ -1393,7 +1393,10 @@ impl Default for Builder {
 impl Builder {
     /// Select a language / voice by BCP-47 tag (e.g. `"en"`, `"de"`, `"fr"`).
     pub fn voice(mut self, lang: &str) -> Self {
-        self.lang = normalize_voice_tag(lang);
+        self.lang = match crate::translate::split_voice_variant(lang) {
+            (base, Some(variant)) => format!("{}+{variant}", normalize_voice_tag(base)),
+            (base, None) => normalize_voice_tag(base),
+        };
         self
     }
 
