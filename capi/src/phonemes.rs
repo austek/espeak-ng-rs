@@ -78,7 +78,7 @@ pub fn clauses(settings: &Settings, text: &str, mode: i32) -> espeak_ng::Result<
     let lines: Vec<&str> = rendered.split('\n').collect();
     let marks = terminators(text);
     let n = lines.len();
-    Ok(lines
+    let clauses: Vec<Clause> = lines
         .into_iter()
         .enumerate()
         .map(|(i, line)| match (i + 1 < n, marks.get(i)) {
@@ -94,7 +94,8 @@ pub fn clauses(settings: &Settings, text: &str, mode: i32) -> espeak_ng::Result<
                 end_byte: text.len(),
             },
         })
-        .collect())
+        .collect();
+    Ok(with_closing_clause(clauses, text, &marks))
 }
 
 /// Where clause `i` of `n` ends when the source has no mark for it: evenly
@@ -107,9 +108,26 @@ fn spread_end(text: &str, i: usize, n: usize) -> usize {
     at.min(text.len().saturating_sub(1)).max(1)
 }
 
+fn closes_text(text: &str, end: usize) -> bool {
+    text.get(end..).is_some_and(|rest| rest.trim_end().chars().all(|c| "\"'”’»)]".contains(c)))
+}
+
 fn last_terminator(text: &str, n: usize, marks: &[(char, usize)]) -> i32 {
     match marks.get(n - 1) {
-        Some(&(c, end)) if end == text.trim_end().len() => terminator_value(c),
+        Some(&(c, end)) if closes_text(text, end) => terminator_value(c),
         _ => EOF_TERMINATOR,
     }
+}
+
+/// C reports a closing quote after the last mark as a clause of its own.
+fn with_closing_clause(mut clauses: Vec<Clause>, text: &str, marks: &[(char, usize)]) -> Vec<Clause> {
+    let n = clauses.len();
+    let trailing = marks
+        .get(n.saturating_sub(1))
+        .is_some_and(|&(_, end)| end < text.trim_end().len() && closes_text(text, end));
+    if trailing {
+        clauses.push(Clause { phonemes: String::new(), terminator: EOF_TERMINATOR, end_byte: text.len() });
+        clauses[n - 1].end_byte = marks[n - 1].1;
+    }
+    clauses
 }
