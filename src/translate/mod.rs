@@ -1898,6 +1898,39 @@ fn clause_pieces(text: &str, used: &mut usize) -> Vec<(String, bool)> {
 }
 
 /// Adds the clause boundaries C's `ReadClause` inserts when its source buffer fills.
+/// `--punct`: C's `AnnouncePunctuation` for a clause-ending mark.  A clause
+/// that already holds text ends with a short pause, and the mark's name is then
+/// read as a clause of its own; a mark that is the last character of the text
+/// is lost with it.  Marks the option does not cover pass through.
+fn announce_clause_punctuation(tokens: Vec<Token>, options: &LangOptions) -> Vec<Token> {
+    let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
+    let total = tokens.len();
+    for (ix, token) in tokens.into_iter().enumerate() {
+        let Token::ClauseBoundary(c) = token else {
+            out.push(token);
+            continue;
+        };
+        if !punct_covers(options, c) {
+            out.push(Token::ClauseBoundary(c));
+            continue;
+        }
+        let has_text = out
+            .iter()
+            .rev()
+            .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
+            .any(|t| !matches!(t, Token::Space | Token::WordJoin | Token::Embedded(_)));
+        if has_text {
+            out.push(Token::ClauseBoundary(if c == ',' { ',' } else { ';' }));
+        }
+        if has_text && ix + 1 == total {
+            continue;
+        }
+        out.push(Token::Punctuation(c));
+        out.push(Token::ClauseBoundary(c));
+    }
+    out
+}
+
 fn split_overlong_clauses(tokens: Vec<Token>) -> Vec<Token> {
     let mut out = Vec::with_capacity(tokens.len());
     let mut used = 0usize;
@@ -7578,7 +7611,8 @@ fn suppress_abbreviation_periods(tokens: &mut [Token]) {
     // shows exactly this: `w'0n t'u:` on one line versus `w'0n` / `t'u:` on
     // two.  Language-independent, like the clause tokenizer in C.
     for i in 0..tokens.len() {
-        if !matches!(tokens[i], Token::ClauseBoundary('.')) {
+        let announced = i > 0 && matches!(tokens[i - 1], Token::Punctuation('.'));
+        if !matches!(tokens[i], Token::ClauseBoundary('.')) || announced {
             continue;
         }
         let next_word = tokens[i + 1..].iter().find(|t| {
@@ -8710,47 +8744,19 @@ pub(crate) fn build_translate_entries(
                     found_in_list: false,
                 });
             }
-            Token::ClauseBoundary(c) => {
+            Token::ClauseBoundary(_) => {
                 // A clause boundary resets the part-of-speech expectation.
+                // `--punct` names were split into their own clause beforehand
+                // (`announce_clause_punctuation`).
                 prev_word = None;
-                // `--punct`: announce clause punctuation by name instead of a
-                // silent break.  Falls back to a break if the char has no name.
-                let (name, name_from_dict) = if punct_covers(options, *c) {
-                    lookup_symbol_name(
-                        *c, dict, phdata, stress_opts, options, SymbolName::Announce,
-                        PosExpect {
-                            at_clause_end: at_end[token_ix],
-                            at_clause_start: at_start[token_ix],
-                            ..PosExpect::default()
-                        },
-                    )
-                } else {
-                    (Vec::new(), false)
-                };
-                if name.is_empty() {
-                    entries.push(TranslateEntry {
-                        phonemes:   Vec::new(),
-                        dict_flags: 0,
-                        kind:       TranslateEntryKind::ClauseBoundary,
-                        word_lower: None,
-                        no_word_gap: false, word_group: None,
-                        found_in_list: false,
-                    });
-                } else {
-                    entries.push(TranslateEntry {
-                        phonemes:   name,
-                        dict_flags: 0,
-                        kind:       TranslateEntryKind::Word,
-                        word_lower: None,
-                        no_word_gap: false, word_group: None,
-                        // A dictionary pronunciation is a *translation given*
-                        // (C's `SFLAG_DICTIONARY`), which suppresses the
-                        // stress-conditioned phoneme changes; a name that came
-                        // from replacement text was read by the rules and does
-                        // take them.
-                        found_in_list: name_from_dict,
-                    });
-                }
+                entries.push(TranslateEntry {
+                    phonemes:   Vec::new(),
+                    dict_flags: 0,
+                    kind:       TranslateEntryKind::ClauseBoundary,
+                    word_lower: None,
+                    no_word_gap: false, word_group: None,
+                    found_in_list: false,
+                });
             }
             // A point between two numbers that is not their decimal separator
             // (`de 3.14`) is not a word: C appends the language's `_.` entry to
@@ -9748,6 +9754,7 @@ impl Translator {
         split_unrecognised_ordinals(&mut tokens, &dict, &number_grammar);
         merge_digit_follow(&mut tokens, &dict);
         expand_dotted_phrases(&mut tokens, &dict, lang);
+        tokens = announce_clause_punctuation(tokens, &self.options);
         suppress_abbreviation_periods(&mut tokens);
         apply_time_reading(&mut tokens, lang);
         apply_dash_reading(&mut tokens, lang);

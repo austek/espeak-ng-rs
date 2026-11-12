@@ -292,9 +292,10 @@ fn punct_announces_punctuation_by_name() {
     let base = t.text_to_ipa("a, b.").unwrap().replace('\n', " ");
     assert_eq!(base.split_whitespace().count(), 2, "baseline {base:?}");
 
-    // `--punct` (all): comma and period are announced by name.
+    // `--punct` (all): the comma is announced by name, on its own line; a
+    // period that ends the text is lost, as in C.
     t.options.punct = Some(Vec::new());
-    assert_eq!(t.text_to_ipa("a, b.").unwrap(), "ˈeɪ kˈɒmə bˈiː dˈɒt");
+    assert_eq!(t.text_to_ipa("a, b.").unwrap(), "ˈeɪ\nkˈɒmə\nbˈiː");
 
     // `--punct=","` (only comma): the period stays silent.
     t.options.punct = Some(vec![',']);
