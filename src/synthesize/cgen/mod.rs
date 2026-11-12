@@ -3,6 +3,7 @@
 //! phoneme codes.
 
 pub mod generate;
+pub mod langtab;
 pub mod lengths;
 pub mod phlist;
 pub mod pitches;

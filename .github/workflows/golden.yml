@@ -64,6 +64,7 @@ jobs:
           --test fuzz_parsers
           --test number_apostrophe_suffix
           --test synth_parity
+          --test synth_parity_langs
           --test tr_phoneme_program_context
           --test tr_next_phoneme_word_end
           --test max_digits

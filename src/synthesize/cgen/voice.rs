@@ -181,55 +181,34 @@ impl Default for LangSynth {
     }
 }
 
-const FR_LENGTHS: [i32; 8] = [190, 170, 190, 200, 0, 0, 190, 240];
-const FR_AMPS: [i32; 8] = [18, 16, 18, 18, 18, 18, 18, 18];
+use super::langtab::{overrides_for, Overrides};
 
 impl LangSynth {
     /// `SelectTranslator`, for the fields this module uses.
     pub fn for_lang(lang: &str) -> Self {
         let mut t = LangSynth::default();
         let primary = lang.split(['-', '_']).next().unwrap_or(lang).to_ascii_lowercase();
-        match primary.as_str() {
-            "en" => {
-                t.stress_lengths = [182, 140, 220, 220, 0, 0, 248, 275];
-                t.stress_flags = 0x08;
-            }
-            "de" => {
-                t.stress_lengths = [150, 130, 200, 200, 0, 0, 270, 270];
-                t.stress_amps = [20, 20, 20, 20, 20, 22, 22, 20];
-                t.word_gap = 0x8;
-                t.long_vowel_threshold = 175 / 2;
-            }
-            "es" | "an" | "ca" | "ia" | "pap" => {
-                t.stress_lengths = [160, 145, 155, 150, 0, 0, 200, 245];
-                t.stress_amps = [16, 14, 15, 16, 20, 20, 22, 22];
-                t.length_mods0 = t.length_mods;
-                t.sonorant_min = 120;
-            }
-            "fr" => {
-                t.stress_lengths = FR_LENGTHS;
-                t.stress_amps = FR_AMPS;
-                t.length_mods0 = t.length_mods;
-            }
-            "am" => {
-                t.stress_lengths = FR_LENGTHS;
-                t.stress_amps = FR_AMPS;
-            }
-            "ru" => {
-                t.stress_lengths = [150, 140, 220, 220, 0, 0, 260, 280];
-                t.stress_amps = [16, 16, 18, 18, 20, 24, 24, 22];
-            }
-            "fi" => t.long_stop = 130,
-            "sl" | "smj" => {
-                t.long_stop = 130;
-                t.intonation_group = 3;
-            }
-            "ku" => {
-                t.stress_lengths = [180, 180, 190, 180, 0, 0, 230, 240];
-                t.stress_amps = [18, 18, 20, 20, 20, 22, 22, 21];
-            }
-            _ => {}
-        }
+        t.apply(&overrides_for(&primary));
         t
+    }
+
+    fn apply(&mut self, o: &Overrides) {
+        self.stress_lengths = o.lengths.unwrap_or(self.stress_lengths);
+        self.stress_amps = o.amps.unwrap_or(self.stress_amps);
+        if o.equal_mods {
+            self.length_mods = &LENGTH_MODS_EQUAL;
+            self.length_mods0 = &LENGTH_MODS_EQUAL;
+        }
+        if o.mods0_is_mods {
+            self.length_mods0 = self.length_mods;
+        }
+        self.lengthen_tonic = o.lengthen_tonic.unwrap_or(self.lengthen_tonic);
+        self.max_lengthmod = o.max_lengthmod.unwrap_or(self.max_lengthmod);
+        self.long_stop = o.long_stop.unwrap_or(self.long_stop);
+        self.word_gap = o.word_gap.unwrap_or(self.word_gap);
+        self.sonorant_min = o.sonorant_min.unwrap_or(self.sonorant_min);
+        self.long_vowel_threshold = o.long_vowel_threshold.unwrap_or(self.long_vowel_threshold);
+        self.word_merge = o.word_merge.unwrap_or(self.word_merge);
+        self.intonation_group = o.intonation_group.unwrap_or(self.intonation_group);
     }
 }
