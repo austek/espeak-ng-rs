@@ -10108,6 +10108,10 @@ impl Translator {
                         let pause = phdata.lookup_phoneme("_");
                         if pause != 0 {
                             codes.push(PhonemeCode {
+                                marker: Some(CodeMarker::InsertedPause(self.options.word_gap)),
+                                ..Default::default()
+                            });
+                            codes.push(PhonemeCode {
                                 code: pause, is_boundary: false, clause_char: None, marker: None
                             });
                         }
@@ -10490,6 +10494,7 @@ fn insert_word_gaps(
             at,
             PhonemeCode { code, is_boundary: false, clause_char: None, marker: None },
         );
+        codes.insert(at, PhonemeCode { marker: Some(CodeMarker::InsertedPause(0)), ..Default::default() });
     }
 }
 
@@ -11535,6 +11540,10 @@ pub enum CodeMarker {
     /// had none (C's `count_pitch_vowels`); this is the stress code it
     /// replaced, `0` for none.  The synthesizer redoes that promotion itself.
     PromotedTonic(u8),
+    /// The pause that follows was put between two words by `MakePhonemeList`,
+    /// not by the word's translation.  A non-zero value makes it the `-g` word
+    /// gap, lasting that many units of 10 ms at the default speed.
+    InsertedPause(i32),
 }
 
 // ---------------------------------------------------------------------------

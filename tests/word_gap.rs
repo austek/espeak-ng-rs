@@ -12,13 +12,16 @@ fn word_gap_adds_one_pause_per_word() {
         Ok(t) if t.translate_to_codes("two words").is_ok() => t,
         _ => { eprintln!("[SKIP] no en data"); return }
     };
-    let base = t.translate_to_codes("two words").unwrap().len();
+    let phonemes = |t: &Translator| {
+        t.translate_to_codes("two words").unwrap().iter().filter(|c| c.marker.is_none()).count()
+    };
+    let base = phonemes(&t);
 
     t.options.word_gap = 20;
-    let gapped = t.translate_to_codes("two words").unwrap();
+    let gapped = phonemes(&t);
 
     // Exactly one extra (pause) code per word.
-    assert_eq!(gapped.len(), base + 2, "expected one pause per word");
+    assert_eq!(gapped, base + 2, "expected one pause per word");
 }
 
 #[test]

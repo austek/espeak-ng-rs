@@ -67,6 +67,7 @@ jobs:
           --test synth_parity_langs
           --test synth_parity_voicefile
           --test synth_parity_phlist
+          --test synth_parity_wordgap
           --test tr_phoneme_program_context
           --test tr_next_phoneme_word_end
           --test max_digits

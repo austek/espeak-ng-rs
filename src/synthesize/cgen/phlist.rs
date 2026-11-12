@@ -34,6 +34,9 @@ pub struct Ph {
     pub pitch1: i32,
     pub pitch2: i32,
     pub embedded: Vec<EmbeddedCmd>,
+    /// A pause `MakePhonemeList` inserts between words, after it has looked
+    /// ahead from the phonemes before it.
+    pub inserted: bool,
 }
 
 impl Ph {
@@ -52,6 +55,7 @@ impl Ph {
             pitch1: 255,
             pitch2: 255,
             embedded: Vec::new(),
+            inserted: false,
         }
     }
 
@@ -127,6 +131,8 @@ pub fn build_list(
     let mut pending: Vec<EmbeddedCmd> = Vec::new();
     let mut table = phdata;
     let mut promoted: Option<u8> = None;
+    let mut inserted: Option<i32> = None;
+    let mut gaps: Vec<(usize, i32)> = Vec::new();
     for c in codes {
         match &c.marker {
             Some(CodeMarker::Embedded(cmd)) => {
@@ -135,6 +141,10 @@ pub fn build_list(
             }
             Some(CodeMarker::PromotedTonic(original)) => {
                 promoted = Some(*original);
+                continue;
+            }
+            Some(CodeMarker::InsertedPause(units)) => {
+                inserted = Some(*units);
                 continue;
             }
             Some(CodeMarker::LangSwitch(lang)) => {
@@ -171,6 +181,12 @@ pub fn build_list(
         let s = if t.typ == PH_VOWEL { stress.take().unwrap_or(1) } else { 0 };
         let mut p = Ph::new(t.clone(), s, newword);
         newword = 0;
+        if let Some(units) = inserted.take() {
+            p.inserted = true;
+            if units > 0 && t.typ == PH_PAUSE {
+                gaps.push((list.len(), units * 14));
+            }
+        }
         if t.typ == PH_VOWEL {
             p.synthflags |= SFLAG_SYLLABLE;
         }
@@ -181,6 +197,7 @@ pub fn build_list(
         list.push(p);
     }
     finish_list(&mut list, phdata, post_pause);
+    gaps.into_iter().for_each(|(i, length)| list[i].length = length);
     set_word_stress(&mut list);
     diminish_unstressed(&mut list, stress_flags);
     Clause { list, clause_char: None, embedded_after: pending }
@@ -235,7 +252,7 @@ fn diminish_unstressed(list: &mut [Ph], stress_flags: u32) {
         if stress_flags & 0x08 != 0 {
             diminish_pair(list, i);
         } else if unstress_count > 1 && unstress_count & 1 == 0 {
-            let next_word = list.get(i + 1).is_some_and(|n| n.newword != 0);
+            let next_word = list[i + 1..].iter().find(|n| !n.inserted).is_some_and(|n| n.newword != 0);
             if stress_flags & S_NO_DIM != 0 || (word_stress > 3 && next_word) {
                 unstress_count = 1;
             } else {
@@ -247,6 +264,9 @@ fn diminish_unstressed(list: &mut [Ph], stress_flags: u32) {
 
 fn diminish_pair(list: &mut [Ph], i: usize) {
     for j in i + 1..list.len() {
+        if list[j].inserted {
+            continue;
+        }
         if list[j].typ == PH_PAUSE {
             return;
         }
