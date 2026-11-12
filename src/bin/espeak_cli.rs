@@ -909,7 +909,18 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
         format_x(&codes, &phdata, cli.sep, cli.tie, &data_dir, translator.options.lang.as_str())
     };
 
-    emit(cli, &format!("{line}\n"))
+    let closing = if cli.markup || !closes_after_mark(text) { "" } else { "\n" };
+    emit(cli, &format!("{line}\n{closing}"))
+}
+
+/// C ends a clause at a mark that a quote or bracket follows, and reads that
+/// closer as a clause of its own: one more, empty, output line.
+fn closes_after_mark(text: &str) -> bool {
+    const CLOSERS: &str = "\"'`)]}>\u{ab}\u{bb}\u{2019}\u{201d}";
+    const MARKS: &str = ".,!?;:";
+    let trimmed = text.trim_end();
+    let before = trimmed.trim_end_matches(|c: char| CLOSERS.contains(c) || c.is_whitespace());
+    before.len() < trimmed.len() && before.chars().next_back().is_some_and(|c| MARKS.contains(c))
 }
 
 

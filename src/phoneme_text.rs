@@ -48,6 +48,7 @@ pub fn format_mnemonics(
     // A stress marker is written as part of the phoneme it precedes, as in C,
     // where the separator goes *before* the stress: `tS.'i:.z`, not `tS.'.i:.z`.
     let mut pending_stress = String::new();
+    let mut leading_pauses = true;
     let push_unit = |u: String, word_units: &mut Vec<String>, pending: &mut String| {
         if u.is_empty() {
             return;
@@ -118,6 +119,7 @@ pub fn format_mnemonics(
         if pc.is_boundary && pc.code == 0 {
             flush_word(&mut out, &mut word_units, sep);
             if pc.clause_char.is_some() {
+                leading_pauses = true;
                 out.push('\n');
             } else {
                 out.push(' ');
@@ -158,6 +160,13 @@ pub fn format_mnemonics(
                         // Type-1 phonemes that carry a program are *tone*
                         // phonemes (Mandarin `55`/`214`/…), which C writes out
                         // with `WritePhMnemonic` like any other phoneme.
+                        // C marks the first sound after a clause's opening
+                        // pauses as a word start, so no separator precedes it.
+                        let is_pause = c == crate::phoneme::PHON_PAUSE;
+                        if leading_pauses && !is_pause {
+                            flush_word(&mut out, &mut word_units, sep);
+                        }
+                        leading_pauses = leading_pauses && is_pause;
                         push_unit(ph.mnemonic_display(), &mut word_units, &mut pending_stress);
                     }
                 }
