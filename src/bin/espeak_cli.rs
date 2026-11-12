@@ -376,6 +376,11 @@ fn resolve_voice(value: &str, data_dir: &Path) -> String {
         return with_variant(tag);
     }
     let voices = espeak_ng::voices::list_voices(data_dir);
+    let by_file = voices.iter().find(|v| v.file == value);
+    if let Some(v) = by_file {
+        return espeak_ng::translate::resolve_dict_stem(data_dir, &v.language)
+            .unwrap_or_else(|| v.language.clone());
+    }
     let query = espeak_ng::voices::VoiceQuery { name: Some(value.to_string()), ..Default::default() };
     match espeak_ng::voices::find_voice(&voices, &query) {
         // Resolve to the language that actually has data — the voice's primary
