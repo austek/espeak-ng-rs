@@ -18,7 +18,7 @@ use super::{
 };
 use crate::dictionary::stress::{set_word_stress, StressOpts};
 use crate::dictionary::Dictionary;
-use crate::phoneme::{PhonemeData, PHON_PAUSE, PHON_PAUSE_VSHORT, PHON_SWITCH};
+use crate::phoneme::{PhonemeData, PHON_END_WORD, PHON_PAUSE, PHON_PAUSE_VSHORT, PHON_SWITCH};
 
 #[derive(Clone, Copy)]
 pub(crate) struct Alphabet {
@@ -250,7 +250,12 @@ fn marker(table: &str) -> PhonemeCode {
 }
 
 fn opens_with_switch(items: &[Item]) -> bool {
-    matches!(items, [Item::Switch(_), ..] | [Item::Ph(PHON_PAUSE), Item::Switch(_), ..])
+    matches!(
+        items,
+        [Item::Switch(_), ..]
+            | [Item::Ph(PHON_PAUSE), Item::Switch(_), ..]
+            | [Item::Ph(PHON_PAUSE), Item::Ph(PHON_END_WORD), Item::Switch(_), ..]
+    )
 }
 
 /// A switch back to the voice that closed another word's region just before.

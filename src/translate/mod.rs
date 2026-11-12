@@ -6765,6 +6765,20 @@ fn spell_aborted_switch(
     Some(items)
 }
 
+/// The kind of the entry of the nearest word-like token before `token_ix`.
+fn previous_entry_kind<'a>(
+    tokens: &[Token],
+    entries: &'a [TranslateEntry],
+    token_ix: usize,
+) -> Option<&'a TranslateEntryKind> {
+    (0..token_ix)
+        .rev()
+        .filter(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
+        .filter_map(|k| entries.get(k))
+        .find(|e| e.phonemes.iter().any(|&b| b != 0))
+        .map(|e| &e.kind)
+}
+
 /// The word before `token_ix` in its clause holds a quote the rules do not cover.
 fn previous_word_has_open_quote(
     tokens: &[Token],
@@ -8399,7 +8413,28 @@ pub(crate) fn build_translate_entries(
                         .trim_end_matches('\0')
                         .to_string();
                     let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
-                    let items = lone.and_then(|c| letters::spell_in_switched(voice, alts, &target, c));
+                    let listed_there = !at_end[token_ix]
+                        && alts
+                            .get(&target)
+                            .is_some_and(|t| dict_lists_word(word_script, &t.dict, &t.options));
+                    let items = lone
+                        .filter(|_| !listed_there)
+                        .and_then(|c| letters::spell_in_switched(voice, alts, &target, c));
+                    let run_on = (0..token_ix)
+                        .rev()
+                        .find(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
+                        .and_then(|k| entries.get(k))
+                        .is_some_and(|e| {
+                            e.kind == TranslateEntryKind::Stream
+                                || e.phonemes.first() == Some(&crate::phoneme::PHON_SWITCH)
+                        });
+                    let items = items.map(|mut items| {
+                        let at = usize::from(items.first() == Some(&letters::Item::Ph(crate::phoneme::PHON_PAUSE)));
+                        if run_on && at == 1 {
+                            items.insert(1, letters::Item::Ph(crate::phoneme::PHON_END_WORD));
+                        }
+                        items
+                    });
                     if let Some(items) = items {
                         let mut phonemes = letters::encode(&items);
                         phonemes.push(0);
@@ -9810,14 +9845,7 @@ impl Translator {
                         let mut it = text.chars();
                         it.next().filter(|_| it.next().is_none())
                     };
-                    let char_name = word
-                        .strip_prefix('_')
-                        .and_then(lone)
-                        .or_else(|| {
-                            lone(word)
-                                .filter(|c| c.is_alphabetic())
-                                .and_then(|c| c.to_lowercase().next())
-                        });
+                    let char_name = word.strip_prefix('_').and_then(lone);
                     // `translate_to_codes_inner` with switching disabled: a
                     // switched word may not switch again.
                     let sw = match char_name {
@@ -9859,7 +9887,9 @@ impl Translator {
                             .iter()
                             .rposition(|k| k.marker.is_none())
                             .is_some_and(|i| !codes[i].is_boundary);
-                        if word_open && open_switch.is_none() && !hyphen_joined {
+                        let follows_stream = previous_entry_kind(&tokens, &entries, token_ix)
+                            == Some(&TranslateEntryKind::Stream);
+                        if word_open && open_switch.is_none() && !hyphen_joined && !follows_stream {
                             codes.push(PhonemeCode { code: 15, is_boundary: true, ..Default::default() });
                         }
                         codes.extend(name.iter().map(|&b| PhonemeCode { code: b, ..Default::default() }));
@@ -9870,6 +9900,9 @@ impl Translator {
                             });
                             open_switch = Some(target.clone());
                         }
+                        if follows_stream && word_open {
+                            codes.push(PhonemeCode { code: 15, is_boundary: true, ..Default::default() });
+                        }
                         for c in sw {
                             // Drop the inner clause boundary; this is one word
                             // inside the outer clause.
@@ -9878,7 +9911,13 @@ impl Translator {
                             }
                             codes.push(c);
                         }
-                        codes.push(PhonemeCode { code: 15, is_boundary: true, ..Default::default() });
+                        let before_stream = (token_ix + 1..tokens.len())
+                            .find(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
+                            .and_then(|k| entries.get(k))
+                            .is_some_and(|e| e.kind == TranslateEntryKind::Stream);
+                        if !before_stream {
+                            codes.push(PhonemeCode { code: 15, is_boundary: true, ..Default::default() });
+                        }
                         from_dict.resize(codes.len(), false);
                         continue;
                     }
@@ -10034,7 +10073,12 @@ impl Translator {
                             !c.is_boundary && c.code != crate::phoneme::PHON_END_WORD
                         })
                         .any(|c| c.code != crate::phoneme::PHON_PAUSE);
-                    if runs_on && !joined && entry.phonemes.iter().any(|&b| b != 0) {
+                    let stream_run = entry.kind == TranslateEntryKind::Stream
+                        && matches!(
+                            previous_entry_kind(&tokens, &entries, token_ix),
+                            Some(TranslateEntryKind::Stream | TranslateEntryKind::LangSwitch)
+                        );
+                    if runs_on && !joined && !stream_run && entry.phonemes.iter().any(|&b| b != 0) {
                         codes.push(PhonemeCode {
                             code: 15, is_boundary: true, clause_char: None, marker: None,
                         });
@@ -10228,7 +10272,21 @@ impl Translator {
                         .checked_sub(1)
                         .and_then(|k| entries.get(k))
                         .is_some_and(|e| e.no_word_gap);
-                    if !joined && !only_pauses_since_clause_start(&codes) {
+                    let before = previous_entry_kind(&tokens, &entries, token_ix);
+                    let after = (token_ix + 1..tokens.len())
+                        .filter(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
+                        .filter_map(|k| entries.get(k))
+                        .find(|e| e.phonemes.iter().any(|&b| b != 0))
+                        .map(|e| &e.kind);
+                    use TranslateEntryKind::{LangSwitch, Stream};
+                    // A spelled word carries its own word break after its
+                    // opening pause, so none comes before it when a spelled or
+                    // switched word precedes, nor after one before another.
+                    let stream_runs = matches!(
+                        (before, after),
+                        (Some(Stream), Some(Stream | LangSwitch)) | (Some(LangSwitch), Some(Stream))
+                    );
+                    if !joined && !stream_runs && !only_pauses_since_clause_start(&codes) {
                         codes.push(PhonemeCode {
                             code:         15,
                             is_boundary:  true,
