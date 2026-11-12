@@ -225,7 +225,8 @@ pub fn process_markup_opts(input: &str, break_mul: u32) -> (Vec<Segment>, Vec<Ma
                 continue;
             }
             let close = find_char(&chars, i + 1, '>').unwrap_or(n - 1);
-            let inner: String = chars[i + 1..close.min(n)].iter().collect();
+            let end = close.min(n);
+            let inner: String = chars[(i + 1).min(end)..end].iter().collect();
             i = (close + 1).min(n);
             w.apply_tag(&inner);
             continue;
