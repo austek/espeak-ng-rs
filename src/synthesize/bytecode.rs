@@ -673,10 +673,9 @@ where
                 // Group 0: parameters / RETURN / IPA name.
                 let data = (instn & 0xff) as usize;
                 if instn2 == 0 {
-                    match data {
-                        0x0001 /* INSTN_RETURN */ => end_flag = 1,
-                        _ => {} // INSTN_CONTINUE and others: no-op
-                    }
+                    if data == 0x0001 /* INSTN_RETURN */ {
+                        end_flag = 1;
+                    } // INSTN_CONTINUE and others: no-op
                     pc += 1;
                 } else if instn2 == I_IPA_NAME as usize {
                     // Followed by UTF-8 bytes, two per instruction word.  C caps

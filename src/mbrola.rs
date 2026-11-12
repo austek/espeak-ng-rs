@@ -215,9 +215,9 @@ impl MbrolaTable {
             if mnem != pr.name {
                 continue;
             }
-            let mut found = if pr.next_phoneme == 0 {
-                true
-            } else if pr.next_phoneme == u32::from(b':') && ctx.lengthen {
+            let mut found = if pr.next_phoneme == 0
+                || (pr.next_phoneme == u32::from(b':') && ctx.lengthen)
+            {
                 true
             } else {
                 let other = if pr.control & MBR_MATCH_PREV != 0 {

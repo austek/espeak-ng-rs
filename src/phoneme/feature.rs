@@ -165,6 +165,7 @@ impl PhonemeFeature {
     ///
     /// Mirrors `phoneme_feature_from_string()`.  Returns `None` if the string
     /// is not exactly 3 ASCII bytes.
+    #[allow(clippy::should_implement_trait)] // public API returns Option, not Result
     pub fn from_str(s: &str) -> Option<Self> {
         let b = s.as_bytes();
         if b.len() != 3 {

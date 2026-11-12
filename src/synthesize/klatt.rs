@@ -699,9 +699,9 @@ impl Klatt {
         self.set_zero_abc(RNZ, frame.fhz[F_NZ], frame.bhz[F_NZ]);
 
         // Parallel resonators, with the branch amplitude folded into `a`.
-        for ix in 0..7 {
+        for (ix, amp) in amp_par.iter().enumerate().take(7) {
             self.set_abc(RNPP + ix, frame.fhz[ix], frame.bphz[ix]);
-            self.rsn[RNPP + ix].a *= amp_par[ix];
+            self.rsn[RNPP + ix].a *= amp;
         }
 
         // Output low-pass.
@@ -1000,16 +1000,16 @@ pub fn synthesize_frames_klatt(
             }
         }
 
-        for ix in 1..6 {
-            peaks[ix].freq1 = fr.ffreq[ix] as f64;
-            peaks[ix].freq = peaks[ix].freq1 as i32;
-            peaks[ix].freq_inc = (next.ffreq[ix] as f64 - peaks[ix].freq1) * step_over_len;
+        for (ix, pk) in peaks.iter_mut().enumerate().take(6).skip(1) {
+            pk.freq1 = fr.ffreq[ix] as f64;
+            pk.freq = pk.freq1 as i32;
+            pk.freq_inc = (next.ffreq[ix] as f64 - pk.freq1) * step_over_len;
 
             if ix < 4 {
                 // Klatt bandwidth for F1..F3; the rest are fixed.
-                peaks[ix].bw1 = fr.bw[ix] as f64 * 2.0;
-                peaks[ix].bw = peaks[ix].bw1 as i32;
-                peaks[ix].bw_inc = (next.bw[ix] as f64 * 2.0 - peaks[ix].bw1) * step_over_len;
+                pk.bw1 = fr.bw[ix] as f64 * 2.0;
+                pk.bw = pk.bw1 as i32;
+                pk.bw_inc = (next.bw[ix] as f64 * 2.0 - pk.bw1) * step_over_len;
             }
         }
 
@@ -1030,23 +1030,22 @@ pub fn synthesize_frames_klatt(
 
         if klatt_flag {
             // The frame carries the extra parallel-resonator parameters.
-            for ix in 1..7 {
-                peaks[ix].bp1 = fr.klatt_bp[ix] as f64 * 4.0;
-                peaks[ix].bp = peaks[ix].bp1 as i32;
-                peaks[ix].bp_inc =
-                    (next.klatt_bp[ix] as f64 * 4.0 - peaks[ix].bp1) * step_over_len;
+            for (ix, pk) in peaks.iter_mut().enumerate().take(7).skip(1) {
+                pk.bp1 = fr.klatt_bp[ix] as f64 * 4.0;
+                pk.bp = pk.bp1 as i32;
+                pk.bp_inc = (next.klatt_bp[ix] as f64 * 4.0 - pk.bp1) * step_over_len;
 
-                peaks[ix].ap1 = fr.klatt_ap[ix] as f64;
-                peaks[ix].ap = peaks[ix].ap1 as i32;
-                peaks[ix].ap_inc = (next.klatt_ap[ix] as f64 - peaks[ix].ap1) * step_over_len;
+                pk.ap1 = fr.klatt_ap[ix] as f64;
+                pk.ap = pk.ap1 as i32;
+                pk.ap_inc = (next.klatt_ap[ix] as f64 - pk.ap1) * step_over_len;
             }
         } else {
             // Divergence (see the fn doc): keep the `KlattInit` defaults so a
             // non-Klatt frame is audible instead of silent.
             let dflt = KtFrame::default();
-            for ix in 1..7 {
-                peaks[ix].ap1 = dflt.ap[ix] as f64;
-                peaks[ix].ap = dflt.ap[ix];
+            for (ix, pk) in peaks.iter_mut().enumerate().take(7).skip(1) {
+                pk.ap1 = dflt.ap[ix] as f64;
+                pk.ap = dflt.ap[ix];
                 klattp[0] = dflt.avdb; // AV
                 klattp1[0] = dflt.avdb as f64;
             }
@@ -1067,14 +1066,14 @@ pub fn synthesize_frames_klatt(
 
             // F6..F8 are fixed cascade values set at init; F0's slot holds the
             // nasal zero.
-            for ix in 0..6 {
-                kt_frame.fhz[ix] = peaks[ix].freq;
+            for (ix, pk) in peaks.iter().enumerate().take(6) {
+                kt_frame.fhz[ix] = pk.freq;
                 if ix < 4 {
-                    kt_frame.bhz[ix] = peaks[ix].bw;
+                    kt_frame.bhz[ix] = pk.bw;
                 }
             }
-            for ix in 1..7 {
-                kt_frame.ap[ix] = peaks[ix].ap;
+            for (ix, pk) in peaks.iter().enumerate().take(7).skip(1) {
+                kt_frame.ap[ix] = pk.ap;
             }
 
             kt_frame.avdb = klattp[0];

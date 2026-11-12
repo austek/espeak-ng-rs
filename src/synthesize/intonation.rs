@@ -243,8 +243,8 @@ pub(crate) fn count_pitch_vowels(syls: &mut [Syllable], start: usize, end: usize
     let mut number_pre: Option<usize> = None;
     let mut last_primary: Option<usize> = None;
 
-    for ix in start..end {
-        let stress = syls[ix].stress;
+    for (ix, syl) in syls.iter().enumerate().take(end).skip(start) {
+        let stress = syl.stress;
         if stress >= max_stress {
             max_stress_posn2 = if stress > max_stress { ix } else { max_stress_posn };
             max_stress_posn = ix;

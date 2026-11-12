@@ -194,8 +194,7 @@ mod tests {
     fn mnemonic_roundtrip_ascii() {
         for name in &["@", "@-", "nas", "vwl!", "_:"] {
             let packed = PhonemeTab::pack_mnemonic(name);
-            let mut ph = PhonemeTab::default();
-            ph.mnemonic = packed;
+            let ph = PhonemeTab { mnemonic: packed, ..PhonemeTab::default() };
             assert_eq!(&ph.mnemonic_str(), name, "roundtrip failed for {:?}", name);
         }
     }

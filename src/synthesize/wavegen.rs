@@ -246,8 +246,7 @@ fn peaks_to_harmspect(
 
     // ── Phase 1: Sum formant peak contributions (WITHOUT >>15 — applied later) ──
     // Mirrors: htab[h++] += pk_shape[...] * p->height;  (C does NOT shift here)
-    for pk in 0..=N_HARMONIC_PEAKS {
-        let p = &peaks[pk];
+    for p in peaks.iter().take(N_HARMONIC_PEAKS + 1) {
         if p.height == 0 || p.freq == 0 {
             continue;
         }
@@ -322,9 +321,9 @@ fn peaks_to_harmspect(
     // 8 Hz steps (`wvoice->tone_adjust`).  The default curve tilts the spectrum
     // down above 600 Hz; leaving it out left the port ~5 dB hot around F2.
     let mut effective_hmax = 0;
-    for h in 1..=hmax {
-        let x = htab[h] >> 15;
-        htab[h] = (x * x) >> 8;
+    for (h, slot) in htab.iter_mut().enumerate().take(hmax + 1).skip(1) {
+        let x = *slot >> 15;
+        *slot = (x * x) >> 8;
         let ix = ((pitch_hz16 * h as i64) >> 19) as usize;
         if ix < N_TONE_ADJUST {
             // C computes `(htab[h] * tone_adjust[ix]) >> 13`.  Applying that
@@ -336,9 +335,9 @@ fn peaks_to_harmspect(
             // applied **relative to the default**: the standard voices keep the
             // levels they were tuned at, and a `tone` line in a voice or
             // `+variant` file contributes exactly its difference from it.
-            htab[h] = ((htab[h] as i64 * tone_adjust[ix] as i64) / TONE_REFERENCE) as i32;
+            *slot = ((*slot as i64 * tone_adjust[ix] as i64) / TONE_REFERENCE) as i32;
         }
-        if htab[h] > 0 {
+        if *slot > 0 {
             effective_hmax = h;
         }
     }
@@ -398,10 +397,11 @@ pub fn set_tone_adjust(tone_pts: &[i32; 12]) -> [u8; N_TONE_ADJUST] {
         let freq2 = (pts[pt] / 8) as usize; // 8 Hz steps
         let height2 = pts[pt + 1];
         if freq2 > freq1 {
-            for ix in freq1..freq2.min(N_TONE_ADJUST) {
+            let end = freq2.min(N_TONE_ADJUST);
+            for (ix, slot) in out.iter_mut().enumerate().take(end).skip(freq1) {
                 let y = height1
                     + ((ix - freq1) as i32 * (height2 - height1)) / (freq2 - freq1) as i32;
-                out[ix] = y.clamp(0, 255) as u8;
+                *slot = y.clamp(0, 255) as u8;
             }
         }
         freq1 = freq2;
@@ -554,7 +554,7 @@ pub fn wavegen_segment(
     }
     let mut cbytes: i32 = WAVEMULT_OFFSET - cycle_samples / 2; // starts negative
 
-    for i in 0..n {
+    for (i, out_slot) in output.iter_mut().enumerate().take(n) {
         // ── Every 64 samples: update harmonic table ──────────────────────
         if (i & 63) == 0 {
             let t = i as f64 / n as f64;
@@ -633,14 +633,14 @@ pub fn wavegen_segment(
             let h_switch_sign = (890_u32 / (f0_hz as u32).max(1)) as usize;
             let h_switch_sign = h_switch_sign.min(mh);
 
-            for h in 1..=h_switch_sign {
+            for &harm in &htab[hswitch][1..=h_switch_sign] {
                 let idx = (theta >> 5) as usize;
-                total += SIN_TAB[idx] as i64 * htab[hswitch][h] as i64;
+                total += SIN_TAB[idx] as i64 * harm as i64;
                 theta = theta.wrapping_add(waveph);
             }
-            for h in (h_switch_sign + 1)..=mh {
+            for &harm in &htab[hswitch][(h_switch_sign + 1)..=mh] {
                 let idx = (theta >> 5) as usize;
-                total -= SIN_TAB[idx] as i64 * htab[hswitch][h] as i64;
+                total -= SIN_TAB[idx] as i64 * harm as i64;
                 theta = theta.wrapping_add(waveph);
             }
         }
@@ -652,7 +652,7 @@ pub fn wavegen_segment(
 
         // Scale by amplitude
         let z = (total >> 8) * amplitude2 / (1 << 13);
-        output[i] = z.clamp(i32::MIN as i64 + 1, i32::MAX as i64) as i32;
+        *out_slot = z.clamp(i32::MIN as i64 + 1, i32::MAX as i64) as i32;
     }
 
     output
@@ -880,14 +880,16 @@ mod tests {
     /// heights) so the synthesizer's `hmax` — derived from the F5 peak — is
     /// non-zero and the mid formants actually reach the output.
     fn full_voiced_frame(f1: i16, f2: i16, f3: i16) -> SpectFrame {
-        let mut f = SpectFrame::default();
-        f.ffreq = [0, f1, f2, f3, 3300, 4300, 5300];
-        f.fheight = [0, 100, 80, 60, 45, 30, 15, 0];
-        f.fwidth = [40, 55, 70, 90, 110, 130];
-        f.fright = [40, 55, 70];
-        f.rms = 50;
+        let mut f = SpectFrame {
+            ffreq: [0, f1, f2, f3, 3300, 4300, 5300],
+            fheight: [0, 100, 80, 60, 45, 30, 15, 0],
+            fwidth: [40, 55, 70, 90, 110, 130],
+            fright: [40, 55, 70],
+            rms: 50,
+            length: 40,
+            ..SpectFrame::default()
+        };
         f.klattp[0] = 50; // AV = 50 (voiced)
-        f.length = 40;
         f
     }
 

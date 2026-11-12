@@ -73,14 +73,15 @@ impl SpectFrame {
     /// Parse a non-Klatt frame_t2 from 44 bytes.
     pub fn from_bytes_t2(data: &[u8]) -> Option<Self> {
         if data.len() < FRAME_T2_SIZE { return None; }
-        let mut f = SpectFrame::default();
-        f.frflags = u16::from_le_bytes([data[0], data[1]]);
-        for i in 0..7 {
-            f.ffreq[i] = i16::from_le_bytes([data[2 + i*2], data[3 + i*2]]);
+        let mut f = SpectFrame {
+            frflags: u16::from_le_bytes([data[0], data[1]]),
+            length: data[16],
+            rms: data[17],
+            ..SpectFrame::default()
+        };
+        for (i, fq) in f.ffreq.iter_mut().enumerate() {
+            *fq = i16::from_le_bytes([data[2 + i*2], data[3 + i*2]]);
         }
-        // offset 16
-        f.length = data[16];
-        f.rms    = data[17];
         // offset 18
         f.fheight.copy_from_slice(&data[18..26]);
         // offset 26
@@ -129,13 +130,15 @@ impl SpectFrame {
     /// Parse a Klatt frame_t from 64 bytes.
     pub fn from_bytes_t(data: &[u8]) -> Option<Self> {
         if data.len() < FRAME_T_SIZE { return None; }
-        let mut f = SpectFrame::default();
-        f.frflags = u16::from_le_bytes([data[0], data[1]]);
-        for i in 0..7 {
-            f.ffreq[i] = i16::from_le_bytes([data[2 + i*2], data[3 + i*2]]);
+        let mut f = SpectFrame {
+            frflags: u16::from_le_bytes([data[0], data[1]]),
+            length: data[16],
+            rms: data[17],
+            ..SpectFrame::default()
+        };
+        for (i, fq) in f.ffreq.iter_mut().enumerate() {
+            *fq = i16::from_le_bytes([data[2 + i*2], data[3 + i*2]]);
         }
-        f.length = data[16];
-        f.rms    = data[17];
         f.fheight.copy_from_slice(&data[18..26]);
         f.fwidth.copy_from_slice(&data[26..32]);
         f.fright.copy_from_slice(&data[32..35]);
@@ -262,16 +265,18 @@ mod tests {
 
     #[test]
     fn spect_seq_compile_round_trip() {
-        let mut f1 = SpectFrame::default();
-        f1.frflags = 0x0002; // not FRFLAG_KLATT → frame_t2
-        f1.ffreq = [120, 730, 1090, 2440, 3400, 4000, 4500];
-        f1.length = 20;
-        f1.rms = 40;
-        f1.fheight = [1, 2, 3, 4, 5, 6, 7, 8];
-        f1.fwidth = [9, 10, 11, 12, 13, 14];
-        f1.fright = [1, 2, 3];
-        f1.bw = [4, 5, 6, 7];
-        f1.klattp = [50, 1, 2, 3, 4];
+        let f1 = SpectFrame {
+            frflags: 0x0002, // not FRFLAG_KLATT → frame_t2
+            ffreq: [120, 730, 1090, 2440, 3400, 4000, 4500],
+            length: 20,
+            rms: 40,
+            fheight: [1, 2, 3, 4, 5, 6, 7, 8],
+            fwidth: [9, 10, 11, 12, 13, 14],
+            fright: [1, 2, 3],
+            bw: [4, 5, 6, 7],
+            klattp: [50, 1, 2, 3, 4],
+            ..SpectFrame::default()
+        };
         let mut f2 = f1.clone();
         f2.ffreq[1] = 700;
         f2.length = 25;
@@ -292,15 +297,17 @@ mod tests {
     #[test]
     fn spect_seqk_klatt_compile_round_trip() {
         // A Klatt sequence (first frame carries FRFLAG_KLATT → 64-byte frame_t).
-        let mut f = SpectFrame::default();
-        f.frflags = FRFLAG_KLATT;
-        f.ffreq = [130, 700, 1200, 2500, 3300, 3900, 4400];
-        f.length = 18;
-        f.rms = 45;
-        f.klattp = [50, 1, 2, 3, 4];
-        f.klattp2 = [5, 6, 7, 8, 9];
-        f.klatt_ap = [1, 2, 3, 4, 5, 6, 7];
-        f.klatt_bp = [8, 9, 10, 11, 12, 13, 14];
+        let f = SpectFrame {
+            frflags: FRFLAG_KLATT,
+            ffreq: [130, 700, 1200, 2500, 3300, 3900, 4400],
+            length: 18,
+            rms: 45,
+            klattp: [50, 1, 2, 3, 4],
+            klattp2: [5, 6, 7, 8, 9],
+            klatt_ap: [1, 2, 3, 4, 5, 6, 7],
+            klatt_bp: [8, 9, 10, 11, 12, 13, 14],
+            ..SpectFrame::default()
+        };
 
         let frames = vec![f.clone(), f.clone()];
         let bytes = compile_spect_seq(&frames);
@@ -419,8 +426,7 @@ mod tests {
 
     #[test]
     fn dur_samples_speed_factor() {
-        let mut f = SpectFrame::default();
-        f.length = 4;
+        let f = SpectFrame { length: 4, ..SpectFrame::default() };
         // 4 * 64 = 256 samples at speed 1.0
         assert_eq!(f.dur_samples(1.0), 256);
         // double speed → 128

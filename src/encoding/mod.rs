@@ -762,8 +762,8 @@ mod tests {
     fn iso8859_1_is_identity() {
         // ISO-8859-1 bytes 0x80–0xFF should map 1-to-1 to Unicode.
         let table = Encoding::Iso8859_1.codepage().unwrap();
-        for i in 0usize..128 {
-            assert_eq!(table[i] as usize, i + 0x80, "byte 0x{:02X}", i + 0x80);
+        for (i, &cp) in table.iter().enumerate().take(128) {
+            assert_eq!(cp as usize, i + 0x80, "byte 0x{:02X}", i + 0x80);
         }
     }
 
