@@ -177,7 +177,11 @@ fn run() -> std::io::Result<()> {
         let data = resolved_data_dir(cli.path_override.as_deref());
         let spelled = cli.voice_raw.clone().unwrap_or_else(|| cli.voice.clone());
         let wanted = match espeak_ng::voices::voice_file_entry(&data, split_variant_base(&spelled)) {
-            Some(_) => spelled,
+            Some(v) => {
+                loaded_pitch = v.pitch;
+                loaded_voice = Some(v);
+                spelled
+            }
             None => with_spelled_variant(&cli.voice, &spelled),
         };
         let compiling_without_voices =
