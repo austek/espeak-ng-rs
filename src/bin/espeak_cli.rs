@@ -11,7 +11,7 @@ use espeak_ng::translate::ipa_table::{
     PHON_LENGTHEN, PHON_STRESS_2, PHON_STRESS_3, PHON_STRESS_P, PHON_STRESS_P2,
     PHON_STRESS_PREV, PHON_STRESS_TONIC, PHON_STRESS_U,
 };
-use espeak_ng::translate::{default_data_dir, normalize_voice_tag, PhonemeCode, Translator};
+use espeak_ng::translate::{default_data_dir, PhonemeCode, Translator};
 
 #[derive(Debug, Default)]
 struct Cli {
@@ -133,9 +133,6 @@ fn run() -> std::io::Result<()> {
     if cli.compile_intonations {
         return run_compile_intonations(&cli);
     }
-    if let Some(lang_arg) = cli.compile.clone() {
-        return run_compile(&lang_arg, &cli);
-    }
     if let Some(src_arg) = cli.compile_phonemes.clone() {
         return run_compile_phonemes(&src_arg, &cli);
     }
@@ -147,9 +144,17 @@ fn run() -> std::io::Result<()> {
     // line reaches the synthesizer below; the rest of a language's settings
     // still come from the data directory.
     create_phonout(&cli);
+    let data = resolved_data_dir(cli.path_override.as_deref());
+    if !data.join("phontab").exists() {
+        eprintln!("Error processing file '{}': No such file or directory.", data.join("phontab").display());
+        std::process::exit(1);
+    }
     let text_outputs = cli.trace_rules || cli.pho || cli.ipa || cli.x_mnem;
     if plays_audio(&cli) && !text_outputs {
         fail_with(ENS_AUDIO_ERROR);
+    }
+    if let Some(lang) = cli.compile.as_deref() {
+        cli.voice = lang.to_ascii_lowercase();
     }
     let mut loaded_pitch = None;
     let mut loaded_voice = None;
@@ -171,12 +176,25 @@ fn run() -> std::io::Result<()> {
         // plain language tag is left unchanged.
         let data = resolved_data_dir(cli.path_override.as_deref());
         let spelled = cli.voice_raw.clone().unwrap_or_else(|| cli.voice.clone());
-        cli.voice = match espeak_ng::voices::voice_file_entry(&data, split_variant_base(&spelled)) {
-            Some(_) => resolve_voice(&spelled, &data),
-            None => resolve_voice(&cli.voice, &data),
+        let wanted = match espeak_ng::voices::voice_file_entry(&data, split_variant_base(&spelled)) {
+            Some(_) => spelled,
+            None => cli.voice.clone(),
         };
-        if !voice_exists(&cli.voice, &data) {
-            fail_with(ENS_VOICE_NOT_FOUND);
+        let compiling_without_voices =
+            cli.compile.is_some() && espeak_ng::voices::list_catalog(&data).is_empty();
+        match resolve_voice(&wanted, &data) {
+            Some(v) => cli.voice = v,
+            None if compiling_without_voices => {}
+            None => fail_with(ENS_VOICE_NOT_FOUND),
+        }
+    }
+    if let Some(lang_arg) = cli.compile.clone() {
+        return run_compile(&lang_arg, &cli);
+    }
+    if text_outputs && !cli.pho {
+        if let Some(mb) = espeak_ng::voices::load_mbrola_voice(&data, &cli.voice) {
+            cli.voice = espeak_ng::translate::resolve_dict_stem(&data, &mb.language)
+                .unwrap_or(mb.language);
         }
     }
 
@@ -364,12 +382,15 @@ fn plays_audio(cli: &Cli) -> bool {
 /// One `espeak_Synth` call's phoneme output; `-q` silences `--pho`.
 fn text_output(cli: &Cli, text: &str) -> std::io::Result<()> {
     if cli.trace_rules {
-        trace_output(cli, text)
-    } else if cli.pho {
-        if cli.quiet { Ok(()) } else { pho_output(cli, text) }
-    } else {
-        phoneme_output(cli, text)
+        trace_output(cli, text, cli.x_mnem || cli.ipa)?;
     }
+    if cli.x_mnem || cli.ipa {
+        phoneme_output(cli, text)?;
+    }
+    if cli.pho && !cli.quiet {
+        pho_output(cli, text)?;
+    }
+    Ok(())
 }
 
 /// `fopen(--phonout, "w")` at start-up, so an empty result still leaves a file.
@@ -389,30 +410,46 @@ fn fail_with(status_message: &str) -> ! {
     std::process::exit(1);
 }
 
-/// Whether `voice` (with any `+variant` removed) names a language with data or
-/// an MBROLA voice.
-fn voice_exists(voice: &str, data_dir: &Path) -> bool {
-    let (base, _) = espeak_ng::translate::split_voice_variant(voice);
-    espeak_ng::translate::resolve_dict_stem(data_dir, base).is_some()
-        || espeak_ng::voices::load_mbrola_voice(data_dir, base).is_some()
+/// C's `SelectVoiceByName`: the voice name, else its file path, else the last
+/// component of its file path, each compared without regard to case.
+fn select_voice_by_name<'a>(voices: &'a [Voice], name: &str) -> Option<&'a Voice> {
+    let tail = format!("/{name}").to_ascii_lowercase();
+    voices
+        .iter()
+        .find(|v| v.name.eq_ignore_ascii_case(name))
+        .or_else(|| voices.iter().find(|v| v.file.eq_ignore_ascii_case(name)))
+        .or_else(|| voices.iter().find(|v| v.file.to_ascii_lowercase().ends_with(&tail)))
 }
 
-/// Resolve a `-v` value to a language tag.  A value that already resolves as a
-/// language (its `<stem>_dict` exists) is kept as-is; otherwise it is matched
-/// against the installed voices by name (`-v "French (France)"` → `fr-fr`),
-/// falling back to the original string if nothing matches.
 fn split_variant_base(value: &str) -> &str {
     espeak_ng::translate::split_voice_variant(value).0
 }
 
-fn resolve_voice(value: &str, data_dir: &Path) -> String {
+/// The voice a `-v` value selects the way `espeak_ng_SetVoiceByName` and then
+/// `SetVoiceByProperties` do: by name or file, else the best language match.
+fn find_catalog_voice(value: &str, data_dir: &Path) -> Option<Voice> {
+    let catalog = espeak_ng::voices::list_catalog(data_dir);
+    select_voice_by_name(&catalog, value).cloned().or_else(|| {
+        listed_voices(data_dir, catalog.clone(), Some(value))
+            .into_iter()
+            .find(|v| !v.file.starts_with("mb/"))
+    })
+}
+
+/// Resolve a `-v` value (a `+variant` suffix passes through) to something the
+/// engine loads: a language with data is kept as given, an MBROLA voice keeps
+/// its name, any other voice becomes the language that has data for it.
+/// `None` is C's "voice does not exist".
+fn resolve_voice(value: &str, data_dir: &Path) -> Option<String> {
     let (base, variant) = espeak_ng::translate::split_voice_variant(value);
-    let with_variant = |tag: String| match variant {
-        Some(v) => format!("{tag}+{v}"),
-        None => tag,
+    let with_variant = |stem: &str| match variant {
+        Some(v) => format!("{stem}+{v}"),
+        None => stem.to_string(),
     };
-    if espeak_ng::translate::resolve_dict_stem(data_dir, base).is_some() {
-        return value.to_string();
+    if espeak_ng::translate::resolve_dict_stem(data_dir, base).is_some()
+        || espeak_ng::voices::load_mbrola_voice(data_dir, base).is_some()
+    {
+        return Some(value.to_string());
     }
     if let Some(v) = espeak_ng::voices::voice_file_entry(data_dir, base) {
         let resolves = |tag: &str| espeak_ng::translate::resolve_dict_stem(data_dir, tag).is_some();
@@ -420,22 +457,12 @@ fn resolve_voice(value: &str, data_dir: &Path) -> String {
             Some(d) if !resolves(&v.language) => d.to_string(),
             _ => v.language.clone(),
         };
-        return with_variant(tag);
+        return Some(with_variant(&tag));
     }
-    let voices = espeak_ng::voices::list_voices(data_dir);
-    let by_file = voices.iter().find(|v| v.file == value);
-    if let Some(v) = by_file {
-        return espeak_ng::translate::resolve_dict_stem(data_dir, &v.language)
-            .unwrap_or_else(|| v.language.clone());
-    }
-    let query = espeak_ng::voices::VoiceQuery { name: Some(value.to_string()), ..Default::default() };
-    match espeak_ng::voices::find_voice(&voices, &query) {
-        // Resolve to the language that actually has data — the voice's primary
-        // code may be a locale (`fr-fr`) whose phoneme table is the base (`fr`).
-        Some(v) => espeak_ng::translate::resolve_dict_stem(data_dir, &v.language)
-            .unwrap_or_else(|| v.language.clone()),
-        None => value.to_string(),
-    }
+    let v = find_catalog_voice(base, data_dir)?;
+    let stem = espeak_ng::translate::resolve_dict_stem(data_dir, &v.language)
+        .unwrap_or_else(|| v.language.clone());
+    Some(with_variant(&stem))
 }
 
 /// `--compile-intonations`: C reads `<data>/../phsource/intonation`; this port
@@ -526,8 +553,12 @@ fn run_compile_phonemes(src_arg: &str, cli: &Cli) -> std::io::Result<()> {
 
     let data_dir = resolved_data_dir(cli.path_override.as_deref());
     let given = PathBuf::from(src_arg);
+    let c_default = data_dir.join("../phsource/phonemes");
     let src_path = match () {
-        _ if src_arg.is_empty() => data_dir.join("phonemes"),
+        _ if src_arg.is_empty() && !c_default.exists() && data_dir.join("phonemes").exists() => {
+            data_dir.join("phonemes")
+        }
+        _ if src_arg.is_empty() => c_default,
         _ if given.is_file() => given,
         _ => given.join("phonemes"),
     };
@@ -809,7 +840,7 @@ fn decode_phonemes(codes: &[u8], phdata: &PhonemeData) -> String {
 /// Each word gets a `Translate '<word>'` header, then one line per matching
 /// rule: `<score>\t<rule> [<phonemes>]`, with a blank line between letter
 /// positions.  The rule is rendered back to source form by `DecodeRule`.
-fn trace_output(cli: &Cli, text: &str) -> std::io::Result<()> {
+fn trace_output(cli: &Cli, text: &str, phonemes_follow: bool) -> std::io::Result<()> {
     use espeak_ng::dictionary::rules::{trace_begin, trace_take, TraceEvent};
 
     let ioerr = |e: espeak_ng::Error| std::io::Error::other(format!("{e}"));
@@ -861,13 +892,14 @@ fn trace_output(cli: &Cli, text: &str) -> std::io::Result<()> {
         }
     }
 
-    // C follows the trace with a blank line and the resulting phonemes.
-    let codes = translator.translate_to_codes(text).map_err(ioerr)?;
     if rules_ran {
         out.push('\n');
     }
-    out.push_str(&format_x(&codes, &phdata, cli.sep, cli.tie, &data_dir, translator.options.lang.as_str()));
-    out.push('\n');
+    if !phonemes_follow {
+        let codes = translator.translate_to_codes(text).map_err(ioerr)?;
+        out.push_str(&format_x(&codes, &phdata, cli.sep, cli.tie, &data_dir, translator.options.lang.as_str()));
+        out.push('\n');
+    }
 
     emit(cli, &out)
 }
@@ -1228,7 +1260,7 @@ fn gather_texts(cli: &Cli) -> std::io::Result<Vec<String>> {
         return Ok(vec![decode(&read_input_file(path))]);
     }
     if let (Some(first), false) = (cli.positionals.first(), cli.stdin_all) {
-        return Ok(vec![first.to_string_lossy().into_owned()]);
+        return Ok(vec![decode(first.to_string_lossy().as_bytes())]);
     }
     let input = read_stdin()?;
     if cli.stdin_all {
@@ -1426,7 +1458,7 @@ fn apply_short(cli: &mut Cli, c: char, arg: &str) -> bool {
 
 fn set_voice(cli: &mut Cli, arg: &str) {
     let name: String = arg.chars().take(39).collect();
-    cli.voice = normalize_voice_tag(&name);
+    cli.voice = if name.is_empty() { "en".to_string() } else { name.to_ascii_lowercase() };
     cli.voice_raw = Some(name);
 }
 

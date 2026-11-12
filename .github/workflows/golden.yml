@@ -35,6 +35,7 @@ jobs:
           --test cli_voices_list
           --test cli_getopt
           --test cli_messages
+          --test cli_voice_select
           --test dictionary_bounds
           --test english_letter_group_y
           --test italian_rule_stress

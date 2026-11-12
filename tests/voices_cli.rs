@@ -47,7 +47,7 @@ fn voice_name_resolves_to_language() {
 }
 
 #[test]
-fn missing_variant_warns_but_still_speaks_base() {
+fn missing_variant_is_silent_and_speaks_base() {
     if !have_data() {
         return;
     }
