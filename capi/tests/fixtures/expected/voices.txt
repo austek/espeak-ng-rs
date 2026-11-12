@@ -1,0 +1,157 @@
+Abkhaz|cau/ab|5:ab,|1|0|0
+Afrikaans|gmw/af|5:af,|1|0|0
+Amharic|sem/am|5:am,|1|0|0
+Aragonese|roa/an|5:an,|1|0|0
+Arabic|sem/ar|5:ar,|1|0|0
+Assamese|inc/as|5:as,|1|0|0
+Azerbaijani|trk/az|5:az,|1|0|0
+Bashkir|trk/ba|5:ba,|1|0|0
+Belarusian|zle/be|5:be,|1|0|0
+Bulgarian|zls/bg|5:bg,|1|0|0
+Bengali|inc/bn|5:bn,|1|0|0
+Bishnupriya Manipuri|inc/bpy|5:bpy,|1|0|0
+Bosnian|zls/bs|5:bs,|1|0|0
+Catalan|roa/ca|5:ca,|1|0|0
+Catalan (Balearic)|roa/ca-ba|5:ca-ba,|1|0|0
+Catalan (North-western)|roa/ca-nw|5:ca-nw,|1|0|0
+Catalan (Valencian)|roa/ca-va|5:ca-va,|1|0|0
+Cherokee |iro/chr|5:chr-US-Qaaa-x-west,|1|0|0
+Chinese (Mandarin, latin as English)|sit/cmn|5:cmn,5:zh-cmn,5:zh,|1|0|0
+Chinese (Mandarin, latin as Pinyin)|sit/cmn-Latn-pinyin|5:cmn-latn-pinyin,5:zh-cmn,5:zh,|1|0|0
+Crimean Tatar|trk/crh|5:crh,|1|0|0
+Czech|zlw/cs|5:cs,|1|0|0
+Chuvash|trk/cv|5:cv,|1|0|0
+Welsh|cel/cy|5:cy,|1|0|0
+Danish|gmq/da|5:da,|1|0|0
+German|gmw/de|5:de,|1|0|0
+Greek|grk/el|5:el,|1|0|0
+English (Caribbean)|gmw/en-029|5:en-029,10:en,|1|0|0
+English (Great Britain)|gmw/en|2:en-gb,2:en,|1|0|0
+English (Scotland)|gmw/en-GB-scotland|5:en-gb-scotland,4:en,|1|0|0
+English (Lancaster)|gmw/en-GB-x-gbclan|5:en-gb-x-gbclan,3:en-gb,5:en,|1|0|0
+English (West Midlands)|gmw/en-GB-x-gbcwmd|5:en-gb-x-gbcwmd,9:en-gb,9:en,|1|0|0
+English (Received Pronunciation)|gmw/en-GB-x-rp|5:en-gb-x-rp,4:en-gb,5:en,|1|0|0
+English (Shavian alphabet)|gmw/en-Shaw|5:en-shaw,|1|0|0
+English (America)|gmw/en-US|2:en-us,3:en,|1|0|0
+English (America, New York City)|gmw/en-US-nyc|5:en-us-nyc,|1|0|0
+Esperanto|art/eo|5:eo,|1|0|0
+Spanish (Spain)|roa/es|5:es,|1|0|0
+Spanish (Latin America)|roa/es-419|5:es-419,6:es-mx,|1|0|0
+Estonian|urj/et|5:et,|1|0|0
+Basque|eu|5:eu,|1|0|0
+Persian|ira/fa|5:fa,|1|0|0
+Persian (Pinglish)|ira/fa-Latn|5:fa-latn,|1|0|0
+Finnish|urj/fi|5:fi,|1|0|0
+Faroese|gmq/fo|5:fo,|1|0|0
+French (Belgium)|roa/fr-BE|5:fr-be,8:fr,|1|0|0
+French (Switzerland)|roa/fr-CH|5:fr-ch,8:fr,|1|0|0
+French (France)|roa/fr|5:fr-fr,5:fr,|1|0|0
+Gaelic (Irish)|cel/ga|5:ga,|1|0|0
+Gaelic (Scottish)|cel/gd|5:gd,|1|0|0
+Guarani|sai/gn|5:gn,|1|0|0
+Greek (Ancient)|grk/grc|5:grc,|1|0|0
+Gujarati|inc/gu|5:gu,|1|0|0
+Hakka Chinese|sit/hak|5:hak,|1|0|0
+Hawaiian|map/haw|5:haw,|1|0|0
+Hebrew|sem/he|5:he,|1|0|0
+Hindi|inc/hi|5:hi,|1|0|0
+Croatian|zls/hr|5:hr,5:hbs,|1|0|0
+Haitian Creole|roa/ht|5:ht,|1|0|0
+Hungarian|urj/hu|5:hu,|1|0|0
+Armenian (East Armenia)|ine/hy|5:hy,5:hy-arevela,|1|0|0
+Armenian (West Armenia)|ine/hyw|5:hyw,5:hy-arevmda,8:hy,|1|0|0
+Interlingua|art/ia|5:ia,|1|0|0
+Indonesian|poz/id|5:id,|1|0|0
+Ido|art/io|5:io,|1|0|0
+Icelandic|gmq/is|5:is,|1|0|0
+Italian|roa/it|5:it,|1|0|0
+Japanese|jpx/ja|5:ja,|1|0|0
+Lojban|art/jbo|5:jbo,|1|0|0
+Georgian|ccs/ka|5:ka,|1|0|0
+Karakalpak|trk/kaa|5:kaa,|1|0|0
+Kazakh|trk/kk|5:kk,|1|0|0
+Greenlandic|esx/kl|5:kl,|1|0|0
+Kannada|dra/kn|5:kn,|1|0|0
+Korean|ko|5:ko,|1|0|0
+Konkani|inc/kok|5:kok,|1|0|0
+Kurdish|ira/ku|5:ku,|1|0|0
+Kyrgyz|trk/ky|5:ky,|1|0|0
+Latin|itc/la|5:la,|1|0|0
+Luxembourgish|gmw/lb|5:lb,|1|0|0
+Lingua Franca Nova|art/lfn|5:lfn,|1|0|0
+Ligurian|roa/lij|5:lij,|1|0|0
+Lithuanian|bat/lt|5:lt,|1|0|0
+Latgalian|bat/ltg|5:ltg,|1|0|0
+Latvian|bat/lv|5:lv,|1|0|0
+Māori|poz/mi|5:mi,|1|0|0
+Macedonian|zls/mk|5:mk,|1|0|0
+Malayalam|dra/ml|5:ml,|1|0|0
+Ankhmaa|xgn/mn-f|4:mn,|1|0|0
+Mongolian|xgn/mn|5:mn,|1|0|0
+Marathi|inc/mr|5:mr,|1|0|0
+Malay|poz/ms|5:ms,|1|0|0
+Maltese|sem/mt|5:mt,|1|0|0
+Totontepec Mixe|miz/mto|5:mto,|1|0|0
+Myanmar (Burmese)|sit/my|5:my,|1|0|0
+Norwegian Bokmål|gmq/nb|5:nb,5:no,|1|0|0
+Nahuatl (Classical)|azc/nci|5:nci,|1|0|0
+Nepali|inc/ne|5:ne,|1|0|0
+Dutch|gmw/nl|5:nl,|1|0|0
+Nogai|trk/nog|5:nog,|1|0|0
+Oromo|cus/om|5:om,|1|0|0
+Oriya|inc/or|5:or,|1|0|0
+Punjabi|inc/pa|5:pa,|1|0|0
+Papiamento|roa/pap|5:pap,|1|0|0
+Klingon|art/piqd|5:piqd,|1|0|0
+Polish|zlw/pl|5:pl,|1|0|0
+Pashto|ira/ps|5:ps,|1|0|0
+Pashto (Northwestern)|ira/ps-x-northwest|5:ps-x-northwest,5:ps,|1|0|0
+Pashto (Southeastern)|ira/ps-x-southeast|5:ps-x-southeast,5:ps,|1|0|0
+Pashto (Yusufzai)|ira/ps-x-yusufzai|5:ps-x-yusufzai,5:ps,|1|0|0
+Portuguese (Portugal)|roa/pt|5:pt,5:pt-pt,|1|0|0
+Portuguese (Brazil)|roa/pt-BR|5:pt-br,6:pt,|1|0|0
+Pyash|art/py|5:py,|1|0|0
+Lang Belta|art/qdb|5:qdb,|1|0|0
+Quechua|qu|5:qu,|1|0|0
+K'iche'|myn/quc|5:quc,|1|0|0
+Quenya|art/qya|5:qya,|1|0|0
+Romanian|roa/ro|5:ro,|1|0|0
+Russian|zle/ru|5:ru,|1|0|0
+Russian (Classic)|zle/ru-cl|5:ru-cl,|1|0|0
+Russian (Latvia)|zle/ru-LV|2:ru-lv,|1|0|0
+Aromanian|roa/rup|5:rup,|1|0|0
+Sindhi|inc/sd|5:sd,|1|0|0
+Shan (Tai Yai)|tai/shn|5:shn,|1|0|0
+Sinhala|inc/si|5:si,|1|0|0
+Sindarin|art/sjn|5:sjn,|1|0|0
+Slovak|zlw/sk|5:sk,|1|0|0
+Slovenian|zls/sl|5:sl,|1|0|0
+Lule Saami|urj/smj|5:smj,|1|0|0
+Albanian|ine/sq|5:sq,|1|0|0
+Serbian|zls/sr|5:sr,|1|0|0
+Swedish|gmq/sv|5:sv,|1|0|0
+Swahili|bnt/sw|5:sw,|1|0|0
+Tamil|dra/ta|5:ta,|1|0|0
+Telugu|dra/te|5:te,|1|0|0
+Thai|tai/th|5:th,|1|0|0
+Tigrinya|sem/ti|5:ti,|1|0|0
+Turkmen|trk/tk|5:tk,|1|0|0
+Setswana|bnt/tn|5:tn,|1|0|0
+Turkish|trk/tr|5:tr,|1|0|0
+Tatar|trk/tt|5:tt,|1|0|0
+Uyghur|trk/ug|5:ug,|1|0|0
+Ukrainian|zle/uk|5:uk,|1|0|0
+Urdu|inc/ur|5:ur,|1|0|0
+Uzbek|trk/uz|5:uz,|1|0|0
+Vietnamese (Northern)|aav/vi|5:vi,|1|0|0
+Vietnamese (Central)|aav/vi-VN-x-central|5:vi-vn-x-central,|1|0|0
+Vietnamese (Southern)|aav/vi-VN-x-south|5:vi-vn-x-south,|1|0|0
+xextan-test|art/xex|5:xex,|1|0|0
+Chinese (Cantonese)|sit/yue|5:yue,5:zh-yue,8:zh,|1|0|0
+Chinese (Cantonese, latin as Jyutping)|sit/yue-Latn-jyutping|5:yue,5:zh-yue,8:zh,|1|0|0
+de-filter 0 German
+setprops=0
+current=German|gmw/de
+byname-missing=2
+byname-fr=0
+current=French (France)

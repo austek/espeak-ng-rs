@@ -171,6 +171,10 @@ jobs:
           --test regressive_voicing_hr
           --test ku_arabic_script_words
           --test sep_lengthen
+      - name: C ABI tests
+        run: |
+          sudo apt-get install -y pkg-config
+          cargo test --release -p espeak-ng-capi
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:

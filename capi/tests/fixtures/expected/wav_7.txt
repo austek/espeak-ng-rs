@@ -1,0 +1,1 @@
+rate=22050 synth=0 samples=67512 fnv=e16bb34bc7a635c8

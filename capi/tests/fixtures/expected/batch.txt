@@ -1,0 +1,296 @@
+## en | Hello world, this is a test.
+setvoice=0
+mode=0 [h@l'oU w'3:ld] term=41014
+mode=0 [DIs Iz a# t'Est] term=480028
+mode=2 [həlˈəʊ wˈɜːld] term=41014
+mode=2 [ðɪs ɪz ɐ tˈɛst] term=480028
+mode=35f82 [həlˈə͟ʊ wˈɜːld] term=41014
+mode=35f82 [ðɪs ɪz ɐ tˈɛst] term=480028
+mode=5f00 [h_@_l_'oU w_'3:_l_d] term=41014
+mode=5f00 [D_I_s I_z a# t_'E_s_t] term=480028
+## en | The quick brown fox jumps over the lazy dog.
+setvoice=0
+mode=0 [D@ kw'Ik br'aUn f'0ks dZ'Vmps ,oUv3 D@ l'eIzi d'0g] term=480028
+mode=2 [ðə kwˈɪk bɹˈaʊn fˈɒks dʒˈʌmps ˌəʊvə ðə lˈeɪzi dˈɒɡ] term=480028
+mode=35f82 [ðə kwˈɪk bɹˈa͟ʊn fˈɒks d͟ʒˈʌmps ˌə͟ʊvə ðə lˈe͟ɪzi dˈɒɡ] term=480028
+mode=5f00 [D_@ k_w_'I_k b_r_'aU_n f_'0_k_s dZ_'V_m_p_s ,oU_v_3 D_@ l_'eI_z_i d_'0_g] term=480028
+## en | How are you today? I am fine!
+setvoice=0
+mode=0 [h,aU A@ ju: t@d'eI] term=82028
+mode=0 [aIa#m f'aIn] term=8302d
+mode=2 [hˌaʊ ɑː juː tədˈeɪ] term=82028
+mode=2 [aɪɐm fˈaɪn] term=8302d
+mode=35f82 [hˌa͟ʊ ɑː juː tədˈe͟ɪ] term=82028
+mode=35f82 [a͟ɪɐm fˈa͟ɪn] term=8302d
+mode=5f00 [h_,aU A@ j_u: t_@_d_'eI] term=82028
+mode=5f00 [aI_a#_m f_'aI_n] term=8302d
+## en | Red, green, blue; black: white.
+setvoice=0
+mode=0 [r'Ed] term=41014
+mode=0 [gr'i:n] term=41014
+mode=0 [bl'u:] term=4101e
+mode=0 [bl'ak] term=4001e
+mode=0 [w'aIt] term=480028
+mode=2 [ɹˈɛd] term=41014
+mode=2 [ɡɹˈiːn] term=41014
+mode=2 [blˈuː] term=4101e
+mode=2 [blˈak] term=4001e
+mode=2 [wˈaɪt] term=480028
+mode=35f82 [ɹˈɛd] term=41014
+mode=35f82 [ɡɹˈiːn] term=41014
+mode=35f82 [blˈuː] term=4101e
+mode=35f82 [blˈak] term=4001e
+mode=35f82 [wˈa͟ɪt] term=480028
+mode=5f00 [r_'E_d] term=41014
+mode=5f00 [g_r_'i:_n] term=41014
+mode=5f00 [b_l_'u:] term=4101e
+mode=5f00 [b_l_'a_k] term=4001e
+mode=5f00 [w_'aI_t] term=480028
+## en | She sells sea shells by the sea shore.
+setvoice=0
+mode=0 [Si: s'Elz s'i: S'Elz baI D@ s'i: S'o@] term=480028
+mode=2 [ʃiː sˈɛlz sˈiː ʃˈɛlz baɪ ðə sˈiː ʃˈɔː] term=480028
+mode=35f82 [ʃiː sˈɛlz sˈiː ʃˈɛlz ba͟ɪ ðə sˈiː ʃˈɔː] term=480028
+mode=5f00 [S_i: s_'E_l_z s_'i: S_'E_l_z b_aI D_@ s_'i: S_'o@] term=480028
+## en | Colourful rhythms of thought
+setvoice=0
+mode=0 [k'Vl3f@L r'ID@mz 0v T'O:t] term=90028
+mode=2 [kˈʌləfəl ɹˈɪðəmz ɒv θˈɔːt] term=90028
+mode=35f82 [kˈʌləfə͟l ɹˈɪðəmz ɒv θˈɔːt] term=90028
+mode=5f00 [k_'V_l_3_f_@L r_'I_D_@_m_z 0_v T_'O:_t] term=90028
+## en | There are 25 apples and 3 oranges.
+setvoice=0
+mode=0 [De@r,A@ tw'Enti f'aIv 'ap@Lz_:_: and Tr'i:; '0rIndZI2z] term=480028
+mode=2 [ðeəɹˌɑː twˈɛnti fˈaɪv ˈapəlz and θɹˈiː ˈɒɹɪndʒɪz] term=480028
+mode=35f82 [ðe͟əɹˌɑː twˈɛnti fˈa͟ɪv ˈapə͟lz and θɹˈiː ˈɒɹɪnd͟ʒɪz] term=480028
+mode=5f00 [D_e@_r_,A@ t_w_'E_n_t_i f_'aI_v 'a_p_@L_z__:__: a_n_d T_r_'i:_; '0_r_I_n_dZ_I2_z] term=480028
+## en | Dr. Smith went to Washington.
+setvoice=0
+mode=0 [d'0kt3] term=480028
+mode=0 [sm'IT wEnt t@ w'0SINt@n] term=480028
+mode=2 [dˈɒktə] term=480028
+mode=2 [smˈɪθ wɛnt tə wˈɒʃɪŋtən] term=480028
+mode=35f82 [dˈɒktə] term=480028
+mode=35f82 [smˈɪθ wɛnt tə wˈɒʃɪŋtən] term=480028
+mode=5f00 [d_'0_k_t_3] term=480028
+mode=5f00 [s_m_'I_T w_E_n_t t_@ w_'0_S_I_N_t_@_n] term=480028
+## en | Knowledge is power.
+setvoice=0
+mode=0 [n'0lIdZ Iz p'aU3] term=480028
+mode=2 [nˈɒlɪdʒ ɪz pˈaʊə] term=480028
+mode=35f82 [nˈɒlɪd͟ʒ ɪz pˈa͟ʊə] term=480028
+mode=5f00 [n_'0_l_I_dZ I_z p_'aU_3] term=480028
+## en | Please call me at noon
+setvoice=0
+mode=0 [pl'i:z k'O:l m,i:; at n'u:n] term=90028
+mode=2 [plˈiːz kˈɔːl mˌiː at nˈuːn] term=90028
+mode=35f82 [plˈiːz kˈɔːl mˌiː at nˈuːn] term=90028
+mode=5f00 [p_l_'i:_z k_'O:_l m_,i:_; a_t n_'u:_n] term=90028
+## de | Guten Morgen, wie geht es dir?
+setvoice=0
+mode=0 [g'u:t@n m'Org@n] term=41014
+mode=0 [vi: g'e:t _|Es d'i:r] term=82028
+mode=2 [ɡˈuːtən mˈɔɾɡən] term=41014
+mode=2 [viː ɡˈeːt ɛs dˈiːɾ] term=82028
+mode=35f82 [ɡˈuːtən mˈɔɾɡən] term=41014
+mode=35f82 [viː ɡˈeːt ɛs dˈiːɾ] term=82028
+mode=5f00 [g_'u:_t_@_n m_'O_r_g_@_n] term=41014
+mode=5f00 [v_i: g_'e:_t _|_E_s d_'i:_r] term=82028
+## de | Das ist ein kleiner Test.
+setvoice=0
+mode=0 [das _|Ist _|aIn kl'aIn3 t'Est] term=480028
+mode=2 [das ɪst aɪn klˈaɪnɜ tˈɛst] term=480028
+mode=35f82 [das ɪst a͟ɪn klˈa͟ɪnɜ tˈɛst] term=480028
+mode=5f00 [d_a_s _|_I_s_t _|_aI_n k_l_'aI_n_3 t_'E_s_t] term=480028
+## de | Ich habe zwanzig Äpfel gekauft.
+setvoice=0
+mode=0 [_|IC hA:b@ tsv'antsIC _!'Epf@l g@k'aUft] term=480028
+mode=2 [ɪç hɑːbə tsvˈantsɪç ˈɛpfəl ɡəkˈaʊft] term=480028
+mode=35f82 [ɪç hɑːbə t͟svˈant͟sɪç ˈɛpfəl ɡəkˈa͟ʊft] term=480028
+mode=5f00 [_|_I_C h_A:_b_@ ts_v_'a_n_ts_I_C _!_'E_p_f_@_l g_@_k_'aU_f_t] term=480028
+## de | Schöne Grüße aus Köln!
+setvoice=0
+mode=0 [S'Y:n@ gr'y:s@_! _|,aUs k'Wln] term=8302d
+mode=2 [ʃˈøːnə ɡɾˈyːsə ˌaʊs kˈœln] term=8302d
+mode=35f82 [ʃˈøːnə ɡɾˈyːsə ˌa͟ʊs kˈœln] term=8302d
+mode=5f00 [S_'Y:_n_@ g_r_'y:_s_@__! _|_,aU_s k_'W_l_n] term=8302d
+## de | Die Straße ist lang
+setvoice=0
+mode=0 [di: Str'A:s@ _|Ist l'aN] term=90028
+mode=2 [diː ʃtɾˈɑːsə ɪst lˈaŋ] term=90028
+mode=35f82 [diː ʃtɾˈɑːsə ɪst lˈaŋ] term=90028
+mode=5f00 [d_i: S_t_r_'A:_s_@ _|_I_s_t l_'a_N] term=90028
+## fr | Bonjour tout le monde, ceci est un essai.
+setvoice=0
+mode=0 [bO~Z'ur tulm'O~d] term=41014
+mode=0 [s@s,i; Et2 W~n es'E] term=480028
+mode=2 [bɔ̃ʒˈuʁ tulmˈɔ̃d] term=41014
+mode=2 [səsˌi ɛt œ̃n esˈɛ] term=480028
+mode=35f82 [bɔ̃ʒˈuʁ tulmˈɔ̃d] term=41014
+mode=35f82 [səsˌi ɛt œ̃n esˈɛ] term=480028
+mode=5f00 [b_O~_Z_'u_r t_u_l_m_'O~_d] term=41014
+mode=5f00 [s_@_s_,i_; E_t2 W~_n e_s_'E] term=480028
+## fr | Où est la gare ?
+setvoice=0
+mode=0 [u E la- g'ar] term=82028
+mode=2 [u ɛ la- ɡˈaʁ] term=82028
+mode=35f82 [u ɛ la- ɡˈaʁ] term=82028
+mode=5f00 [u E l_a- g_'a_r] term=82028
+## fr | Les enfants jouent dans le jardin.
+setvoice=0
+mode=0 [le-z2 A~f'A~ Zw dA~ l@- Zard'E~] term=480028
+mode=2 [le-z ɑ̃fˈɑ̃ ʒw dɑ̃ lə- ʒaʁdˈɛ̃] term=480028
+mode=35f82 [le-z ɑ̃fˈɑ̃ ʒw dɑ̃ lə- ʒaʁdˈɛ̃] term=480028
+mode=5f00 [l_e-_z2 A~_f_'A~ Z_w d_A~ l_@- Z_a_r_d_'E~] term=480028
+## fr | Il y a trente-deux voitures
+setvoice=0
+mode=0 [il i; a tr'A~td'Y vwat'yr] term=90028
+mode=2 [il i a tʁˈɑ̃tdˈø vwatˈyʁ] term=90028
+mode=35f82 [il i a tʁˈɑ̃tdˈø vwatˈyʁ] term=90028
+mode=5f00 [i_l i_; a t_r_'A~_t_d_'Y v_w_a_t_'y_r] term=90028
+## fr | C'est la vie
+setvoice=0
+mode=0 [sE la- v'i] term=90028
+mode=2 [sɛ la- vˈi] term=90028
+mode=35f82 [sɛ la- vˈi] term=90028
+mode=5f00 [s_E l_a- v_'i] term=90028
+## ru | Привет, мир! Это тест.
+setvoice=0
+mode=0 [p@-r;iv;'et] term=41014
+mode=0 [m;'ir] term=8302d
+mode=0 ['EtV t;'E#st] term=480028
+mode=2 [prʲivʲˈet] term=41014
+mode=2 [mʲˈir] term=8302d
+mode=2 [ˈɛtʌ tʲˈɛst] term=480028
+mode=35f82 [prʲivʲˈet] term=41014
+mode=35f82 [mʲˈir] term=8302d
+mode=35f82 [ˈɛtʌ tʲˈɛst] term=480028
+mode=5f00 [p_@-_r_;_i_v_;_'e_t] term=41014
+mode=5f00 [m;_'i_r] term=8302d
+mode=5f00 ['E_t_V t;_'E#_s_t] term=480028
+## ru | Как дела?
+setvoice=0
+mode=0 [k'Ak d;'ela#] term=82028
+mode=2 [kˈɑk dʲˈeɭa] term=82028
+mode=35f82 [kˈɑk dʲˈeɭa] term=82028
+mode=5f00 [k_'A_k d;_'e_l_a#] term=82028
+## ru | Москва — столица России.
+setvoice=0
+mode=0 [mVskv'A] term=4101e
+mode=0 [stVl;'itsa# @-rVs;s;'iI] term=480028
+mode=2 [mʌskvˈɑ] term=4101e
+mode=2 [stʌɭʲˈitsa rʌsʲsʲˈiɪ] term=480028
+mode=35f82 [mʌskvˈɑ] term=4101e
+mode=35f82 [stʌɭʲˈit͟sa rʌsʲsʲˈiɪ] term=480028
+mode=5f00 [m_V_s_k_v_'A] term=4101e
+mode=5f00 [s_t_V_l_;_'i_ts_a# @-_r_V_s;_s;_'i_I] term=480028
+## ru | Я люблю читать книги
+setvoice=0
+mode=0 ['ja l;u"bl;'u" tS;it'At; kn;'ig;I] term=90028
+mode=2 [ˈja ɭʲu"bɭʲˈu" tʃʲitˈɑtʲ knʲˈiɡʲɪ] term=90028
+mode=35f82 [ˈj͟a ɭʲu"bɭʲˈu" t͟ʃʲitˈɑtʲ knʲˈiɡʲɪ] term=90028
+mode=5f00 ['ja l_;_u"_b_l_;_'u" tS;_i_t_'A_t; k_n_;_'i_g_;_I] term=90028
+## ru | Сегодня хорошая погода
+setvoice=0
+mode=0 [s;iv'odn;V xVr'oSVja pVg'oda#] term=90028
+mode=2 [sʲivˈodnʲʌ xʌrˈoʃʌja pʌɡˈoda] term=90028
+mode=35f82 [sʲivˈodnʲʌ xʌrˈoʃʌj͟a pʌɡˈoda] term=90028
+mode=5f00 [s;_i_v_'o_d_n_;_V x_V_r_'o_S_V_ja p_V_g_'o_d_a#] term=90028
+## ku | Roj baş, ev ceribandin e.
+setvoice=0
+mode=0 [R'oZ b'aS] term=41014
+mode=0 ['Ev dZ,E*Iband'In 'E#] term=480028
+mode=2 [rˈoʒ bˈaʃ] term=41014
+mode=2 [ˈɛv dʒˌɛɾɪbandˈɪn ˈɛ] term=480028
+mode=35f82 [rˈoʒ bˈaʃ] term=41014
+mode=35f82 [ˈɛv d͟ʒˌɛɾɪbandˈɪn ˈɛ] term=480028
+mode=5f00 [R_'o_Z b_'a_S] term=41014
+mode=5f00 ['E_v dZ_,E_*_I_b_a_n_d_'I_n 'E#] term=480028
+## ku | Ez te hez dikim
+setvoice=0
+mode=0 [Ez tE# h'Ez dIk'Im] term=90028
+mode=2 [ɛz tɛ hˈɛz dɪkˈɪm] term=90028
+mode=35f82 [ɛz tɛ hˈɛz dɪkˈɪm] term=90028
+mode=5f00 [E_z t_E# h_'E_z d_I_k_'I_m] term=90028
+## ku | Kurdistan welatê min e
+setvoice=0
+mode=0 [k,URdIst'an wEl'ate m'In 'E#] term=90028
+mode=2 [kˌʊrdɪstˈan wɛlˈate mˈɪn ˈɛ] term=90028
+mode=35f82 [kˌʊrdɪstˈan wɛlˈate mˈɪn ˈɛ] term=90028
+mode=5f00 [k_,U_R_d_I_s_t_'a_n w_E_l_'a_t_e m_'I_n 'E#] term=90028
+## ku | Çawa yî?
+setvoice=0
+mode=0 [tS'awa j'i] term=82028
+mode=2 [tʃˈawa jˈi] term=82028
+mode=35f82 [t͟ʃˈawa jˈi] term=82028
+mode=5f00 [tS_'a_w_a j_'i] term=82028
+## ku | Nan û av
+setvoice=0
+mode=0 [n'an u 'av] term=90028
+mode=2 [nˈan u ˈav] term=90028
+mode=35f82 [nˈan u ˈav] term=90028
+mode=5f00 [n_'a_n u 'a_v] term=90028
+## ar | مرحبا بالعالم
+setvoice=0
+mode=0 [mRHb'a: bilA'a:lam] term=90028
+mode=2 [mrħbˈaː bilʕˈaːlam] term=90028
+mode=35f82 [mrħbˈaː bilʕˈaːlam] term=90028
+mode=5f00 [m_R_H_b_'a: b_i_l_A_'a:_l_a_m] term=90028
+## ar | كيف حالك اليوم؟
+setvoice=0
+mode=0 [k'ajfa H'a:lik ?alj'awm] term=82028
+mode=2 [kˈajfa ħˈaːlik ʔaljˈawm] term=82028
+mode=35f82 [kˈajfa ħˈaːlik ʔaljˈawm] term=82028
+mode=5f00 [k_'a_j_f_a H_'a:_l_i_k ?_a_l_j_'a_w_m] term=82028
+## ar | هذا اختبار صغير
+setvoice=0
+mode=0 [h'a:Da: 'iXtib,a:R s['agHi:R] term=90028
+mode=2 [hˈaːðaː ˈiχtibˌaːr s̪ˈaɣiːr] term=90028
+mode=35f82 [hˈaːðaː ˈiχtibˌaːr s̪ˈaɣiːr] term=90028
+mode=5f00 [h_'a:_D_a: 'i_X_t_i_b_,a:_R s[_'a_gH_i:_R] term=90028
+## ar | اللغة العربية جميلة
+setvoice=0
+mode=0 [?all'ugHa ?alAaR'abi:j,a dZm'i:lt] term=90028
+mode=2 [ʔallˈuɣa ʔalʕarˈabiːjˌa dʒmˈiːlt] term=90028
+mode=35f82 [ʔallˈuɣa ʔalʕarˈabiːjˌa d͟ʒmˈiːlt] term=90028
+mode=5f00 [?_a_l_l_'u_gH_a ?_a_l_A_a_R_'a_b_i:_j_,a dZ_m_'i:_l_t] term=90028
+## ar | شكرا جزيلا
+setvoice=0
+mode=0 [SkR'a: dZz'i:la:] term=90028
+mode=2 [ʃkrˈaː dʒzˈiːlaː] term=90028
+mode=35f82 [ʃkrˈaː d͟ʒzˈiːlaː] term=90028
+mode=5f00 [S_k_R_'a: dZ_z_'i:_l_a:] term=90028
+## tr | Merhaba dünya, bu bir deneme.
+setvoice=0
+mode=0 [m'ERhaba dYnj'a] term=41014
+mode=0 [bU bIR den'emE] term=480028
+mode=2 [mˈɛrhaba dønjˈa] term=41014
+mode=2 [bʊ bɪr denˈemɛ] term=480028
+mode=35f82 [mˈɛrhaba dønjˈa] term=41014
+mode=35f82 [bʊ bɪr denˈemɛ] term=480028
+mode=5f00 [m_'E_R_h_a_b_a d_Y_n_j_'a] term=41014
+mode=5f00 [b_U b_I_R d_e_n_'e_m_E] term=480028
+## tr | Bugün hava çok güzel!
+setvoice=0
+mode=0 [bug'Yn hav'a tS'Ok Jyz'&l] term=8302d
+mode=2 [buɡˈøn havˈa tʃˈɔk ɟyzˈæl] term=8302d
+mode=35f82 [buɡˈøn havˈa t͟ʃˈɔk ɟyzˈæl] term=8302d
+mode=5f00 [b_u_g_'Y_n h_a_v_'a tS_'O_k J_y_z_'&_l] term=8302d
+## tr | Türkçe öğreniyorum
+setvoice=0
+mode=0 [t'YRktSE W:*en'ijo*Um] term=90028
+mode=2 [tˈørktʃɛ œːɾenˈijoɾʊm] term=90028
+mode=35f82 [tˈørkt͟ʃɛ œːɾenˈijoɾʊm] term=90028
+mode=5f00 [t_'Y_R_k_tS_E W:_*_e_n_'i_j_o_*_U_m] term=90028
+## tr | İstanbul güzel bir şehir mi?
+setvoice=0
+mode=0 [Ist'anbUL Jyz'&l bIR Seh'IR mI] term=82028
+mode=2 [ɪstˈanbʊɫ ɟyzˈæl bɪr ʃehˈɪr mɪ] term=82028
+mode=35f82 [ɪstˈanbʊɫ ɟyzˈæl bɪr ʃehˈɪr mɪ] term=82028
+mode=5f00 [I_s_t_'a_n_b_U_L J_y_z_'&_l b_I_R S_e_h_'I_R m_I] term=82028
+## tr | Çocuklar bahçede oynuyor
+setvoice=0
+mode=0 [tSodZUkL'aR b'ahtSEdE Ojn'ujOR] term=90028
+mode=2 [tʃodʒʊkɫˈar bˈahtʃɛdɛ ɔjnˈujɔr] term=90028
+mode=35f82 [t͟ʃod͟ʒʊkɫˈar bˈaht͟ʃɛdɛ ɔjnˈujɔr] term=90028
+mode=5f00 [tS_o_dZ_U_k_L_'a_R b_'a_h_tS_E_d_E O_j_n_'u_j_O_R] term=90028

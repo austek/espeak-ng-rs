@@ -1,0 +1,11 @@
+param 1 default=175 current=175 set(0)=0->0 set(1)=0->1 set(60)=0->60 set(175)=0->175 set(450)=0->450 set(1000)=0->1000 set(-5)=0->-5 rel(7)=0->187 default-after=175
+param 2 default=100 current=100 set(0)=0->0 set(1)=0->1 set(60)=0->60 set(175)=0->175 set(450)=0->450 set(1000)=0->1000 set(-5)=0->-5 rel(7)=0->107 default-after=100
+param 3 default=50 current=50 set(0)=0->0 set(1)=0->1 set(60)=0->60 set(175)=0->175 set(450)=0->450 set(1000)=0->1000 set(-5)=0->-5 rel(7)=0->53 default-after=50
+param 4 default=50 current=50 set(0)=0->0 set(1)=0->1 set(60)=0->60 set(175)=0->175 set(450)=0->450 set(1000)=0->1000 set(-5)=0->-5 rel(7)=0->53 default-after=50
+param 5 default=0 current=0 set(0)=-1->0 set(1)=-1->1 set(60)=-1->60 set(175)=-1->175 set(450)=-1->450 set(1000)=-1->1000 set(-5)=-1->-5 rel(7)=-1->7 default-after=0
+param 6 default=0 current=0 set(0)=-1->0 set(1)=-1->1 set(60)=-1->60 set(175)=-1->175 set(450)=-1->450 set(1000)=-1->1000 set(-5)=-1->-5 rel(7)=-1->7 default-after=0
+param 7 default=0 current=0 set(0)=0->0 set(1)=0->1 set(60)=0->60 set(175)=0->175 set(450)=0->450 set(1000)=0->1000 set(-5)=0->-5 rel(7)=0->7 default-after=0
+param 10 default=100 current=100 set(0)=0->0 set(1)=0->1 set(60)=0->60 set(175)=0->175 set(450)=0->450 set(1000)=0->1000 set(-5)=0->-5 rel(7)=0->7 default-after=100
+samplerate=22050
+info-nonnull=1 path-nonnull=1
+cancel=0 sync=0 playing=0

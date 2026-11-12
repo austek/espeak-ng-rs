@@ -1,0 +1,18 @@
+init=0
+out=0
+voice=0
+missing=100006ff
+rate=22050
+param=0
+rate=200
+synth=0
+uid=0 samples=18646 fnv=74027d66fe1cc248
+msg 0=Success
+msg 100006ff=The specified espeak-ng voice does not exist
+msg 100004ff=The espeak-ng library has not been initialized
+msg 100001ff=Compile error
+msg 100005ff=Cannot initialize the audio device
+cancel=0 sync=0
+char=0
+key=0
+terminate=0
