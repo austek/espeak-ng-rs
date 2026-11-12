@@ -1075,6 +1075,7 @@ impl EspeakNg {
         let speed = variant.as_ref().and_then(|v| v.speed).or(entry.as_ref().and_then(|e| e.speed));
         let rate = speed.filter(|&s| s > 0).map_or(rate, |s| (rate as i64 * s as i64 / 100) as u32);
         let stress_lengths = stress_lengths_with_adds(
+            crate::synthesize::cgen::voice::LangSynth::for_lang(self.voice_spec.effective_lang()).stress_lengths,
             entry.as_ref(),
             variant.as_ref().map_or(&[][..], |v| &v.stress_add),
         );
@@ -1213,10 +1214,12 @@ impl EspeakNg {
     }
 }
 
-/// The language's stress lengths after the voice file's `stressLength`
-/// (replaces the first entries it lists) and the `stressAdd` lines of the voice
-/// file and variant (added entry by entry); `None` when none of them is set.
+/// The language's stress lengths (`base`, from `SelectTranslator`) after the
+/// voice file's `stressLength` (replaces the first entries it lists) and the
+/// `stressAdd` lines of the voice file and variant (added entry by entry);
+/// `None` when none of them is set.
 fn stress_lengths_with_adds(
+    base: [i32; 8],
     entry: Option<&crate::voices::VoiceEntry>,
     variant_add: &[i32],
 ) -> Option<[u32; 8]> {
@@ -1225,7 +1228,7 @@ fn stress_lengths_with_adds(
     if set.is_empty() && file_add.is_empty() && variant_add.is_empty() {
         return None;
     }
-    let mut out = crate::synthesize::setlengths::STRESS_LENGTHS_EN.map(|x| x as i32);
+    let mut out = base;
     for (slot, &x) in out.iter_mut().zip(set) {
         *slot = x;
     }
