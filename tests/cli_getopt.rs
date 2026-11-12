@@ -69,6 +69,7 @@ fn unique_abbreviation_selects_the_option() {
 }
 
 #[test]
+/// Guards against regression; the behaviour already held before the getopt fix.
 fn options_may_follow_the_text() {
     spoken(&["hi", "-q", "-x"], "h'aI\n");
 }
@@ -86,6 +87,7 @@ fn numeric_arguments_use_atoi() {
 }
 
 #[test]
+/// Guards against regression; the behaviour already held before the getopt fix.
 fn clustered_short_options() {
     spoken(&["-qx", "hi"], "h'aI\n");
     spoken(&["-qvde", "-x", "hallo"], "h'alo:\n");

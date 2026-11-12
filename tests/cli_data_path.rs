@@ -37,6 +37,7 @@ fn env_names_the_parent_of_the_data_directory() {
 }
 
 #[test]
+/// Guards against regression; the behaviour already held before the data-path fix.
 fn env_naming_the_data_directory_itself_still_works() {
     if !have_data() {
         return;
@@ -47,6 +48,7 @@ fn env_naming_the_data_directory_itself_still_works() {
 }
 
 #[test]
+/// Guards against regression; the behaviour already held before the data-path fix.
 fn path_option_names_the_parent_of_the_data_directory() {
     if !have_data() {
         return;

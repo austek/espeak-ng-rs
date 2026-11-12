@@ -48,6 +48,7 @@ fn other_marks_use_their_own_names() {
 }
 
 #[test]
+/// Guards against regression; the behaviour already held before the punct fix.
 fn without_the_option_marks_are_not_named() {
     assert_eq!(spoken(&["-x", "one, two"]), "w'0n\nt'u:\n");
 }

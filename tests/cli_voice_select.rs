@@ -43,6 +43,7 @@ fn underscore_is_not_a_hyphen_in_language_tags() {
 }
 
 #[test]
+/// Guards against regression; the behaviour already held before the voice-select fix.
 fn file_path_and_language_selectors() {
     speaks(&["-q", "-x", "-v", "roa/fr", "bonjour"], "bO~Z'ur\n");
     speaks(&["-q", "-x", "-v", "pt-br", "ola"], "'Ol&\n");
@@ -54,6 +55,7 @@ fn empty_voice_name_means_the_default_voice() {
 }
 
 #[test]
+/// Guards against regression; the behaviour already held before the voice-select fix.
 fn missing_variant_file_is_not_reported() {
     speaks(&["-q", "-x", "-v", "en+nonexistentvariant", "hello"], "h@l'oU\n");
 }

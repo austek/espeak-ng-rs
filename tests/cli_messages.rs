@@ -134,6 +134,7 @@ fn stdin_lines_are_separate_synth_calls() {
 }
 
 #[test]
+/// Guards against regression; the behaviour already held before the messages fix.
 fn bulk_stdin_is_one_synth_call() {
     let r = run_with(&["-q", "-x", "--stdin"], b"foo bar\nbaz qux\n");
     assert_eq!(r.out, "f'u: b'A@ b'az kw@ks\n");
