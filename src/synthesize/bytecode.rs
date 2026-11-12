@@ -724,12 +724,11 @@ where
                 // a Translator, which is exactly the translate stage
                 // (`InterpretPhoneme(tr, 0x100, …)` in phonemelist.c); at
                 // synthesis time `tr` is NULL and the instruction is skipped.
-                if phoneme_list_mode && instn2 < 8 {
-                    if stress_condition(nb, (instn2 & 7) as u16, 1, true, &lookup) {
+                if phoneme_list_mode && instn2 < 8
+                    && stress_condition(nb, (instn2 & 7) as u16, 1, true, &lookup) {
                         change_phoneme = Some((instn & 0xff) as u8);
                         end_flag = 1; // change phoneme, exit
                     }
-                }
                 pc += 1;
             }
             2 | 3 => {

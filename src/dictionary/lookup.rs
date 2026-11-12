@@ -286,12 +286,11 @@ pub fn lookup_dict2_follow(
             pos = entry_end;
             continue;
         }
-        if flags2.is_verb() {
-            if !ctx.expect_verb && !(ctx.expect_verb_s && (end_flags & super::FLAG_SUFX_S != 0)) {
+        if flags2.is_verb()
+            && !ctx.expect_verb && !(ctx.expect_verb_s && (end_flags & super::FLAG_SUFX_S != 0)) {
                 pos = entry_end;
                 continue;
             }
-        }
         if flags2.is_past() && !ctx.expect_past {
             pos = entry_end;
             continue;

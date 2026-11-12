@@ -647,24 +647,22 @@ pub fn get_vowel_stress(
                 }
 
                 // phUNSTRESSED: force unstressed if control bit 0 set
-                if stress < 0 && (control & 1) != 0 {
-                    if ph.map(|p| p.phflags & PH_UNSTRESSED != 0).unwrap_or(false) {
+                if stress < 0 && (control & 1) != 0
+                    && ph.map(|p| p.phflags & PH_UNSTRESSED != 0).unwrap_or(false) {
                         vowel_stress[count as usize] = STRESS_IS_UNSTRESSED;
                     }
-                }
 
                 count += 1;
                 stress = -1;
             }
-        } else if is_syllabic {
-            if count < 99 {
+        } else if is_syllabic
+            && count < 99 {
                 vowel_stress[count as usize] = stress as i8;
                 if stress < 0 && (control & 1) != 0 {
                     vowel_stress[count as usize] = STRESS_IS_UNSTRESSED;
                 }
                 count += 1;
             }
-        }
 
         // Copy phoneme to output
         phonemes[out_pos] = phcode;
@@ -856,19 +854,17 @@ pub fn set_word_stress(
                         let mnem = phdata.get(final_ph).map(|p| p.mnemonic).unwrap_or(0);
                         let ph2_type = phdata.get(final_ph2).map(|p| p.typ).unwrap_or(0);
                         // simplified Spanish rule
-                        if mnem != b'n' as u32 && mnem != b's' as u32 {
-                            if ph2_type == PH_VOWEL {
+                        if mnem != b'n' as u32 && mnem != b's' as u32
+                            && ph2_type == PH_VOWEL {
                                 ss = vowel_count - 1;
                             }
-                        }
                     }
                 }
 
-                if stressflags & S_FINAL_LONG != 0 && vowel_count >= 2 {
-                    if vowel_length[(vowel_count-1) as usize] > vowel_length[(vowel_count-2) as usize] {
+                if stressflags & S_FINAL_LONG != 0 && vowel_count >= 2
+                    && vowel_length[(vowel_count-1) as usize] > vowel_length[(vowel_count-2) as usize] {
                         ss = vowel_count - 1;
                     }
-                }
 
                 // Avoid explicitly unstressed/diminished syllables
                 if vowel_stress[ss as usize] == STRESS_IS_DIMINISHED
@@ -1006,8 +1002,8 @@ pub fn set_word_stress(
                 max_stress = STRESS_IS_PRIMARY as i32;
             }
         }
-        STRESSPOSN_EU => {
-            if stressed_syllable == 0 && vowel_count > 2 {
+        STRESSPOSN_EU
+            if stressed_syllable == 0 && vowel_count > 2 => {
                 for ix in 1..vowel_count {
                     vowel_stress[ix as usize] = STRESS_IS_DIMINISHED;
                 }
@@ -1020,7 +1016,6 @@ pub fn set_word_stress(
                     vowel_stress[(vowel_count-1) as usize] = STRESS_IS_SECONDARY;
                 }
             }
-        }
         _ => {
             // STRESSPOSN_1L (0) = default: trochaic, handled below
         }
@@ -1032,12 +1027,10 @@ pub fn set_word_stress(
         && vowel_count > 2
         && max_stress_input < STRESS_IS_SECONDARY as i32
         && vowel_stress[(vowel_count-1) as usize] == STRESS_IS_PRIMARY
-    {
-        if phdata.get(final_ph).map(|p| p.typ == PH_VOWEL).unwrap_or(false) {
+        && phdata.get(final_ph).map(|p| p.typ == PH_VOWEL).unwrap_or(false) {
             vowel_stress[(vowel_count-1) as usize] = STRESS_IS_UNSTRESSED;
             vowel_stress[(vowel_count-2) as usize] = STRESS_IS_PRIMARY;
         }
-    }
 
     // ── Determine base stress for trochaic fill ────────────────────────────
     let mut stress: i8 = if max_stress < STRESS_IS_PRIMARY as i32 {
@@ -1052,11 +1045,10 @@ pub fn set_word_stress(
             if vowel_stress[1] == STRESS_IS_PRIMARY { vowel_stress[2] = STRESS_IS_SECONDARY; }
             if vowel_stress[2] == STRESS_IS_PRIMARY { vowel_stress[1] = STRESS_IS_SECONDARY; }
         }
-        if stressflags & S_INITIAL_2 != 0 && vowel_stress[1] < STRESS_IS_DIMINISHED {
-            if vowel_count > 3 && vowel_stress[2] >= STRESS_IS_PRIMARY {
+        if stressflags & S_INITIAL_2 != 0 && vowel_stress[1] < STRESS_IS_DIMINISHED
+            && vowel_count > 3 && vowel_stress[2] >= STRESS_IS_PRIMARY {
                 vowel_stress[1] = STRESS_IS_SECONDARY;
             }
-        }
     }
 
     if std::env::var_os("ESPEAK_RS_DEBUG_STRESS").is_some() {
@@ -1140,11 +1132,10 @@ pub fn set_word_stress(
     }
 
     if tonic >= 0 {
-        if tonic > ms || ms <= STRESS_IS_PRIMARY as i32 {
-            if ms_posn > 0 && ms_posn < 100 {
+        if (tonic > ms || ms <= STRESS_IS_PRIMARY as i32)
+            && ms_posn > 0 && ms_posn < 100 {
                 vowel_stress[ms_posn as usize] = tonic as i8;
             }
-        }
         ms = tonic;
     }
 

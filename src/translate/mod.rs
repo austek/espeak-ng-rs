@@ -2466,11 +2466,10 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                             emoji.push(m);
                         }
                         // A ZWJ binds the following emoji into the same sequence.
-                        if m == '\u{200D}' {
-                            if matches!(chars.peek(), Some(&n) if is_emoji_char(n)) {
+                        if m == '\u{200D}'
+                            && matches!(chars.peek(), Some(&n) if is_emoji_char(n)) {
                                 emoji.push(chars.next().unwrap());
                             }
-                        }
                     } else {
                         break;
                     }
@@ -8565,14 +8564,13 @@ pub(crate) fn build_translate_entries(
                     }
                 }
                 // C drops the opening pause of a word that follows a hyphen.
-                if token_ix > 0 && matches!(tokens[token_ix - 1], Token::WordJoin) {
-                    if wr.phonemes.first().is_some_and(|&c| {
+                if token_ix > 0 && matches!(tokens[token_ix - 1], Token::WordJoin)
+                    && wr.phonemes.first().is_some_and(|&c| {
                         c != crate::phoneme::PHON_SWITCH
                             && phdata.get(c).is_some_and(|p| p.typ == crate::phoneme::PH_PAUSE)
                     }) {
                         wr.phonemes.remove(0);
                     }
-                }
                 // A lone letter handed to another voice (`it м` → `_^_RU`, a
                 // Devanagari letter in `de`) is spelled by that voice, with the
                 // alphabet's name first, as `TranslateLetter` does; a word
@@ -10033,11 +10031,10 @@ impl Translator {
                     });
                     if let Some(sw) = sw {
                         let hyphen_joined = token_ix > 0 && matches!(tokens[token_ix - 1], Token::WordJoin);
-                        if hyphen_joined {
-                            if codes.last().is_some_and(|c| c.is_boundary && c.marker.is_none()) {
+                        if hyphen_joined
+                            && codes.last().is_some_and(|c| c.is_boundary && c.marker.is_none()) {
                                 codes.pop();
                             }
-                        }
                         let name =entry.phonemes.iter().position(|&b| b == 0).map_or(&[][..], |z| &entry.phonemes[z + 1..]);
                         if !name.is_empty() && open_switch.take().is_some() {
                             codes.push(PhonemeCode {
