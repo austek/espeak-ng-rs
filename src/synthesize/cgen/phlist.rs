@@ -169,11 +169,8 @@ pub fn build_list(
             continue;
         }
         let s = if t.typ == PH_VOWEL { stress.take().unwrap_or(1) } else { 0 };
-        let is_pause = t.typ == PH_PAUSE;
-        let mut p = Ph::new(t.clone(), s, if is_pause { 0 } else { newword });
-        if !is_pause {
-            newword = 0;
-        }
+        let mut p = Ph::new(t.clone(), s, newword);
+        newword = 0;
         if t.typ == PH_VOWEL {
             p.synthflags |= SFLAG_SYLLABLE;
         }

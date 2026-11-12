@@ -59,3 +59,12 @@ fn alternate_unstressed_vowels_follow_the_last_words_stress() {
         (&["-v", "bs"], "Kuća je velika.", 26692, 0x851e345f0757d7ce),
     ]);
 }
+
+/// A pause that a word's own phonemes start with carries that word's start.
+#[test]
+fn a_word_initial_pause_starts_the_word() {
+    check(&[
+        (&["-v", "nl"], "Waar is het station alsjeblieft?", 44164, 0x077645c0e4144d61),
+        (&["-v", "da"], "Katten sover på sofaen i stuen.", 43698, 0xfbf201c68c054d5f),
+    ]);
+}
