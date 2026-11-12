@@ -864,7 +864,7 @@ pub fn set_word_stress(
                     }
                 }
 
-                if stressflags & S_FINAL_LONG != 0 {
+                if stressflags & S_FINAL_LONG != 0 && vowel_count >= 2 {
                     if vowel_length[(vowel_count-1) as usize] > vowel_length[(vowel_count-2) as usize] {
                         ss = vowel_count - 1;
                     }

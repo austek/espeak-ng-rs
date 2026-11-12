@@ -56,6 +56,7 @@ jobs:
           --test robustness_tone_sandhi
           --test robustness_linear_time
           --test robustness_wav_stream
+          --test robustness_final_long_stress
           --test number_apostrophe_suffix
           --test synth_parity
           --test tr_phoneme_program_context
