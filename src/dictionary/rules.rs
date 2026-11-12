@@ -144,7 +144,7 @@ pub fn is_letter_wc(letter_bits: &[u8; 256], wc: u32, letter_bits_offset: u32, g
 
 pub fn is_alpha(c: u32) -> bool {
     // Use unicode alphanumeric as a portable approximation.
-    (c as u8).is_ascii_alphabetic() || (c >= 0xc0 && c < 0x2c0)
+    (c as u8).is_ascii_alphabetic() || (0xc0..0x2c0).contains(&c)
 }
 
 /// C's `IsAlpha`: `iswalpha` plus the in-word marks of the Indic, Hebrew and
@@ -190,7 +190,7 @@ fn abandons_word(wc: u32, next: Option<&u8>, any_alpha: u32) -> bool {
 }
 
 pub fn is_digit(c: u32) -> bool {
-    (c >= b'0' as u32 && c <= b'9' as u32) || (c >= 0x660 && c <= 0x669) // Arabic-Indic
+    (c >= b'0' as u32 && c <= b'9' as u32) || (0x660..=0x669).contains(&c) // Arabic-Indic
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

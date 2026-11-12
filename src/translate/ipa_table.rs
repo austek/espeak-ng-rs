@@ -54,7 +54,7 @@ pub const IPA1: [u32; 96] = [
 /// Convert an ASCII character (0x20..=0x7f) using the ipa1 table.
 /// Returns the Unicode codepoint.
 pub fn ipa1_char(c: u8) -> u32 {
-    if c >= 0x20 && c < 0x80 {
+    if (0x20..0x80).contains(&c) {
         IPA1[(c - 0x20) as usize]
     } else {
         c as u32

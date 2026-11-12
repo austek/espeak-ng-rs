@@ -1271,7 +1271,7 @@ fn annotate_codes(
                     j += 1;
                     if nb || nc == 9 { next_wordstart = true; continue; }
                     if nc == 12 { continue; }
-                    if nc >= 1 && nc <= 7 { continue; }
+                    if (1..=7).contains(&nc) { continue; }
                     next_code = nc;
                     next_is_boundary = nb;
                     break;
@@ -1285,7 +1285,7 @@ fn annotate_codes(
                     j += 1;
                     if nb || nc == 9 { next2_wordstart = true; continue; }
                     if nc == 12 { continue; }
-                    if nc >= 1 && nc <= 7 { continue; }
+                    if (1..=7).contains(&nc) { continue; }
                     next2_code = nc;
                     break;
                 }
@@ -1303,7 +1303,7 @@ fn annotate_codes(
                         let (c2, b2) = flat[jj];
                         if b2 { break; } // END_WORD or pause boundary
                         if c2 == 0 || c2 == 15 { break; }
-                        if c2 >= 1 && c2 <= 7 { continue; }
+                        if (1..=7).contains(&c2) { continue; }
                         if let Some(ph) = phdata.get(c2) {
                             if ph.typ == 2 /* phVOWEL */ { has_more = true; break; }
                         }
@@ -2204,7 +2204,7 @@ mod tests {
         let mut pcm = vec![0i16; 500];
         pcm[0] = 30_000;
         apply_echo(&mut pcm, 50, 10_000); // huge gain
-        assert!(pcm.iter().all(|&s| s >= i16::MIN && s <= i16::MAX));
+        assert!(pcm.iter().all(|&s| (i16::MIN..=i16::MAX).contains(&s)));
         assert_eq!(pcm[50], i16::MAX, "over-unity echo saturates, not overflows");
     }
 

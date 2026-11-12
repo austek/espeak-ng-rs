@@ -89,7 +89,7 @@ pub fn num_instn_words(instn: u16) -> usize {
         // 0xb (i_FMT), 0xc (i_WAV), 0xd (i_VWLSTART), 0xe (i_VWLENDING),
         // 0xf (i_WAVADD): 2 words (instruction + address word)
         // Check if followed by i_WAVADD (4 words total).
-        0xb | 0xc | 0xd | 0xe | 0xf => 2,
+        0xb..=0xf => 2,
         _ => 1,
     }
 }
@@ -841,7 +841,7 @@ where
                 }
                 pc += 4;
             }
-            0xb | 0xc | 0xd | 0xe | 0xf => {
+            0xb..=0xf => {
                 // FMT / WAV / VWLSTART / VWLEND / ADDWAV.
                 let idx = (hi4 - 0xb) as usize; // 0..4
                 let addr = ((instn & 0xf) as u32) << 18 | ((word_at(phonindex, pc + 1) as u32) << 2);

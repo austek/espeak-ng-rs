@@ -9302,7 +9302,7 @@ pub(crate) fn promote_translate_entries(
         else {
             return;
         };
-        if ph[..fv].iter().any(|&c| matches!(c, 4 | 5 | 6 | 7)) {
+        if ph[..fv].iter().any(|&c| matches!(c, 4..=7)) {
             return;
         }
         let mut new_ph = ph.to_vec();
