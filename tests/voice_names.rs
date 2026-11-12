@@ -21,6 +21,19 @@ fn voice_file_path_under_lang_selects_that_voice() {
 }
 
 #[test]
+fn dialect_voice_files_keep_their_phoneme_table() {
+    let text = "hello world, the dogs";
+    for (voice, want) in [
+        ("gmw/en-GB-scotland", "h@l'oU w'VRld|D@ d'0gz"),
+        ("gmw/en-029", "h@l'oU w'3:ld|d@2 d'0gz"),
+        ("gmw/en-US", "h@l'oU w'3:ld|D@2 d'0gz"),
+        ("gmw/en-GB-x-rp", "h@l'oU w'3:ld|D@2 d'0gz"),
+    ] {
+        assert_eq!(run(voice, text).0, want, "{voice}");
+    }
+}
+
+#[test]
 fn numeric_and_unknown_variants_are_silent() {
     for v in ["en+3", "en+13", "en+zzz", "en+f2+croak"] {
         let (out, err) = run(v, "hello world");

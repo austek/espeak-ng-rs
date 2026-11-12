@@ -158,7 +158,11 @@ fn run() -> std::io::Result<()> {
         // Resolve a voice *name* (e.g. "French (France)") to a language tag; a
         // plain language tag is left unchanged.
         let data = resolved_data_dir(cli.path_override.as_deref());
-        cli.voice = resolve_voice(&cli.voice, &data);
+        let spelled = cli.voice_raw.clone().unwrap_or_else(|| cli.voice.clone());
+        cli.voice = match espeak_ng::voices::voice_file_entry(&data, split_variant_base(&spelled)) {
+            Some(_) => resolve_voice(&spelled, &data),
+            None => resolve_voice(&cli.voice, &data),
+        };
     }
 
     let text = gather_text(&cli)?;
@@ -350,6 +354,10 @@ fn speak_mbrola(
 /// language (its `<stem>_dict` exists) is kept as-is; otherwise it is matched
 /// against the installed voices by name (`-v "French (France)"` → `fr-fr`),
 /// falling back to the original string if nothing matches.
+fn split_variant_base(value: &str) -> &str {
+    espeak_ng::translate::split_voice_variant(value).0
+}
+
 fn resolve_voice(value: &str, data_dir: &Path) -> String {
     let (base, variant) = espeak_ng::translate::split_voice_variant(value);
     let with_variant = |tag: String| match variant {
@@ -360,9 +368,12 @@ fn resolve_voice(value: &str, data_dir: &Path) -> String {
         return value.to_string();
     }
     if let Some(v) = espeak_ng::voices::voice_file_entry(data_dir, base) {
-        let want = v.dictionary.clone().unwrap_or_else(|| v.language.clone());
-        let stem = espeak_ng::translate::resolve_dict_stem(data_dir, &want).unwrap_or(want);
-        return with_variant(stem);
+        let resolves = |tag: &str| espeak_ng::translate::resolve_dict_stem(data_dir, tag).is_some();
+        let tag = match v.dictionary.as_deref() {
+            Some(d) if !resolves(&v.language) => d.to_string(),
+            _ => v.language.clone(),
+        };
+        return with_variant(tag);
     }
     let voices = espeak_ng::voices::list_voices(data_dir);
     let query = espeak_ng::voices::VoiceQuery { name: Some(value.to_string()), ..Default::default() };

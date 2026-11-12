@@ -144,6 +144,7 @@ jobs:
           --test clause_leading_punctuation
           --test voice_names
           --test voice_keywords
+          --test regressive_voicing_hr
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
