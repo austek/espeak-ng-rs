@@ -57,8 +57,8 @@ macro_rules! skip_without_en {
 }
 
 /// `<break>`: C's six `strength` lengths, and `time` as an explicit duration.
-/// Only `medium` and above are clause boundaries; the weaker ones are a
-/// prepause on the next word, and `none` is no pause at all.
+/// Only `medium` and above are clause boundaries; the weaker ones, `none`
+/// included, are a `B` command on the next word.
 #[test]
 fn break_lengths_follow_the_tag() {
     skip_without_en!();
@@ -74,11 +74,13 @@ fn break_lengths_follow_the_tag() {
     let weak = delta(r#"one<break strength="weak"/>two"#);
     let medium = delta(r#"one<break strength="medium"/>two"#);
     let strong = delta(r#"one<break strength="x-strong"/>two"#);
-    assert!(weak > 50 && weak < 200, "weak = {weak}");
+    // C: a weak break is only the 10 ms pause `DoEmbedded` puts before its
+    // `B` command (154 samples; 861 - 854 ms in whole milliseconds).
+    assert_eq!(weak, 7, "weak = {weak}");
     assert!(medium > weak, "medium {medium} <= weak {weak}");
     assert!(strong > medium + 300, "x-strong {strong} vs medium {medium}");
-    // `none` adds nothing — but still keeps the two words apart.
-    assert_eq!(delta(r#"one<break strength="none"/>two"#), 0);
+    // `none` is the same command, so the same pause.
+    assert_eq!(delta(r#"one<break strength="none"/>two"#), 7);
 }
 
 /// `--ssml-break=<percentage>` scales `<break time=…>` and nothing else.

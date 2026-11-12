@@ -58,6 +58,7 @@ pub fn embed_code(letter: char) -> Option<usize> {
         'R' => 4,
         'H' => 5,
         'T' => 6,
+        'B' => 12,
         'F' => 13,
         _ => return None,
     })

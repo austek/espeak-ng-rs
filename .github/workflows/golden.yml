@@ -70,6 +70,7 @@ jobs:
           --test synth_parity_wordgap
           --test synth_parity_variants
           --test synth_parity_voice_path
+          --test synth_parity_ssml_break
           --test tr_phoneme_program_context
           --test tr_next_phoneme_word_end
           --test max_digits

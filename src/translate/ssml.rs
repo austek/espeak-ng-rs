@@ -421,14 +421,16 @@ impl Walker {
         self.cur.push(BREAK_LETTER);
     }
 
-    /// Silence without a clause boundary: C turns a `<break strength>` weaker
-    /// than `medium` into a *prepause* on the next word, which leaves the
-    /// clause (and so the intonation) alone.
-    /// A zero-length one is still emitted: C writes `\x01 0B` for
-    /// `strength="none"`, and the command is what keeps the words on either
-    /// side of the tag apart.
-    fn emit_prepause_ms(&mut self, ms: u32) {
-        self.push_break_cmd(ms, false);
+    /// A `<break strength>` weaker than `medium`: C writes `\x01<level>B`, a
+    /// word command whose `pre_pause` change never reaches a word, so all that
+    /// is heard is the short pause `DoEmbedded` puts before any command.
+    fn emit_weak_break(&mut self, level: u32) {
+        if self.suppress_depth != 0 {
+            return;
+        }
+        self.cur.push(crate::translate::CTRL_EMBEDDED);
+        self.cur.push_str(&level.to_string());
+        self.cur.push('B');
     }
 
     /// `<break>`: `strength` picks one of C's six pause lengths and `time`
@@ -438,7 +440,7 @@ impl Walker {
         // with `value = 21` when no `strength` is given.
         const BREAK_VALUE: [u32; 6] = [0, 70, 140, 210, 400, 800];
         let mut ms = 210;
-        let mut weak = false;
+        let mut weak = None;
         let mut exact = false;
         if let Some(a) = get_attr(attrs, "strength") {
             let level = match a.trim().to_ascii_lowercase().as_str() {
@@ -451,18 +453,18 @@ impl Walker {
                 _ => 2, // C's `if (value < 0) value = 2`
             };
             ms = BREAK_VALUE[level];
-            weak = level < 3;
+            weak = (level < 3).then_some(level as u32);
         }
         if let Some(t) = get_attr(attrs, "time").as_deref().and_then(parse_break_time) {
             // `time` wins, and restores the clause boundary a weak `strength`
             // had taken away.
             ms = (t as u64 * self.break_mul as u64 / 100).min(u32::MAX as u64) as u32;
-            weak = false;
             exact = true;
         }
-        if weak {
-            self.emit_prepause_ms(ms);
-        } else {
+        if let Some(level) = weak {
+            self.emit_weak_break(level);
+        }
+        if weak.is_none() || exact {
             self.push_break_cmd(ms, exact);
             if self.suppress_depth == 0 {
                 self.cur.push(SSML_BREAK);
@@ -1001,14 +1003,15 @@ mod tests {
         assert_eq!(show(&strip_markup("a<break strength=\"x-strong\"/>b")), "a{800}|b");
         assert_eq!(show(&strip_markup("a<break strength=\"strong\"/>b")), "a{400}|b");
         assert_eq!(show(&strip_markup("a<break strength=\"medium\"/>b")), "a{210}|b");
-        assert_eq!(show(&strip_markup("a<break strength=\"weak\"/>b")), "a{140}b");
-        assert_eq!(show(&strip_markup("a<break strength=\"x-weak\"/>b")), "a{70}b");
+        assert_eq!(show(&strip_markup("a<break strength=\"weak\"/>b")), "a{2}b");
+        assert_eq!(show(&strip_markup("a<break strength=\"x-weak\"/>b")), "a{1}b");
         assert_eq!(show(&strip_markup("a<break strength=\"none\"/>b")), "a{0}b");
-        // An unknown strength is C's `weak`, and `time` wins over `strength`.
-        assert_eq!(show(&strip_markup("a<break strength=\"huh\"/>b")), "a{140}b");
+        // An unknown strength is C's `weak`; `time` adds the clause break to
+        // the `B` command a weak `strength` already wrote.
+        assert_eq!(show(&strip_markup("a<break strength=\"huh\"/>b")), "a{2}b");
         assert_eq!(
             show(&strip_markup("a<break strength=\"weak\" time=\"300ms\"/>b")),
-            "a{+300}|b"
+            "a{2}{+300}|b"
         );
     }
 
