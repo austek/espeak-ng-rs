@@ -6765,18 +6765,53 @@ fn spell_aborted_switch(
     Some(items)
 }
 
-/// The kind of the entry of the nearest word-like token before `token_ix`.
-fn previous_entry_kind<'a>(
+/// A spelled word that opens with its own pause, after which C starts the word.
+fn paused_stream(e: &TranslateEntry) -> bool {
+    e.kind == TranslateEntryKind::Stream && e.phonemes.first() == Some(&crate::phoneme::PHON_PAUSE)
+}
+
+/// A spelled word's opening switch is kept, rather than merged into the one
+/// before it, only when it names a table other than `current`.
+fn stream_switch_kept(e: &TranslateEntry, current: &str) -> bool {
+    letters::decode(&e.phonemes)
+        .into_iter()
+        .find_map(|i| match i {
+            letters::Item::Switch(t) => Some(t),
+            letters::Item::Ph(_) => None,
+        })
+        .is_some_and(|t| t != current)
+}
+
+/// The entry of the nearest word-like token before `token_ix` that speaks.
+fn previous_entry<'a>(
     tokens: &[Token],
     entries: &'a [TranslateEntry],
     token_ix: usize,
-) -> Option<&'a TranslateEntryKind> {
+) -> Option<&'a TranslateEntry> {
     (0..token_ix)
         .rev()
         .filter(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
         .filter_map(|k| entries.get(k))
         .find(|e| e.phonemes.iter().any(|&b| b != 0))
-        .map(|e| &e.kind)
+}
+
+fn previous_entry_kind<'a>(
+    tokens: &[Token],
+    entries: &'a [TranslateEntry],
+    token_ix: usize,
+) -> Option<&'a TranslateEntryKind> {
+    previous_entry(tokens, entries, token_ix).map(|e| &e.kind)
+}
+
+/// A spelled word of Arabic script.  C gives the word start of one that
+/// follows another to the switch after its opening pause; spelled CJK or
+/// Cyrillic letters keep it on the pause.
+fn arabic_stream(e: &TranslateEntry) -> bool {
+    e.kind == TranslateEntryKind::Stream
+        && e.word_lower
+            .as_deref()
+            .and_then(|w| w.chars().next())
+            .is_some_and(|c| ('\u{600}'..='\u{6ff}').contains(&c))
 }
 
 /// The word before `token_ix` in its clause holds a quote the rules do not cover.
@@ -8413,13 +8448,7 @@ pub(crate) fn build_translate_entries(
                         .trim_end_matches('\0')
                         .to_string();
                     let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
-                    let listed_there = !at_end[token_ix]
-                        && alts
-                            .get(&target)
-                            .is_some_and(|t| dict_lists_word(word_script, &t.dict, &t.options));
-                    let items = lone
-                        .filter(|_| !listed_there)
-                        .and_then(|c| letters::spell_in_switched(voice, alts, &target, c));
+                    let items = lone.and_then(|c| letters::spell_in_switched(voice, alts, &target, c));
                     let run_on = (0..token_ix)
                         .rev()
                         .find(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
@@ -9845,7 +9874,14 @@ impl Translator {
                         let mut it = text.chars();
                         it.next().filter(|_| it.next().is_none())
                     };
-                    let char_name = word.strip_prefix('_').and_then(lone);
+                    // A Latin letter handed to English (C's default-Latin switch)
+                    // is named; a word of another script goes to its language's
+                    // own reading, rules or list.
+                    let char_name = word.strip_prefix('_').and_then(lone).or_else(|| {
+                        lone(word)
+                            .filter(|c| c.is_alphabetic() && (*c as u32) <= 0x241)
+                            .and_then(|c| c.to_lowercase().next())
+                    });
                     // `translate_to_codes_inner` with switching disabled: a
                     // switched word may not switch again.
                     let sw = match char_name {
@@ -9914,7 +9950,7 @@ impl Translator {
                         let before_stream = (token_ix + 1..tokens.len())
                             .find(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
                             .and_then(|k| entries.get(k))
-                            .is_some_and(|e| e.kind == TranslateEntryKind::Stream);
+                            .is_some_and(|e| paused_stream(e) && stream_switch_kept(e, &target));
                         if !before_stream {
                             codes.push(PhonemeCode { code: 15, is_boundary: true, ..Default::default() });
                         }
@@ -10073,11 +10109,14 @@ impl Translator {
                             !c.is_boundary && c.code != crate::phoneme::PHON_END_WORD
                         })
                         .any(|c| c.code != crate::phoneme::PHON_PAUSE);
-                    let stream_run = entry.kind == TranslateEntryKind::Stream
-                        && matches!(
-                            previous_entry_kind(&tokens, &entries, token_ix),
-                            Some(TranslateEntryKind::Stream | TranslateEntryKind::LangSwitch)
-                        );
+                    let stream_run = paused_stream(entry)
+                        && previous_entry(&tokens, &entries, token_ix).is_some_and(|p| {
+                            match p.kind {
+                                TranslateEntryKind::Stream => arabic_stream(p) && arabic_stream(entry),
+                                TranslateEntryKind::LangSwitch => true,
+                                _ => false,
+                            }
+                        });
                     if runs_on && !joined && !stream_run && entry.phonemes.iter().any(|&b| b != 0) {
                         codes.push(PhonemeCode {
                             code: 15, is_boundary: true, clause_char: None, marker: None,
@@ -10272,20 +10311,30 @@ impl Translator {
                         .checked_sub(1)
                         .and_then(|k| entries.get(k))
                         .is_some_and(|e| e.no_word_gap);
-                    let before = previous_entry_kind(&tokens, &entries, token_ix);
+                    let before_entry = previous_entry(&tokens, &entries, token_ix);
+                    let before = before_entry.map(|e| &e.kind);
+                    let before_arabic = before_entry.is_some_and(arabic_stream);
                     let after = (token_ix + 1..tokens.len())
                         .filter(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
                         .filter_map(|k| entries.get(k))
-                        .find(|e| e.phonemes.iter().any(|&b| b != 0))
-                        .map(|e| &e.kind);
+                        .find(|e| e.phonemes.iter().any(|&b| b != 0));
                     use TranslateEntryKind::{LangSwitch, Stream};
                     // A spelled word carries its own word break after its
                     // opening pause, so none comes before it when a spelled or
                     // switched word precedes, nor after one before another.
-                    let stream_runs = matches!(
-                        (before, after),
-                        (Some(Stream), Some(Stream | LangSwitch)) | (Some(LangSwitch), Some(Stream))
-                    );
+                    let next_spelled = after.is_some_and(paused_stream);
+                    let stream_runs = match (before, after.map(|e| &e.kind)) {
+                        (Some(Stream), Some(LangSwitch)) => true,
+                        (Some(Stream), Some(Stream)) => {
+                            next_spelled && before_arabic && after.is_some_and(arabic_stream)
+                        }
+                        (Some(LangSwitch), Some(Stream)) => {
+                            let prev_target = before_entry.map(|e| switch_target(&e.phonemes));
+                            next_spelled
+                                && after.zip(prev_target).is_some_and(|(e, t)| stream_switch_kept(e, &t))
+                        }
+                        _ => false,
+                    };
                     if !joined && !stream_runs && !only_pauses_since_clause_start(&codes) {
                         codes.push(PhonemeCode {
                             code:         15,

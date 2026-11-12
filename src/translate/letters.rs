@@ -301,6 +301,9 @@ pub(super) fn push_stream(
             Item::Switch(table) => {
                 let rest = &items[ix + 1..];
                 if *table == current || opens_with_switch(rest) {
+                    if *table == current {
+                        word_start_before_pause(codes);
+                    }
                     continue;
                 }
                 if ix + 1 == items.len() {
@@ -310,6 +313,21 @@ pub(super) fn push_stream(
                 current = table.clone();
             }
         }
+    }
+}
+
+/// A word break pushed after a letter's opening pause moves in front of it when
+/// the switch it would have preceded is dropped, as C's word start then falls
+/// on the pause.
+fn word_start_before_pause(codes: &mut [PhonemeCode]) {
+    let n = codes.len();
+    if n < 2 {
+        return;
+    }
+    let is_break = |c: &PhonemeCode| c.code == PHON_END_WORD && !c.is_boundary && c.marker.is_none();
+    let is_pause = |c: &PhonemeCode| c.code == PHON_PAUSE && !c.is_boundary && c.marker.is_none();
+    if is_break(&codes[n - 1]) && is_pause(&codes[n - 2]) {
+        codes.swap(n - 1, n - 2);
     }
 }
 
