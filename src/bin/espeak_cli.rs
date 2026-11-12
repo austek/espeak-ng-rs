@@ -7,11 +7,8 @@ use std::path::{Path, PathBuf};
 use espeak_ng::engine::{EspeakNg, Parameter};
 use espeak_ng::getopt::{self, HasArg, LongOpt};
 use espeak_ng::phoneme::PhonemeData;
-use espeak_ng::translate::ipa_table::{
-    PHON_LENGTHEN, PHON_STRESS_2, PHON_STRESS_3, PHON_STRESS_P, PHON_STRESS_P2,
-    PHON_STRESS_PREV, PHON_STRESS_TONIC, PHON_STRESS_U,
-};
 use espeak_ng::translate::{default_data_dir, PhonemeCode, Translator};
+use espeak_ng::voices::{listed_voices, resolve_voice};
 
 #[derive(Debug, Default)]
 struct Cli {
@@ -414,17 +411,6 @@ fn fail_with(status_message: &str) -> ! {
     std::process::exit(1);
 }
 
-/// C's `SelectVoiceByName`: the voice name, else its file path, else the last
-/// component of its file path, each compared without regard to case.
-fn select_voice_by_name<'a>(voices: &'a [Voice], name: &str) -> Option<&'a Voice> {
-    let tail = format!("/{name}").to_ascii_lowercase();
-    voices
-        .iter()
-        .find(|v| v.name.eq_ignore_ascii_case(name))
-        .or_else(|| voices.iter().find(|v| v.file.eq_ignore_ascii_case(name)))
-        .or_else(|| voices.iter().find(|v| v.file.to_ascii_lowercase().ends_with(&tail)))
-}
-
 fn split_variant_base(value: &str) -> &str {
     espeak_ng::translate::split_voice_variant(value).0
 }
@@ -437,46 +423,6 @@ fn with_spelled_variant(base: &str, spelled: &str) -> String {
         Some(v) => format!("{}+{v}", split_variant_base(base)),
         None => base.to_string(),
     }
-}
-
-/// The voice a `-v` value selects the way `espeak_ng_SetVoiceByName` and then
-/// `SetVoiceByProperties` do: by name or file, else the best language match.
-fn find_catalog_voice(value: &str, data_dir: &Path) -> Option<Voice> {
-    let catalog = espeak_ng::voices::list_catalog(data_dir);
-    select_voice_by_name(&catalog, value).cloned().or_else(|| {
-        listed_voices(data_dir, catalog.clone(), Some(value))
-            .into_iter()
-            .find(|v| !v.file.starts_with("mb/"))
-    })
-}
-
-/// Resolve a `-v` value (a `+variant` suffix passes through) to something the
-/// engine loads: a language with data is kept as given, an MBROLA voice keeps
-/// its name, any other voice becomes the language that has data for it.
-/// `None` is C's "voice does not exist".
-fn resolve_voice(value: &str, data_dir: &Path) -> Option<String> {
-    let (base, variant) = espeak_ng::translate::split_voice_variant(value);
-    let with_variant = |stem: &str| match variant {
-        Some(v) => format!("{stem}+{v}"),
-        None => stem.to_string(),
-    };
-    if espeak_ng::translate::resolve_dict_stem(data_dir, base).is_some()
-        || espeak_ng::voices::load_mbrola_voice(data_dir, base).is_some()
-    {
-        return Some(value.to_string());
-    }
-    if let Some(v) = espeak_ng::voices::voice_file_entry(data_dir, base) {
-        let resolves = |tag: &str| espeak_ng::translate::resolve_dict_stem(data_dir, tag).is_some();
-        let tag = match v.dictionary.as_deref() {
-            Some(d) if !resolves(&v.language) => d.to_string(),
-            _ => v.language.clone(),
-        };
-        return Some(with_variant(&tag));
-    }
-    let v = find_catalog_voice(base, data_dir)?;
-    let stem = espeak_ng::translate::resolve_dict_stem(data_dir, &v.language)
-        .unwrap_or_else(|| v.language.clone());
-    Some(with_variant(&stem))
 }
 
 /// `--compile-intonations`: C reads `<data>/../phsource/intonation`; this port
@@ -643,94 +589,6 @@ fn run_compile_mbrola(src_arg: &str, cli: &Cli) -> std::io::Result<()> {
 }
 
 type Voice = espeak_ng::voices::VoiceEntry;
-
-/// C's `ScoreVoice` for a language-only request (`spec` is lower-cased).
-fn voice_language_score(spec: &str, v: &Voice) -> i32 {
-    let spec_parts = 1 + spec.matches('-').count() as i32;
-    let base = v
-        .languages
-        .iter()
-        .map(|(code, prio)| language_code_score(spec, spec_parts, code, *prio))
-        .fold(0, i32::max);
-    if base == 0 {
-        return 0;
-    }
-    (base + gender_age_bonus(v)).max(1)
-}
-
-fn language_code_score(spec: &str, spec_parts: i32, code: &str, prio: u8) -> i32 {
-    let code_parts = 1 + code.matches('-').count() as i32;
-    let matching = count_matching_parts(spec, code);
-    if matching == 0 {
-        return 0;
-    }
-    let x = 5 - (spec_parts - matching).max(0) - (code_parts - matching).max(0);
-    x * 100 - i32::from(prio) * 2
-}
-
-/// Parts of `code` that equal the same-position part of `spec`, counted the
-/// way C does: each part ending in `-` while all earlier characters matched,
-/// plus the whole string if it matched to the end.
-fn count_matching_parts(spec: &str, code: &str) -> i32 {
-    let (s, c) = (spec.as_bytes(), code.as_bytes());
-    let mut matching = true;
-    let mut parts = 0;
-    for ix in 0..=c.len() {
-        let c1 = match s.get(ix) { Some(b'-') | None => 0, Some(&b) => b };
-        let raw = c.get(ix).copied().unwrap_or(0);
-        let c2 = if raw == b'-' { 0 } else { raw };
-        matching &= c1 == c2;
-        if raw == b'-' && matching {
-            parts += 1;
-        }
-    }
-    parts + i32::from(matching)
-}
-
-fn gender_age_bonus(v: &Voice) -> i32 {
-    let female_bonus = if v.gender == 'F' && v.age > 12 { 5 } else { 0 };
-    if v.age == 0 {
-        return female_bonus;
-    }
-    let age = i32::from(v.age);
-    let ratio = 3000 / age;
-    let ratio = if ratio < 100 { 10000 / ratio } else { ratio };
-    female_bonus + (5 - (ratio - 100) / 10).min(0)
-}
-
-/// `espeak_ListVoices`: all voices by language, priority and name, or the
-/// voices matching a language request by descending score then name.
-fn listed_voices(data: &Path, all: Vec<Voice>, filter: Option<&str>) -> Vec<Voice> {
-    let mut all = all;
-    all.sort_by(|a, b| {
-        a.language
-            .cmp(&b.language)
-            .then(a.priority.cmp(&b.priority))
-            .then_with(|| a.name.cmp(&b.name))
-    });
-    let Some(f) = filter.filter(|f| !f.is_empty()) else {
-        all.retain(|v| v.language != "variant" && !v.file.starts_with("mb/"));
-        return all;
-    };
-    if f.starts_with("all") {
-        return all;
-    }
-    let spec = f.to_ascii_lowercase();
-    let spec = if spec == "mbrola" { "mb".to_string() } else { spec };
-    let dir_prefix = (!spec.contains('-') && data.join("voices").join(&spec).is_dir())
-        .then(|| format!("{spec}/"));
-    let score = |v: &Voice| match &dir_prefix {
-        Some(p) => if v.file.starts_with(p.as_str()) { 100 } else { 0 },
-        None => voice_language_score(&spec, v),
-    };
-    let mut scored: Vec<(i32, Voice)> = all
-        .into_iter()
-        .map(|v| (score(&v), v))
-        .filter(|(s, _)| *s > 0)
-        .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.name.cmp(&b.1.name)));
-    scored.into_iter().map(|(_, v)| v).collect()
-}
 
 fn pad_bytes(s: &str, width: usize) -> String {
     format!("{s}{}", " ".repeat(width.saturating_sub(s.len())))
@@ -1055,12 +913,6 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
 }
 
 
-/// Render phoneme codes as eSpeak mnemonics (`-x`).
-///
-/// A `phonSWITCH` marker in the stream opens `(lang)` and swaps the phoneme
-/// table used to resolve the mnemonics that follow, so a mid-clause language
-/// switch prints `(en)h@l'oU(ru)` as upstream does instead of leaking the raw
-/// marker phoneme.
 fn format_x(
     codes: &[PhonemeCode],
     phdata: &PhonemeData,
@@ -1069,144 +921,7 @@ fn format_x(
     data_dir: &Path,
     lang: &str,
 ) -> String {
-    let mut out = String::new();
-    let mut word_units: Vec<String> = Vec::new();
-    // The table the codes that follow belong to; `None` = the clause's own.
-    let mut switched: Option<String> = None;
-    let mut tables = espeak_ng::translate::SwitchTables::default();
-
-    // A stress marker is written as part of the phoneme it precedes, as in C,
-    // where the separator goes *before* the stress: `tS.'i:.z`, not `tS.'.i:.z`.
-    let mut pending_stress = String::new();
-    let push_unit = |u: String, word_units: &mut Vec<String>, pending: &mut String| {
-        if u.is_empty() {
-            return;
-        }
-        // `--tie` goes inside the phoneme's own name, so apply it here rather
-        // than between units.
-        let tied = match tie {
-            Some(t) => tie_unit(&u, t),
-            None => u,
-        };
-        word_units.push(format!("{}{}", std::mem::take(pending), tied));
-    };
-
-    let flush_word = |out: &mut String, word_units: &mut Vec<String>, sep: Option<char>| {
-        if word_units.is_empty() {
-            return;
-        }
-        let piece = match sep {
-            None => word_units.concat(),
-            Some(s) => word_units.join(&s.to_string()),
-        };
-        out.push_str(&piece);
-        word_units.clear();
-    };
-
-    for pc in codes {
-        if let Some(espeak_ng::translate::CodeMarker::LangSwitch(target)) = &pc.marker {
-            flush_word(&mut out, &mut word_units, sep);
-            // A *closing* marker binds to the word it follows — upstream writes
-            // `(en)h@l'oU(ru) p@-r…`, so the word-boundary space moves after it.
-            // (A switched word emits its own word boundary and the separator
-            // token emits another, so there can be more than one space here.)
-            let trailing_space = target == lang && out.ends_with(' ');
-            while target == lang && out.ends_with(' ') {
-                out.pop();
-            }
-            out.push_str(&format!(
-                "({})",
-                espeak_ng::translate::switch_marker_name(phdata, target, lang)
-            ));
-            if trailing_space {
-                out.push(' ');
-            }
-            switched = (target != lang).then(|| target.to_string());
-            continue;
-        }
-        // A target with no table keeps resolving with the clause's own.
-        let phdata: &PhonemeData = switched
-            .as_deref()
-            .and_then(|t| tables.get(data_dir, t))
-            .unwrap_or(phdata);
-
-        if pc.is_boundary && pc.code == 15 {
-            // A word boundary flushes whatever stress is pending with it.
-            if !pending_stress.is_empty() {
-                word_units.push(std::mem::take(&mut pending_stress));
-            }
-            flush_word(&mut out, &mut word_units, sep);
-            out.push(' ');
-            // A *space* separator is emitted at a word start too, which is why
-            // C's `--sep` output has two spaces between words — but only once,
-            // even where two boundaries meet (a switched word brings its own).
-            if sep == Some(' ') && !out.ends_with("  ") {
-                out.push(' ');
-            }
-            continue;
-        }
-        if pc.is_boundary && pc.code == 0 {
-            flush_word(&mut out, &mut word_units, sep);
-            if pc.clause_char.is_some() {
-                out.push('\n');
-            } else {
-                out.push(' ');
-            }
-            continue;
-        }
-
-        if pc.code == 15 && !pc.is_boundary {
-            flush_word(&mut out, &mut word_units, sep);
-            out.push(' ');
-            // A *space* separator is emitted at a word start too, which is why
-            // C's `--sep` output has two spaces between words — but only once,
-            // even where two boundaries meet (a switched word brings its own).
-            if sep == Some(' ') && !out.ends_with("  ") {
-                out.push(' ');
-            }
-            continue;
-        }
-
-        match pc.code {
-            PHON_STRESS_P | PHON_STRESS_P2 | PHON_STRESS_TONIC => pending_stress.push('\''),
-            PHON_STRESS_2 | PHON_STRESS_3 => pending_stress.push(','),
-            PHON_STRESS_U | PHON_STRESS_PREV => {}
-            PHON_LENGTHEN => {
-                push_unit(":".to_string(), &mut word_units, &mut pending_stress);
-            }
-            0 if !pc.is_boundary => {}
-            c => {
-                if let Some(ph) = phdata.get(c) {
-                    if ph.typ == 1 && ph.program == 0 {
-                        match ph.std_length {
-                            4 => pending_stress.push('\''),
-                            2 | 3 => pending_stress.push(','),
-                            _ => {}
-                        }
-                    } else {
-                        // Type-1 phonemes that carry a program are *tone*
-                        // phonemes (Mandarin `55`/`214`/…), which C writes out
-                        // with `WritePhMnemonic` like any other phoneme.
-                        push_unit(ph.mnemonic_display(), &mut word_units, &mut pending_stress);
-                    }
-                }
-            }
-        }
-    }
-
-    flush_word(&mut out, &mut word_units, sep);
-    // A suppressed clause boundary (a period before a lowercase word, a comma
-    // between digits) leaves the surrounding separators behind; upstream prints
-    // a single space there.  With a space separator the doubling is intentional.
-    if sep != Some(' ') {
-        while out.contains("  ") {
-            out = out.replace("  ", " ");
-        }
-    }
-    // Word boundaries either side of a clause break leave stray spaces at the
-    // ends of lines (`'eI \n b'i:` where upstream writes `'eI\nb'i:`).
-    let out: String = out.split('\n').map(str::trim).collect::<Vec<_>>().join("\n");
-    out.trim_end().to_string()
+    espeak_ng::phoneme_text::format_mnemonics(codes, phdata, sep, tie, data_dir, lang)
 }
 
 /// Map the `-b` value to an encoding and decode mode.  Unset = auto (UTF-8,
@@ -1661,21 +1376,6 @@ fn parse_tie_value(s: &str) -> Option<char> {
         return Some('\u{200d}');
     }
     s.chars().next()
-}
-
-/// Insert `tie` inside a phoneme's name, before every character after the first
-/// that is a letter — C's `--tie` handling in `GetTranslatedPhonemeString`,
-/// which turns `tʃ` into `t͡ʃ` and leaves `ˈiː` alone.  Modifier letters and
-/// combining marks (U+02B0-U+036F) never take one.
-fn tie_unit(unit: &str, tie: char) -> String {
-    let mut out = String::with_capacity(unit.len() + 2);
-    for (i, c) in unit.chars().enumerate() {
-        if i > 0 && c.is_alphabetic() && !matches!(c as u32, 0x2b0..=0x36f) {
-            out.push(tie);
-        }
-        out.push(c);
-    }
-    out
 }
 
 fn parse_sep_value(s: &str) -> Option<char> {

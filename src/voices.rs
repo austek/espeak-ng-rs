@@ -173,6 +173,145 @@ pub fn list_catalog(data_dir: &Path) -> Vec<VoiceEntry> {
     out
 }
 
+/// C's `SelectVoiceByName`: the voice name, else its file path, else the last
+/// component of its file path, each compared without regard to case.
+pub fn select_voice_by_name<'a>(voices: &'a [VoiceEntry], name: &str) -> Option<&'a VoiceEntry> {
+    let tail = format!("/{name}").to_ascii_lowercase();
+    voices
+        .iter()
+        .find(|v| v.name.eq_ignore_ascii_case(name))
+        .or_else(|| voices.iter().find(|v| v.file.eq_ignore_ascii_case(name)))
+        .or_else(|| voices.iter().find(|v| v.file.to_ascii_lowercase().ends_with(&tail)))
+}
+
+/// The voice a `-v` value selects the way `espeak_ng_SetVoiceByName` and then
+/// `SetVoiceByProperties` do: by name or file, else the best language match.
+pub fn find_catalog_voice(value: &str, data_dir: &Path) -> Option<VoiceEntry> {
+    let catalog = list_catalog(data_dir);
+    select_voice_by_name(&catalog, value).cloned().or_else(|| {
+        listed_voices(data_dir, catalog.clone(), Some(value))
+            .into_iter()
+            .find(|v| !v.file.starts_with("mb/"))
+    })
+}
+
+/// Resolve a `-v` value (a `+variant` suffix passes through) to something the
+/// engine loads: a language with data is kept as given, an MBROLA voice keeps
+/// its name, any other voice becomes the language that has data for it.
+/// `None` is C's "voice does not exist".
+pub fn resolve_voice(value: &str, data_dir: &Path) -> Option<String> {
+    let (base, variant) = crate::translate::split_voice_variant(value);
+    let with_variant = |stem: &str| match variant {
+        Some(v) => format!("{stem}+{v}"),
+        None => stem.to_string(),
+    };
+    if crate::translate::resolve_dict_stem(data_dir, base).is_some()
+        || load_mbrola_voice(data_dir, base).is_some()
+    {
+        return Some(value.to_string());
+    }
+    if let Some(v) = voice_file_entry(data_dir, base) {
+        let resolves = |tag: &str| crate::translate::resolve_dict_stem(data_dir, tag).is_some();
+        let tag = match v.dictionary.as_deref() {
+            Some(d) if !resolves(&v.language) => d.to_string(),
+            _ => v.language.clone(),
+        };
+        return Some(with_variant(&tag));
+    }
+    let v = find_catalog_voice(base, data_dir)?;
+    let stem = crate::translate::resolve_dict_stem(data_dir, &v.language)
+        .unwrap_or_else(|| v.language.clone());
+    Some(with_variant(&stem))
+}
+
+/// C's `ScoreVoice` for a language-only request (`spec` is lower-cased).
+fn voice_language_score(spec: &str, v: &VoiceEntry) -> i32 {
+    let spec_parts = 1 + spec.matches('-').count() as i32;
+    let base = v
+        .languages
+        .iter()
+        .map(|(code, prio)| language_code_score(spec, spec_parts, code, *prio))
+        .fold(0, i32::max);
+    if base == 0 {
+        return 0;
+    }
+    (base + gender_age_bonus(v)).max(1)
+}
+
+fn language_code_score(spec: &str, spec_parts: i32, code: &str, prio: u8) -> i32 {
+    let code_parts = 1 + code.matches('-').count() as i32;
+    let matching = count_matching_parts(spec, code);
+    if matching == 0 {
+        return 0;
+    }
+    let x = 5 - (spec_parts - matching).max(0) - (code_parts - matching).max(0);
+    x * 100 - i32::from(prio) * 2
+}
+
+/// Parts of `code` that equal the same-position part of `spec`, counted the
+/// way C does: each part ending in `-` while all earlier characters matched,
+/// plus the whole string if it matched to the end.
+fn count_matching_parts(spec: &str, code: &str) -> i32 {
+    let (s, c) = (spec.as_bytes(), code.as_bytes());
+    let mut matching = true;
+    let mut parts = 0;
+    for ix in 0..=c.len() {
+        let c1 = match s.get(ix) { Some(b'-') | None => 0, Some(&b) => b };
+        let raw = c.get(ix).copied().unwrap_or(0);
+        let c2 = if raw == b'-' { 0 } else { raw };
+        matching &= c1 == c2;
+        if raw == b'-' && matching {
+            parts += 1;
+        }
+    }
+    parts + i32::from(matching)
+}
+
+fn gender_age_bonus(v: &VoiceEntry) -> i32 {
+    let female_bonus = if v.gender == 'F' && v.age > 12 { 5 } else { 0 };
+    if v.age == 0 {
+        return female_bonus;
+    }
+    let age = i32::from(v.age);
+    let ratio = 3000 / age;
+    let ratio = if ratio < 100 { 10000 / ratio } else { ratio };
+    female_bonus + (5 - (ratio - 100) / 10).min(0)
+}
+
+/// `espeak_ListVoices`: all voices by language, priority and name, or the
+/// voices matching a language request by descending score then name.
+pub fn listed_voices(data: &Path, all: Vec<VoiceEntry>, filter: Option<&str>) -> Vec<VoiceEntry> {
+    let mut all = all;
+    all.sort_by(|a, b| {
+        a.language
+            .cmp(&b.language)
+            .then(a.priority.cmp(&b.priority))
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    let Some(f) = filter.filter(|f| !f.is_empty()) else {
+        all.retain(|v| v.language != "variant" && !v.file.starts_with("mb/"));
+        return all;
+    };
+    if f.starts_with("all") {
+        return all;
+    }
+    let spec = f.to_ascii_lowercase();
+    let spec = if spec == "mbrola" { "mb".to_string() } else { spec };
+    let dir_prefix = (!spec.contains('-') && data.join("voices").join(&spec).is_dir())
+        .then(|| format!("{spec}/"));
+    let score = |v: &VoiceEntry| match &dir_prefix {
+        Some(p) => if v.file.starts_with(p.as_str()) { 100 } else { 0 },
+        None => voice_language_score(&spec, v),
+    };
+    let mut scored: Vec<(i32, VoiceEntry)> = all
+        .into_iter()
+        .map(|v| (score(&v), v))
+        .filter(|(s, _)| *s > 0)
+        .collect();
+    scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.name.cmp(&b.1.name)));
+    scored.into_iter().map(|(_, v)| v).collect()
+}
+
 /// A request for a voice, matched against the available [`VoiceEntry`] list.
 /// Any field left `None` is not constrained.  Mirrors the fields eSpeak NG's
 /// `SetVoiceScores` scores against.
