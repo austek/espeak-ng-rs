@@ -1489,8 +1489,8 @@ fn adjust_formants(
     // formants_reduce_hf — only when a reduction is specified (guard against
     // f3_amp==0 zeroing the high formants).
     if hf_reduce > 0 {
-        for ix in 2..8 {
-            fr.fheight[ix] = (fr.fheight[ix] as i32 * hf_reduce / 100).clamp(0, 255) as u8;
+        for height in &mut fr.fheight[2..8] {
+            *height = (i32::from(*height) * hf_reduce / 100).clamp(0, 255) as u8;
         }
     }
 }

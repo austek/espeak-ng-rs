@@ -892,8 +892,8 @@ impl Klatt {
             // summed with alternating signs.
             let sourc = frics + par_glotout - self.glotlast;
             self.glotlast = par_glotout;
-            for ix in R2P..=R6P {
-                out_s = self.rsn[ix].resonate(sourc) - out_s;
+            for rsn in &mut self.rsn[R2P..=R6P] {
+                out_s = rsn.resonate(sourc) - out_s;
             }
             out_s = self.amp_bypas * sourc - out_s;
 
