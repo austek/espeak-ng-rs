@@ -9,6 +9,7 @@ pub mod phlist;
 pub mod pitches;
 pub mod speed;
 pub mod voice;
+pub mod voicefile;
 pub mod wavegen;
 
 use std::path::Path;
@@ -126,6 +127,11 @@ pub fn lang_synth(data_dir: &Path, voice: &VoiceParams, tunes: &[Tune]) -> LangS
     t
 }
 
+fn with_dictionary_flags(mut t: LangSynth, data_dir: &Path, lang: &str) -> LangSynth {
+    t.stress_flags = crate::dictionary::stress::StressOpts::for_lang_in(lang, data_dir).stress_flags;
+    t
+}
+
 /// The generator voice for these parameters (`LoadVoice` + variant).
 pub fn wvoice(voice: &VoiceParams) -> WVoice {
     let mut v = WVoice::default();
@@ -190,8 +196,10 @@ pub struct Renderer<'a> {
 impl<'a> Renderer<'a> {
     pub fn new(phdata: &'a PhonemeData, data_dir: &Path, params: &VoiceParams) -> Self {
         let tunes = parse_tunes(&phdata.intonations);
-        let tr = lang_synth(data_dir, params, &tunes);
-        let voice = wvoice(params);
+        let (tr, voice) = match voicefile::load(&params.voice_files, &tunes) {
+            Some(l) => (with_dictionary_flags(l.tr, data_dir, &params.lang), l.voice),
+            None => (lang_synth(data_dir, params, &tunes), wvoice(params)),
+        };
         let mut ev: [i32; N_EMBEDDED_VALUES] = EMBEDDED_DEFAULT;
         let rate = params.user_rate_wpm as i32;
         ev[EMBED_S] = rate;

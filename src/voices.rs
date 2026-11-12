@@ -283,8 +283,7 @@ fn collect_dir(root: &Path, dir: &Path, out: &mut Vec<VoiceEntry>) {
 /// the directives the port reads from a voice file are honoured; the rest of
 /// the engine still looks the language's settings up in the data directory.
 pub fn load_voice_file(path: &Path) -> Option<VoiceEntry> {
-    let root = path.parent().unwrap_or(Path::new(""));
-    parse_voice_file(root, path)
+    parse_voice_file(Path::new(""), path)
 }
 
 fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
@@ -746,9 +745,8 @@ pub fn variant_file_name(name: &str) -> String {
 pub fn voice_file_entry(data_dir: &Path, name: &str) -> Option<VoiceEntry> {
     [data_dir.join("voices"), data_dir.join("lang")]
         .iter()
-        .map(|root| root.join(name))
-        .find(|p| p.is_file())
-        .and_then(|p| load_voice_file(&p))
+        .find(|root| root.join(name).is_file())
+        .and_then(|root| parse_voice_file(root, &root.join(name)))
 }
 
 /// Load and parse a variant voice file at `<data_dir>/voices/!v/<name>`.

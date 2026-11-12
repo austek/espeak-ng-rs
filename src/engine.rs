@@ -1059,10 +1059,28 @@ impl EspeakNg {
     fn base_voice_entry(&self) -> Option<crate::voices::VoiceEntry> {
         self.voice_file.clone().or_else(|| {
             let lang = self.voice_spec.effective_lang();
-            crate::voices::list_voices(&self.data_dir)
-                .into_iter()
+            let voices = crate::voices::list_voices(&self.data_dir);
+            let query = crate::voices::VoiceQuery { language: Some(lang.to_string()), ..Default::default() };
+            voices
+                .iter()
                 .find(|v| v.language.eq_ignore_ascii_case(lang))
+                .or_else(|| crate::voices::find_voice(&voices, &query))
+                .cloned()
         })
+    }
+
+    fn voice_file_texts(&self, entry: Option<&crate::voices::VoiceEntry>) -> Vec<String> {
+        let read = |p: std::path::PathBuf| std::fs::read(p).ok().map(|b| String::from_utf8_lossy(&b).into_owned());
+        let base = entry.and_then(|e| {
+            ["voices", "lang"]
+                .iter()
+                .find_map(|d| read(self.data_dir.join(d).join(&e.file)))
+                .or_else(|| read(std::path::PathBuf::from(&e.file)))
+        });
+        let variant = self.voice_spec.variant.as_deref().and_then(|v| {
+            read(self.data_dir.join("voices").join("!v").join(crate::voices::variant_file_name(v)))
+        });
+        base.map(|b| std::iter::once(b).chain(variant).collect()).unwrap_or_default()
     }
 
     fn make_voice_params_levels(&self, rate: u32, pitch: u32, volume: u32) -> VoiceParams {
@@ -1073,7 +1091,7 @@ impl EspeakNg {
             .as_deref()
             .and_then(|v| crate::voices::load_variant(&self.data_dir, v));
         let speed = variant.as_ref().and_then(|v| v.speed).or(entry.as_ref().and_then(|e| e.speed));
-        let rate = speed.filter(|&s| s > 0).map_or(rate, |s| (rate as i64 * s as i64 / 100) as u32);
+        let scaled_rate = speed.filter(|&s| s > 0).map_or(rate, |s| (rate as i64 * s as i64 / 100) as u32);
         let stress_lengths = stress_lengths_with_adds(
             crate::synthesize::cgen::voice::LangSynth::for_lang(self.voice_spec.effective_lang()).stress_lengths,
             entry.as_ref(),
@@ -1089,7 +1107,7 @@ impl EspeakNg {
         // where upstream's curve flattens towards its 80 wpm floor.  A larger
         // duration factor means a *smaller* `speed_percent`.
         let speed_percent = {
-            let f = crate::synthesize::setlengths::speed_duration_factor(rate);
+            let f = crate::synthesize::setlengths::speed_duration_factor(scaled_rate);
             ((100.0 / f).round() as u32).clamp(20, 800)
         };
         // `speed_duration_factor` already carries the calibration, so the
@@ -1209,6 +1227,7 @@ impl EspeakNg {
                 .or(self.voice_pitch)
                 .or_else(|| crate::voices::voice_pitch(&self.data_dir, self.voice_spec.effective_lang())),
             data_dir: Some(self.data_dir.clone()),
+            voice_files: self.voice_file_texts(entry.as_ref()),
             ..VoiceParams::default()
         }
     }

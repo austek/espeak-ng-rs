@@ -266,6 +266,9 @@ pub struct VoiceParams {
     /// The data directory, for the voice file's synthesis keywords.  `None`
     /// keeps the approximate renderer.
     pub data_dir: Option<std::path::PathBuf>,
+    /// The text of the voice file, then of each `+variant` file, in the order
+    /// C's `LoadVoice` reads them.  Empty when the voice has no file.
+    pub voice_files: Vec<String>,
 }
 
 impl VoiceParams {
@@ -322,6 +325,7 @@ impl Default for VoiceParams {
             lang:               String::new(),
             voice_pitch:        None,
             data_dir:           None,
+            voice_files:        Vec::new(),
         }
     }
 }

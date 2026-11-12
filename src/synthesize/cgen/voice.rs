@@ -24,6 +24,9 @@ pub struct WVoice {
     pub height2: [i32; 9],
     pub width: [i32; 9],
     pub freqadd: [i32; 9],
+    /// Breath noise per formant; `breath[0]` is non-zero when any is set.
+    pub breath: [i32; 9],
+    pub breathw: [i32; 9],
     pub tone_adjust: [u8; N_TONE_ADJUST],
     pub speedf1: i32,
     pub speedf2: i32,
@@ -58,6 +61,8 @@ impl Default for WVoice {
             height2: height,
             width,
             freqadd: [0; 9],
+            breath: [0; 9],
+            breathw: [0, 200, 200, 400, 400, 400, 600, 600, 600],
             tone_adjust: set_tone_adjust(&DEFAULT_TONE_POINTS),
             speedf1: 256,
             speedf2: 238,
