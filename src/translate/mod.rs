@@ -2000,6 +2000,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     let text = text.as_ref();
     let mut tokens = Vec::new();
     let mut chars = text.chars().peekable();
+    let mut run_verdict: Option<bool> = None;
 
     while let Some(c) = chars.next() {
         if c == CTRL_EMBEDDED {
@@ -2134,7 +2135,13 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 tokens.push(Token::Punctuation(':'));
                 continue;
             }
-            if c != '.' && !ascii_clause_end_follows(c, chars.clone()) {
+            let ends_clause = match run_verdict {
+                Some(verdict) if matches!(c, '?' | '!') => verdict,
+                _ => ascii_clause_end_follows(c, chars.clone()),
+            };
+            let next_in_run = matches!(chars.peek(), Some('?' | '!'));
+            run_verdict = (matches!(c, '?' | '!') && next_in_run).then_some(ends_clause);
+            if c != '.' && !ends_clause {
                 tokens.push(Token::Punctuation(c));
                 continue;
             }
@@ -7610,22 +7617,20 @@ fn suppress_abbreviation_periods(tokens: &mut [Token]) {
     // follows — "one. two" is not a break, "one. Two" is.  Upstream's `-x`
     // shows exactly this: `w'0n t'u:` on one line versus `w'0n` / `t'u:` on
     // two.  Language-independent, like the clause tokenizer in C.
-    for i in 0..tokens.len() {
+    let mut next_word: Option<usize> = None;
+    for i in (0..tokens.len()).rev() {
         let announced = i > 0 && matches!(tokens[i - 1], Token::Punctuation('.'));
-        if !matches!(tokens[i], Token::ClauseBoundary('.')) || announced {
-            continue;
+        if matches!(tokens[i], Token::ClauseBoundary('.')) && !announced {
+            let ends_sentence = match next_word.map(|j| &tokens[j]) {
+                Some(Token::Word(w)) => w.chars().next().is_some_and(|c| !c.is_lowercase()),
+                _ => true,
+            };
+            if !ends_sentence {
+                tokens[i] = Token::Space;
+            }
         }
-        let next_word = tokens[i + 1..].iter().find(|t| {
-            !matches!(t, Token::Space | Token::WordJoin) && !matches!(t, Token::ClauseBoundary(_))
-        });
-        let ends_sentence = match next_word {
-            None => true,
-            Some(Token::Word(w)) => w.chars().next().is_some_and(|c| !c.is_lowercase()),
-            // A number or symbol after the period keeps the sentence break.
-            Some(_) => true,
-        };
-        if !ends_sentence {
-            tokens[i] = Token::Space;
+        if !matches!(tokens[i], Token::Space | Token::WordJoin | Token::ClauseBoundary(_)) {
+            next_word = Some(i);
         }
     }
 
@@ -9310,6 +9315,18 @@ pub struct Translator {
     pub options: LangOptions,
     /// Resolved espeak-ng data directory.
     data_dir: PathBuf,
+    loaded: std::sync::Mutex<Option<std::sync::Arc<LoadedData>>>,
+}
+
+/// The dictionary and selected phoneme table for one language, loaded once per
+/// translator instead of once per `translate_to_codes` call.
+struct LoadedData {
+    lang: String,
+    dict_condition: u32,
+    dict: Dictionary,
+    phdata: PhonemeData,
+    stress_opts: StressOpts,
+    replacements: Vec<(u8, u8, u8)>,
 }
 
 impl Translator {
@@ -9329,7 +9346,49 @@ impl Translator {
         // Honour the voice's `dictrules` directive (Brazilian Portuguese etc.).
         options.dict_condition = crate::voices::voice_dict_condition(&dir, base);
         options.bracket_pause = crate::voices::voice_bracket_pause(&dir, base);
-        Ok(Translator { options, data_dir: dir })
+        Ok(Translator { options, data_dir: dir, loaded: std::sync::Mutex::new(None) })
+    }
+
+    fn loaded_data(&self) -> Result<std::sync::Arc<LoadedData>> {
+        let lang = &self.options.lang;
+        let mut slot = self.loaded.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(l) = slot.as_ref().filter(|l| {
+            l.lang == *lang && l.dict_condition == self.options.dict_condition
+        }) {
+            return Ok(l.clone());
+        }
+        let dict_stem = resolve_dict_stem(&self.data_dir, lang)
+            .ok_or_else(|| Error::VoiceNotFound(lang.to_string()))?;
+        let dict_path = dict_path(&self.data_dir, &dict_stem)
+            .ok_or_else(|| Error::VoiceNotFound(lang.to_string()))?;
+        let dict_bytes = std::fs::read(&dict_path).map_err(Error::Io)?;
+        let mut dict = Dictionary::from_bytes(&dict_stem, dict_bytes)?;
+        dict.dict_condition = self.options.dict_condition;
+        if !self.data_dir.join("phontab").exists() {
+            return Err(Error::NotImplemented("translate_to_codes: phontab not found"));
+        }
+        let mut phdata = PhonemeData::load(&self.data_dir)?;
+        // The table is usually named after the language; a few voices redirect
+        // it (`phonemes <name>`, e.g. Norwegian Bokmål `nb` → `no`).
+        select_phoneme_table(&mut phdata, &self.data_dir, lang)?;
+        let replacements = crate::voices::voice_replacements(&self.data_dir, lang)
+            .into_iter()
+            .filter_map(|(f, old, new)| {
+                let o = phdata.lookup_phoneme(&old);
+                let n = if new == "NULL" { 0 } else { phdata.lookup_phoneme(&new) };
+                (o != 0).then_some((f, o, n))
+            })
+            .collect();
+        let loaded = std::sync::Arc::new(LoadedData {
+            replacements,
+            lang: lang.clone(),
+            dict_condition: self.options.dict_condition,
+            dict,
+            phdata,
+            stress_opts: StressOpts::for_lang_in(lang, &self.data_dir),
+        });
+        *slot = Some(loaded.clone());
+        Ok(loaded)
     }
 
     /// Create with default data directory.
@@ -9518,15 +9577,24 @@ impl Translator {
         None
     }
 
-    /// What C's `LookupLetter` makes of a symbol this language cannot name, when
-    /// English is asked to speak it inside running text: the symbol itself, or
-    /// the first word of its replacement text, and `None` when English's own
-    /// entry is missing or that word is not in its list.
-    pub(crate) fn symbol_switch_word(&self, c: char, by_name: bool) -> Option<String> {
+    pub(crate) fn load_dictionary(&self) -> Option<Dictionary> {
         let dict_stem = resolve_dict_stem(&self.data_dir, &self.options.lang)?;
         let dict_bytes = std::fs::read(dict_path(&self.data_dir, &dict_stem)?).ok()?;
         let mut dict = Dictionary::from_bytes(&dict_stem, dict_bytes).ok()?;
         dict.dict_condition = self.options.dict_condition;
+        Some(dict)
+    }
+
+    /// What C's `LookupLetter` makes of a symbol this language cannot name, when
+    /// English is asked to speak it inside running text: the symbol itself, or
+    /// the first word of its replacement text, and `None` when English's own
+    /// entry is missing or that word is not in its list.
+    pub(crate) fn symbol_switch_word(
+        &self,
+        dict: &Dictionary,
+        c: char,
+        by_name: bool,
+    ) -> Option<String> {
         let ctx = LookupCtx {
             lookup_symbol: true,
             dict_condition: self.options.dict_condition,
@@ -9719,24 +9787,9 @@ impl Translator {
         // `-v alex` used to report "not yet implemented: … dict not found",
         // which says nothing about the real problem (upstream #2469, where C
         // prints "Unknown phoneme table: ''" and then crashes).
-        let dict_stem = resolve_dict_stem(&self.data_dir, lang)
-            .ok_or_else(|| Error::VoiceNotFound(lang.to_string()))?;
-        let dict_path = dict_path(&self.data_dir, &dict_stem)
-            .ok_or_else(|| Error::VoiceNotFound(lang.to_string()))?;
-        let phontab_path = self.data_dir.join("phontab");
-
-        let dict_bytes = std::fs::read(&dict_path).map_err(Error::Io)?;
-        let mut dict = Dictionary::from_bytes(&dict_stem, dict_bytes)?;
-        dict.dict_condition = self.options.dict_condition;
-
-        if !phontab_path.exists() {
-            return Err(Error::NotImplemented("translate_to_codes: phontab not found"));
-        }
-        let mut phdata = PhonemeData::load(&self.data_dir)?;
-        // The table is usually named after the language; a few voices redirect
-        // it (`phonemes <name>`, e.g. Norwegian Bokmål `nb` → `no`).
-        select_phoneme_table(&mut phdata, &self.data_dir, lang)?;
-        let stress_opts = StressOpts::for_lang_in(lang, &self.data_dir);
+        let loaded = self.loaded_data()?;
+        let (dict, phdata) = (&loaded.dict, &loaded.phdata);
+        let stress_opts = &loaded.stress_opts;
 
         // Capital-letter indication before a capitalised word (C `option_capitals`):
         //   `-k 1` → the `phonCAPITAL` *sound* (short pause + capital phoneme),
@@ -9765,12 +9818,17 @@ impl Translator {
         apply_fractions(&mut tokens, lang);
         apply_exponents(&mut tokens, lang);
         let spelled = split_abandoned_words(&mut tokens, &dict, &self.options);
-        let english: std::cell::OnceCell<Option<Translator>> = std::cell::OnceCell::new();
+        let english: std::cell::OnceCell<Option<(Translator, Dictionary)>> =
+            std::cell::OnceCell::new();
         let english_word = |c: char, by_name: bool| {
             english
-                .get_or_init(|| Translator::new("en", Some(&self.data_dir)).ok())
+                .get_or_init(|| {
+                    let en = Translator::new("en", Some(&self.data_dir)).ok()?;
+                    let dict = en.load_dictionary()?;
+                    Some((en, dict))
+                })
                 .as_ref()
-                .and_then(|en| en.symbol_switch_word(c, by_name))
+                .and_then(|(en, dict)| en.symbol_switch_word(dict, c, by_name))
         };
         let alts = letters::AltLangs::new(&self.data_dir);
         let mut entries = build_translate_entries(
@@ -9802,6 +9860,8 @@ impl Translator {
         // instead of leaking the raw marker — the same thing `text_to_ipa`
         // already does.  Translators are cached per target within the clause.
         let mut switch_cache: std::collections::HashMap<String, Translator> =
+            std::collections::HashMap::new();
+        let mut char_name_cache: std::collections::HashMap<(String, char), Option<Vec<u8>>> =
             std::collections::HashMap::new();
         let mut open_switch: Option<String> = None;
         let mut stream_tail: Option<letters::StreamTail> = None;
@@ -9863,7 +9923,11 @@ impl Translator {
                     // switched word may not switch again.
                     let sw = match char_name {
                         Some(c) => switch_cache.get(&target).and_then(|tr| {
-                            tr.char_name_phonemes(c).map(|ph| {
+                            char_name_cache
+                                .entry((target.clone(), c))
+                                .or_insert_with(|| tr.char_name_phonemes(c))
+                                .clone()
+                                .map(|ph| {
                                 ph.iter()
                                     .filter(|&&b| b != 0)
                                     .map(|&b| PhonemeCode { code: b, ..Default::default() })
@@ -10154,6 +10218,7 @@ impl Translator {
                             .iter()
                             .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
                             .filter(|t| is_word(t))
+                            .take(1)
                             .count();
                         // C drops the `$brk` pause on the last word of a clause.
                         if entry.dict_flags & FLAG_PAUSE1 != 0 && after >= 1 {
@@ -10168,6 +10233,7 @@ impl Translator {
                                 .rev()
                                 .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
                                 .filter(|t| is_word(t))
+                                .take(2)
                                 .count();
                             if before >= 2 && after >= 1 && prepause_timeout == 0 {
                                 pre_pause = 4;
@@ -10363,14 +10429,7 @@ impl Translator {
         // The voice's own `replace` substitutions match the phonemes the rules
         // wrote, so they run before the phoneme programs change them (C does
         // them at the top of `MakePhonemeList`).
-        let replacements: Vec<(u8, u8, u8)> = crate::voices::voice_replacements(&self.data_dir, lang)
-            .into_iter()
-            .filter_map(|(f, old, new)| {
-                let o = phdata.lookup_phoneme(&old);
-                let n = if new == "NULL" { 0 } else { phdata.lookup_phoneme(&new) };
-                (o != 0).then_some((f, o, n))
-            })
-            .collect();
+        let replacements = &loaded.replacements;
         let finish = |own: &mut Vec<PhonemeCode>,
                           own_flags: &mut Vec<bool>,
                           out: &mut Vec<PhonemeCode>| {
@@ -11206,17 +11265,17 @@ fn double_lengthened_consonants(
     use crate::phoneme::{PH_FRICATIVE, PH_LIQUID, PH_NASAL, PH_PAUSE, PH_VFRICATIVE};
     let is_sound = |c: &PhonemeCode| !c.is_boundary && c.marker.is_none() && c.code > 8;
     let is_word_break = |c: &PhonemeCode| c.is_boundary || c.code == crate::phoneme::PHON_END_WORD;
+    let mut clause_start = 0;
     for i in 1..codes.len() {
+        if codes[i - 1].is_boundary && codes[i - 1].code == 0 {
+            clause_start = i;
+        }
         if codes[i].is_boundary
             || codes[i].marker.is_some()
             || codes[i].code != crate::phoneme::PHON_LENGTHEN
         {
             continue;
         }
-        let clause_start = codes[..i]
-            .iter()
-            .rposition(|c| c.is_boundary && c.code == 0)
-            .map_or(0, |p| p + 1);
         let Some(prev) = codes[clause_start..i].iter().rposition(is_sound).map(|p| p + clause_start)
         else {
             continue;
@@ -11342,18 +11401,46 @@ fn apply_list_editing_instructions(
     if edits.is_empty() {
         return;
     }
-    // Apply back to front so earlier indices stay valid.
-    edits.sort_by(|a, b| b.0.cmp(&a.0).then(b.2.cmp(&a.2)));
-    let mut inserted = vec![false; codes.len()];
-    for (i, code, before) in edits {
-        let mut at = if before { i } else { i + 1 };
-        while !before && codes.get(at).is_some_and(|c| c.code == crate::phoneme::PHON_LENGTHEN && !c.is_boundary) {
-            at += 1;
-        }
-        codes.insert(at, PhonemeCode { code, is_boundary: false, clause_char: None , marker: None});
-        inserted.insert(at, true);
-    }
+    let inserted = splice_list_edits(codes, edits);
     change_inserted_phonemes(codes, &inserted, phdata);
+}
+
+/// Applies `(index, code, before)` edits in one pass and returns which output
+/// slots were inserted. `edits` must be sorted by index with the `before` edit
+/// first. An append lands after the original code and any lengthen marks that
+/// follow it, but between a same-index insert and the original.
+fn splice_list_edits(codes: &mut Vec<PhonemeCode>, edits: Vec<(usize, u8, bool)>) -> Vec<bool> {
+    let plain = |code| PhonemeCode { code, is_boundary: false, clause_char: None, marker: None };
+    let is_lengthen =
+        |c: &PhonemeCode| c.code == crate::phoneme::PHON_LENGTHEN && !c.is_boundary;
+    let old = std::mem::take(codes);
+    let mut inserted = Vec::with_capacity(old.len() + edits.len());
+    let mut deferred: Option<u8> = None;
+    let mut pending = edits.into_iter().peekable();
+    for (j, orig) in old.into_iter().enumerate() {
+        if !is_lengthen(&orig) {
+            if let Some(c) = deferred.take() {
+                codes.push(plain(c));
+                inserted.push(true);
+            }
+        }
+        let (mut pre, mut post) = (None, None);
+        while let Some((_, c, before)) = pending.next_if(|e| e.0 == j) {
+            if before { pre = Some(c) } else { post = Some(c) }
+        }
+        for c in pre.into_iter().chain(pre.and(post)) {
+            codes.push(plain(c));
+            inserted.push(true);
+        }
+        codes.push(orig);
+        inserted.push(false);
+        deferred = deferred.or(post.filter(|_| pre.is_none()));
+    }
+    if let Some(c) = deferred {
+        codes.push(plain(c));
+        inserted.push(true);
+    }
+    inserted
 }
 
 /// C interprets an inserted phoneme like any other in the list loop
