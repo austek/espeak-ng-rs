@@ -55,6 +55,7 @@ jobs:
           --test dot_run_ellipsis
           --test robustness_tone_sandhi
           --test robustness_linear_time
+          --test robustness_wav_stream
           --test number_apostrophe_suffix
           --test tr_phoneme_program_context
           --test tr_next_phoneme_word_end

@@ -6349,6 +6349,36 @@ fn ellipsis_for_dot_runs(text: &str) -> std::borrow::Cow<'_, str> {
     std::borrow::Cow::Owned(out)
 }
 
+const TRANSLATE_PIECE_BYTES: usize = 64 * 1024;
+const MAX_RESERVED_CODES: usize = 8 * 1024 * 1024;
+
+/// Splits `text` into pieces of at least `limit` bytes (except the last), each
+/// ending at a sentence end that no number, initial or abbreviation can fake: a
+/// `.`, `!` or `?` after a word of four or more letters, then whitespace.
+fn split_after_sentences(text: &str, limit: usize) -> Vec<&str> {
+    let bytes = text.as_bytes();
+    let ends_sentence = |i: usize| {
+        matches!(bytes[i], b'.' | b'!' | b'?')
+            && bytes.get(i + 1).is_some_and(u8::is_ascii_whitespace)
+            && i >= 4
+            && bytes[i - 4..i].iter().all(|b| b.is_ascii_alphabetic())
+    };
+    let mut pieces = Vec::new();
+    let mut start = 0;
+    while text.len() - start > limit {
+        let Some(end) = (start + limit..bytes.len()).find(|&i| ends_sentence(i)).map(|i| {
+            let blanks = bytes[i + 1..].iter().take_while(|b| b.is_ascii_whitespace()).count();
+            i + 1 + blanks
+        }) else {
+            break;
+        };
+        pieces.push(&text[start..end]);
+        start = end;
+    }
+    pieces.push(&text[start..]);
+    pieces
+}
+
 /// Whether an ASCII clause punctuation mark `c` ends the clause, given the
 /// text after it: C needs a space, a bracket, a `?` or the end of the text
 /// (after skipping a run of `?` and `!`), and otherwise reads the mark inside
@@ -9767,7 +9797,29 @@ impl Translator {
         text: &str,
         allow_switch: bool,
     ) -> Result<Vec<PhonemeCode>> {
-        self.translate_to_codes_tracked(text, allow_switch, None)
+        self.translate_in_pieces(text, allow_switch, TRANSLATE_PIECE_BYTES)
+    }
+
+    /// Translates long text a sentence-bounded piece at a time, so the token and
+    /// entry lists of the whole input never exist together; only the finished
+    /// phoneme codes accumulate.
+    pub(crate) fn translate_in_pieces(
+        &self,
+        text: &str,
+        allow_switch: bool,
+        limit: usize,
+    ) -> Result<Vec<PhonemeCode>> {
+        let pieces = split_after_sentences(text, limit);
+        if let [only] = pieces[..] {
+            return self.translate_to_codes_tracked(only, allow_switch, None);
+        }
+        // About one code per input byte; reserving up front avoids the
+        // doubling reallocation that would hold two copies at the peak.
+        let mut codes = Vec::with_capacity((text.len() / 4 * 5).min(MAX_RESERVED_CODES));
+        for piece in pieces {
+            codes.extend(self.translate_to_codes_tracked(piece, allow_switch, None)?);
+        }
+        Ok(codes)
     }
 
     /// [`translate_to_codes_inner`](Self::translate_to_codes_inner) with an
@@ -12163,6 +12215,40 @@ mod tests {
         assert!(
             (ClauseFlags::INTONATION_MASK & ClauseFlags::TYPE_MASK).is_empty()
         );
+    }
+
+    #[test]
+    fn piecewise_translation_matches_whole_text() {
+        let samples = [
+            ("en", "The quick brown fox jumps over the lazy dog, then 42 cats sat quietly. Where did everyone go? Nobody knows! "),
+            ("de", "Guten Morgen miteinander. Heute scheint die Sonne wirklich schoen! Habt ihr das gesehen? "),
+            ("fr", "Bonjour tout le monde. Il fait vraiment beau aujourd'hui! Avez-vous vu cela? "),
+            ("es", "Buenos dias a todos. Hoy hace muy buen tiempo! Habeis visto eso? "),
+        ];
+        for (lang, sentence) in samples {
+            let Ok(t) = Translator::new(lang, Some(Path::new("espeak-ng-data"))) else { continue };
+            let text = sentence.repeat(12);
+            let (Ok(whole), Ok(pieces)) =
+                (t.translate_in_pieces(&text, true, usize::MAX), t.translate_in_pieces(&text, true, 200))
+            else {
+                continue;
+            };
+            let first = whole.iter().zip(&pieces).position(|(a, b)| a != b);
+            let window = |v: &[PhonemeCode], at: usize| {
+                v[at.saturating_sub(4)..(at + 4).min(v.len())]
+                    .iter()
+                    .map(|c| (c.code, c.is_boundary, c.clause_char))
+                    .collect::<Vec<_>>()
+            };
+            assert!(
+                whole == pieces,
+                "{lang}: lens {} vs {}, first diff {first:?}: {:?} vs {:?}",
+                whole.len(),
+                pieces.len(),
+                first.map(|i| window(&whole, i)),
+                first.map(|i| window(&pieces, i)),
+            );
+        }
     }
 
     #[test]

@@ -1098,7 +1098,7 @@ fn annotate_codes(
     phdata: &crate::phoneme::PhonemeData,
     speed_factor: f64,
 ) -> Vec<AnnCode> {
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(codes.len());
 
     // Helper: get ph_type and length_mod of a real phoneme code
     let ph_info = |c: u8| -> (u8, u8, u8) {
@@ -1115,7 +1115,8 @@ fn annotate_codes(
     // aside, keyed by the index of the code they precede, so they can be
     // re-inserted in order.
     let mut pending_embedded: Vec<(usize, crate::translate::EmbeddedCmd)> = Vec::new();
-    let codes: Vec<crate::translate::PhonemeCode> = {
+    // The flat (code, is_boundary) list is what the look-ahead walks.
+    let flat: Vec<(u8, bool)> = {
         let mut kept = Vec::with_capacity(codes.len());
         for c in codes {
             match &c.marker {
@@ -1123,15 +1124,11 @@ fn annotate_codes(
                     pending_embedded.push((kept.len(), *cmd));
                 }
                 Some(_) => {}
-                None => kept.push(c.clone()),
+                None => kept.push((c.code, c.is_boundary)),
             }
         }
         kept
     };
-    let codes = &codes[..];
-
-    // Build a flat list of (code, is_boundary) for look-ahead
-    let flat: Vec<(u8, bool)> = codes.iter().map(|c| (c.code, c.is_boundary)).collect();
     let n = flat.len();
 
     let mut i = 0;

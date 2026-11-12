@@ -277,23 +277,23 @@ fn run() -> std::io::Result<()> {
         }
     }
 
-    let (pcm, rate) = engine.synth(&text).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, format!("{e}"))
-    })?;
-
-    if cli.stdout_wav || cli.wave_out.is_some() {
-        let mut buf = Vec::new();
-        write_wav_16_mono(&mut buf, &pcm, rate).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("{e}"))
-        })?;
-        if cli.stdout_wav {
-            std::io::stdout().write_all(&buf)?;
-        } else if let Some(ref p) = cli.wave_out {
-            write_wave_file(p, &buf);
-        }
-        return Ok(());
+    if cli.stdout_wav {
+        return stream_wav(&engine, &text, wav_stdout_target());
+    }
+    if let Some(ref p) = cli.wave_out {
+        return match std::fs::File::create(p) {
+            Ok(file) => {
+                let file = std::io::BufWriter::with_capacity(1 << 16, file);
+                stream_wav(&engine, &text, Box::new(file) as Box<dyn WavOut>)
+            }
+            Err(_) => {
+                eprintln!("Can't write to: '{}'", p.display());
+                Ok(())
+            }
+        };
     }
 
+    let _ = engine.synth(&text).map_err(std::io::Error::other)?;
     fail_with(ENS_AUDIO_ERROR)
 }
 
@@ -1319,23 +1319,9 @@ fn write_split_wavs(
 }
 
 fn write_wav_16_mono(w: &mut Vec<u8>, samples: &[i16], sample_rate: u32) -> std::io::Result<()> {
-    let data_bytes = samples.len().saturating_mul(2);
-    let riff_len = 36u32 + data_bytes as u32;
-
+    let data_bytes = samples.len().saturating_mul(2) as u64;
     w.clear();
-    w.extend_from_slice(b"RIFF");
-    w.extend_from_slice(&riff_len.to_le_bytes());
-    w.extend_from_slice(b"WAVEfmt ");
-    w.extend_from_slice(&16u32.to_le_bytes());
-    w.extend_from_slice(&1u16.to_le_bytes());
-    w.extend_from_slice(&1u16.to_le_bytes());
-    w.extend_from_slice(&sample_rate.to_le_bytes());
-    let byte_rate = sample_rate * 2;
-    w.extend_from_slice(&byte_rate.to_le_bytes());
-    w.extend_from_slice(&2u16.to_le_bytes());
-    w.extend_from_slice(&16u16.to_le_bytes());
-    w.extend_from_slice(b"data");
-    w.extend_from_slice(&(data_bytes as u32).to_le_bytes());
+    w.extend_from_slice(&wav_header(sample_rate, Some(data_bytes)));
     for &s in samples {
         w.extend_from_slice(&s.to_le_bytes());
     }
@@ -1396,6 +1382,98 @@ fn add_encoding_flag(current: Option<u32>, arg: &str) -> Option<u32> {
         _ => 2,
     };
     Some(current.unwrap_or(0) | flag).filter(|&f| f != 0)
+}
+
+/// The 44-byte header of a 16-bit mono WAV. `None` writes the placeholder sizes
+/// upstream uses when the length is not known yet (a pipe).
+fn wav_header(sample_rate: u32, data_bytes: Option<u64>) -> [u8; 44] {
+    let (riff_len, data_len) = match data_bytes {
+        Some(n) => {
+            let n = u32::try_from(n).unwrap_or(u32::MAX);
+            (n.saturating_add(36), n)
+        }
+        None => (0x7fff_ff24, 0x7fff_f000),
+    };
+    let mut h = Vec::with_capacity(44);
+    h.extend_from_slice(b"RIFF");
+    h.extend_from_slice(&riff_len.to_le_bytes());
+    h.extend_from_slice(b"WAVEfmt ");
+    h.extend_from_slice(&16u32.to_le_bytes());
+    h.extend_from_slice(&1u16.to_le_bytes());
+    h.extend_from_slice(&1u16.to_le_bytes());
+    h.extend_from_slice(&sample_rate.to_le_bytes());
+    h.extend_from_slice(&sample_rate.saturating_mul(2).to_le_bytes());
+    h.extend_from_slice(&2u16.to_le_bytes());
+    h.extend_from_slice(&16u16.to_le_bytes());
+    h.extend_from_slice(b"data");
+    h.extend_from_slice(&data_len.to_le_bytes());
+    h.try_into().expect("header is 44 bytes")
+}
+
+/// A WAV destination that can have its header sizes patched once the length is
+/// known (a file), or cannot (a pipe).
+trait WavOut: std::io::Write {
+    fn patch_header(&mut self, header: &[u8; 44]) -> std::io::Result<bool>;
+}
+
+impl WavOut for std::io::BufWriter<std::fs::File> {
+    fn patch_header(&mut self, header: &[u8; 44]) -> std::io::Result<bool> {
+        use std::io::{Seek, SeekFrom};
+        self.seek(SeekFrom::Start(0))?;
+        self.write_all(header)?;
+        self.flush()?;
+        Ok(true)
+    }
+}
+
+impl WavOut for std::io::BufWriter<std::io::Stdout> {
+    fn patch_header(&mut self, _header: &[u8; 44]) -> std::io::Result<bool> {
+        Ok(false)
+    }
+}
+
+/// Standard output as a WAV destination: patchable when it is redirected to a
+/// regular file, a plain stream when it is a pipe or terminal.
+fn wav_stdout_target() -> Box<dyn WavOut> {
+    #[cfg(unix)]
+    {
+        use std::io::Seek;
+        use std::os::fd::AsFd;
+        let seekable = std::io::stdout()
+            .as_fd()
+            .try_clone_to_owned()
+            .map(std::fs::File::from)
+            .and_then(|mut f| f.stream_position().map(|_| f));
+        if let Ok(file) = seekable {
+            return Box::new(std::io::BufWriter::with_capacity(1 << 16, file));
+        }
+    }
+    Box::new(std::io::BufWriter::with_capacity(1 << 16, std::io::stdout()))
+}
+
+/// Writes the utterance as a WAV clause by clause, so memory stays flat however
+/// long the text is. The header is a placeholder until the length is known.
+fn stream_wav(engine: &EspeakNg, text: &str, mut out: Box<dyn WavOut>) -> std::io::Result<()> {
+    let rate = engine.sample_rate();
+    let mut written: u64 = 0;
+    let mut failure: Option<std::io::Error> = None;
+    out.write_all(&wav_header(rate, None))?;
+    let mut buf: Vec<u8> = Vec::new();
+    engine
+        .synth_streaming(text, |chunk, _final| {
+            buf.clear();
+            buf.extend(chunk.iter().flat_map(|s| s.to_le_bytes()));
+            written += buf.len() as u64;
+            failure = out.write_all(&buf).err();
+            failure.is_some()
+        })
+        .map_err(std::io::Error::other)?;
+    if let Some(e) = failure {
+        return Err(e);
+    }
+    out.flush()?;
+    out.patch_header(&wav_header(rate, Some(written)))?;
+    Ok(())
 }
 
 fn parse_args(args: Vec<OsString>) -> Cli {
