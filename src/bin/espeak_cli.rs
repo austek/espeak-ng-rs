@@ -133,11 +133,13 @@ fn run() -> std::io::Result<()> {
     // line reaches the synthesizer below; the rest of a language's settings
     // still come from the data directory.
     let mut loaded_pitch = None;
+    let mut loaded_voice = None;
     if cli.load_voice {
         let path = PathBuf::from(cli.voice_raw.as_deref().unwrap_or(&cli.voice));
         match espeak_ng::voices::load_voice_file(&path) {
             Some(v) => {
                 loaded_pitch = v.pitch;
+                loaded_voice = Some(v.clone());
                 let data = resolved_data_dir(cli.path_override.as_deref());
                 let want = v.dictionary.clone().unwrap_or_else(|| v.language.clone());
                 cli.voice = espeak_ng::translate::resolve_dict_stem(&data, &want)
@@ -222,6 +224,7 @@ fn run() -> std::io::Result<()> {
         std::io::Error::new(std::io::ErrorKind::Other, format!("{e}"))
     })?;
     apply_runtime_params(&mut engine, &cli);
+    engine.set_voice_file(loaded_voice);
     if let Some(p) = loaded_pitch {
         engine.set_voice_pitch(Some(p));
     }

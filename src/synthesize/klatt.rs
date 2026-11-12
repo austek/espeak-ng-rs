@@ -957,6 +957,7 @@ pub fn synthesize_frames_klatt(
     frames: &[super::phondata::SpectFrame],
     amps: &[f64],
     pitch: &[f64],
+    duration_scale: &[f64],
     sample_rate: u32,
 ) -> Vec<i32> {
     use super::phondata::FRFLAG_KLATT;
@@ -967,7 +968,11 @@ pub fn synthesize_frames_klatt(
 
     for (fi, fr) in frames.iter().enumerate() {
         let next = frames.get(fi + 1).unwrap_or(fr);
-        let length = fr.length as usize * STEPSIZE;
+        let length = if fr.length == 0 {
+            0
+        } else {
+            fr.dur_samples(duration_scale.get(fi).copied().unwrap_or(1.0))
+        };
         if length == 0 {
             continue;
         }
@@ -1215,7 +1220,7 @@ mod tests {
     fn klatt_frames_pcm(frames: &[crate::synthesize::phondata::SpectFrame]) -> Vec<i32> {
         let amps = vec![1.0; frames.len()];
         let pitch = vec![120.0; frames.len()];
-        synthesize_frames_klatt(frames, &amps, &pitch, 22_050)
+        synthesize_frames_klatt(frames, &amps, &pitch, &[], 22_050)
     }
 
     /// Mean DFT magnitude over a frequency band — a band has to be summed

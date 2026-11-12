@@ -81,6 +81,71 @@ pub struct VoiceEntry {
     pub brackets: Option<u8>,
     /// See [`Self::brackets`] — the `--punct` value.
     pub brackets_announced: Option<u8>,
+    /// `stressAdd <a0…a7>` — added to the language's stress lengths.
+    pub stress_add: Vec<i32>,
+    /// `stressAmp <a0…a7>` — replaces the stress amplitudes it lists.
+    pub stress_amp: Vec<i32>,
+    /// `speed <percent>` — scales the words-per-minute rate.
+    pub speed: Option<i32>,
+    /// `clarity <n>` — harmonic peaks (`n_harmonic_peaks = 1 + min(n, 4)`);
+    /// above 4 also selects the squarer peak shape.
+    pub clarity: Option<i32>,
+    /// `klatt <source> …` — `voice->klattv` after C's `Kopen -= 40` adjustment;
+    /// a non-zero first entry selects the Klatt synthesizer.
+    pub klatt: Option<[i32; 8]>,
+    /// `apostrophe <bits>` — bit 0 keeps a word-initial apostrophe, bit 1 a
+    /// word-final one.
+    pub apostrophe: Option<i32>,
+    /// `lowercaseSentence` — a period before a lowercase letter ends a sentence.
+    pub lowercase_sentence: bool,
+    /// `numbers <n…>` — `(numbers, numbers2)` option bits, `n < 32` in the first
+    /// word and `32 <= n < 64` in the second.
+    pub numbers: (u32, u32),
+    /// `tunes <s> <c> <q> <e> …` — tune names for the clause types; `NULL` keeps
+    /// the default.
+    pub tunes: Vec<String>,
+    /// `variants <n>` — how many variants `--voices` lists for this voice.
+    pub variants: Option<i32>,
+    /// `dict_min <n>` — smallest dictionary the language accepts.
+    pub dict_min: Option<i32>,
+    /// `l_<option> <n>` language options (`l_dieresis`, `l_prefix`, …) as
+    /// `(keyword, value)`.
+    pub lang_options: Vec<(String, i32)>,
+    /// `status` metadata line.
+    pub status: String,
+    /// `maintainer` metadata line.
+    pub maintainer: String,
+}
+
+/// Leading integers of a keyword's arguments, at most `max` of them — what
+/// C's `sscanf("%d %d …")` reads before the first token that is not a number.
+fn read_ints<'a>(rest: impl Iterator<Item = &'a str>, max: usize) -> Vec<i32> {
+    rest.map_while(|t| t.parse::<i32>().ok()).take(max).collect()
+}
+
+fn first<'a>(rest: impl Iterator<Item = &'a str>) -> Option<i32> {
+    read_ints(rest, 1).first().copied()
+}
+
+/// `voice->klattv` for a `klatt` line: eight numbers, zero-filled, with
+/// `Kopen` (index 5) reduced by 40.
+fn klatt_values<'a>(rest: impl Iterator<Item = &'a str>) -> [i32; 8] {
+    let mut v = [0i32; 8];
+    for (slot, n) in v.iter_mut().zip(read_ints(rest, 8)) {
+        *slot = n;
+    }
+    v[5] -= 40;
+    v
+}
+
+/// C's `ReadNumbers`-style bit list for `numbers`: each positive number below
+/// 32 sets that bit of the first word, 32..63 the second.
+fn number_bits<'a>(rest: impl Iterator<Item = &'a str>) -> (u32, u32) {
+    rest.filter_map(|t| t.parse::<u32>().ok()).fold((0, 0), |(a, b), n| match n {
+        1..=31 => (a | (1 << n), b),
+        32..=63 => (a, b | (1 << (n - 32))),
+        _ => (a, b),
+    })
 }
 
 /// Enumerate every voice under `<data_dir>/lang/`, sorted by language code then
@@ -234,6 +299,7 @@ fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
     let mut dict_rules: Vec<u8> = Vec::new();
     let mut brackets: Option<u8> = None;
     let mut brackets_announced: Option<u8> = None;
+    let mut extra = VoiceExtras::default();
 
     for line in text.lines() {
         let line = line.trim();
@@ -242,6 +308,9 @@ fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
         }
         let mut it = line.split_whitespace();
         let Some(key) = it.next() else { continue };
+        if extra.read_keyword(key, it.clone()) {
+            continue;
+        }
         match key {
             "name" => name = it.collect::<Vec<_>>().join(" "),
             "language" => {
@@ -341,8 +410,75 @@ fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
         dict_rules,
         brackets,
         brackets_announced,
+        stress_add: extra.stress_add,
+        stress_amp: extra.stress_amp,
+        speed: extra.speed,
+        clarity: extra.clarity,
+        klatt: extra.klatt,
+        apostrophe: extra.apostrophe,
+        lowercase_sentence: extra.lowercase_sentence,
+        numbers: extra.numbers,
+        tunes: extra.tunes,
+        variants: extra.variants,
+        dict_min: extra.dict_min,
+        lang_options: extra.lang_options,
+        status: extra.status,
+        maintainer: extra.maintainer,
     })
 }
+
+/// The keywords a language file and a variant file share and read the same way.
+#[derive(Debug, Default)]
+struct VoiceExtras {
+    stress_add: Vec<i32>,
+    stress_amp: Vec<i32>,
+    speed: Option<i32>,
+    clarity: Option<i32>,
+    klatt: Option<[i32; 8]>,
+    apostrophe: Option<i32>,
+    lowercase_sentence: bool,
+    numbers: (u32, u32),
+    tunes: Vec<String>,
+    variants: Option<i32>,
+    dict_min: Option<i32>,
+    lang_options: Vec<(String, i32)>,
+    status: String,
+    maintainer: String,
+}
+
+impl VoiceExtras {
+    /// Read `key` if it is one of the shared keywords; `false` if it is not.
+    fn read_keyword<'a>(&mut self, key: &str, rest: impl Iterator<Item = &'a str> + Clone) -> bool {
+        match key {
+            "stressAdd" => self.stress_add = read_ints(rest, 8),
+            "stressAmp" => self.stress_amp = read_ints(rest, 8),
+            "speed" => self.speed = first(rest).or(self.speed),
+            "clarity" => self.clarity = first(rest).or(self.clarity),
+            "klatt" => self.klatt = Some(klatt_values(rest)),
+            "apostrophe" => self.apostrophe = first(rest).or(self.apostrophe),
+            "lowercaseSentence" => self.lowercase_sentence = true,
+            "numbers" => {
+                let (a, b) = number_bits(rest);
+                self.numbers = (self.numbers.0 | a, self.numbers.1 | b);
+            }
+            "tunes" => self.tunes = rest.take(6).map(str::to_string).collect(),
+            "variants" => self.variants = first(rest).or(self.variants),
+            "dict_min" => self.dict_min = first(rest).or(self.dict_min),
+            "status" => self.status = rest.collect::<Vec<_>>().join(" "),
+            "maintainer" => self.maintainer = rest.collect::<Vec<_>>().join(" "),
+            k if k.starts_with("l_") && LANG_OPTION_KEYS.contains(&k) => {
+                if let Some(n) = first(rest) {
+                    self.lang_options.push((k.to_string(), n));
+                }
+            }
+            _ => return false,
+        }
+        true
+    }
+}
+
+const LANG_OPTION_KEYS: [&str; 5] =
+    ["l_dieresis", "l_prefix", "l_regressive_v", "l_unpronouncable", "l_sonorant_min"];
 
 /// The `stressRule` numbers from a language's voice file, if it sets them.
 ///
@@ -575,6 +711,13 @@ pub struct VariantParams {
     pub breath: Vec<i32>,
     /// `breathw …`.
     pub breathw: Vec<i32>,
+    /// `speed <percent>`.
+    pub speed: Option<i32>,
+    /// `clarity <n>`.
+    pub clarity: Option<i32>,
+    /// `klatt <source> …` after C's `Kopen -= 40`; non-zero first entry selects
+    /// the Klatt synthesizer.
+    pub klatt: Option<[i32; 8]>,
 }
 
 /// The `!v/` file a `+variant` suffix names: a number 1-9 is `m<n>`, 11 and up
@@ -684,6 +827,9 @@ fn parse_variant(text: &str) -> Option<VariantParams> {
             "stressadd" | "stressAdd" => v.stress_add = ints(it),
             "breath" => v.breath = ints(it),
             "breathw" => v.breathw = ints(it),
+            "speed" => v.speed = read_ints(it, 1).first().copied().or(v.speed),
+            "clarity" => v.clarity = read_ints(it, 1).first().copied().or(v.clarity),
+            "klatt" => v.klatt = Some(klatt_values(it)),
             _ => {}
         }
     }

@@ -329,6 +329,7 @@ pub struct EspeakNg {
     /// A `pitch <base> <range>` taken from a voice *file* rather than from the
     /// data directory (`--load`).  `None` = look the language's up as usual.
     voice_pitch: Option<(i32, i32)>,
+    voice_file: Option<crate::voices::VoiceEntry>,
     /// Post-synthesis tempo scale (libsonic, `1.0` = off): `>1` faster/shorter,
     /// pitch preserved.  Applied to the final PCM in [`synth`](Self::synth).
     post_tempo: f64,
@@ -389,6 +390,7 @@ impl EspeakNg {
             markup:     false,
             ssml_break: 100,
             voice_pitch: None,
+            voice_file: None,
             post_tempo: 1.0,
             post_pitch: 1.0,
         })
@@ -550,6 +552,12 @@ impl EspeakNg {
     /// definition from a file (`--load`).  `None` restores the lookup.
     pub fn set_voice_pitch(&mut self, pitch: Option<(i32, i32)>) {
         self.voice_pitch = pitch;
+    }
+
+    /// Use a voice definition read from a file (`--load`) for the acoustic
+    /// keywords it sets (`stressAdd`, `speed`, `klatt`, …).
+    pub fn set_voice_file(&mut self, voice: Option<crate::voices::VoiceEntry>) {
+        self.voice_file = voice;
     }
 
     /// Suppress (or restore) the end-of-utterance trailing silence (`-z`).
@@ -1046,7 +1054,35 @@ impl EspeakNg {
     }
 
 
+    /// The voice definition behind the selected language: the file given to
+    /// [`set_voice_file`](Self::set_voice_file), else the installed voice.
+    fn base_voice_entry(&self) -> Option<crate::voices::VoiceEntry> {
+        self.voice_file.clone().or_else(|| {
+            let lang = self.voice_spec.effective_lang();
+            crate::voices::list_voices(&self.data_dir)
+                .into_iter()
+                .find(|v| v.language.eq_ignore_ascii_case(lang))
+        })
+    }
+
     fn make_voice_params_levels(&self, rate: u32, pitch: u32, volume: u32) -> VoiceParams {
+        let entry = self.base_voice_entry();
+        let variant = self
+            .voice_spec
+            .variant
+            .as_deref()
+            .and_then(|v| crate::voices::load_variant(&self.data_dir, v));
+        let speed = variant.as_ref().and_then(|v| v.speed).or(entry.as_ref().and_then(|e| e.speed));
+        let rate = speed.filter(|&s| s > 0).map_or(rate, |s| (rate as i64 * s as i64 / 100) as u32);
+        let stress_lengths = stress_lengths_with_adds(
+            entry.as_ref(),
+            variant.as_ref().map_or(&[][..], |v| &v.stress_add),
+        );
+        let klatt = variant
+            .as_ref()
+            .and_then(|v| v.klatt)
+            .or(entry.as_ref().and_then(|e| e.klatt))
+            .is_some_and(|k| k[0] != 0);
         // Map rate (wpm) to `speed_percent` through upstream's `speed_lookup`
         // curve rather than linearly: `175 / wpm` over-stretched below ~100 wpm,
         // where upstream's curve flattens towards its 80 wpm floor.  A larger
@@ -1142,20 +1178,8 @@ impl EspeakNg {
             formant_factor,
             // `stressLength <l0…l7>` from the language's voice file, when it
             // declares one (the built-in table is English's).
-            stress_lengths: crate::voices::voice_stress_length(
-                &self.data_dir,
-                self.voice_spec.effective_lang(),
-            )
-            .and_then(|v| {
-                let mut out = [0u32; 8];
-                // C reads eight values; a short list leaves the rest at the
-                // English default rather than at zero.
-                out.copy_from_slice(&crate::synthesize::setlengths::STRESS_LENGTHS_EN);
-                for (i, &x) in v.iter().take(8).enumerate() {
-                    out[i] = x.max(0) as u32;
-                }
-                (v.len() >= 8).then_some(out)
-            }),
+            stress_lengths,
+            klatt,
             // `intonation <n>` from the language's voice file, when it sets one
             // (upstream #1466: read the language configuration from data).
             // `intonation <n>` from the language's voice file, when it sets one
@@ -1177,6 +1201,30 @@ impl EspeakNg {
             ..VoiceParams::default()
         }
     }
+}
+
+/// The language's stress lengths after the voice file's `stressLength`
+/// (replaces the first entries it lists) and the `stressAdd` lines of the voice
+/// file and variant (added entry by entry); `None` when none of them is set.
+fn stress_lengths_with_adds(
+    entry: Option<&crate::voices::VoiceEntry>,
+    variant_add: &[i32],
+) -> Option<[u32; 8]> {
+    let set = entry.and_then(|e| e.stress_length.as_deref()).unwrap_or(&[]);
+    let file_add = entry.map_or(&[][..], |e| &e.stress_add);
+    if set.is_empty() && file_add.is_empty() && variant_add.is_empty() {
+        return None;
+    }
+    let mut out = crate::synthesize::setlengths::STRESS_LENGTHS_EN.map(|x| x as i32);
+    for (slot, &x) in out.iter_mut().zip(set) {
+        *slot = x;
+    }
+    for add in [file_add, variant_add] {
+        for (slot, &x) in out.iter_mut().zip(add) {
+            *slot += x;
+        }
+    }
+    Some(out.map(|x| x.max(0) as u32))
 }
 
 /// Scale a base pitch (Hz) by a variant voice's `pitch <base> <range>`

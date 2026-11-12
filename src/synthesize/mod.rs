@@ -1626,7 +1626,11 @@ fn flush_run(
     // accuracy on average across an eight-sentence sweep (4.19 → 2.79 dB RMS,
     // correlation 0.938 → 0.945), and 9.6 dB on "hello world" alone.
     let raw = if voice.klatt {
-        klatt::synthesize_frames_klatt(run_frames, run_amps, run_pitch, voice.sample_rate)
+        let speed_factor = 100.0 / voice.speed_percent.max(1) as f64;
+        let scale: Vec<f64> = (0..run_frames.len())
+            .map(|i| speed_factor * run_speed.get(i).copied().unwrap_or(1.0))
+            .collect();
+        klatt::synthesize_frames_klatt(run_frames, run_amps, run_pitch, &scale, voice.sample_rate)
     } else {
         wavegen::synthesize_frames_seq(
             run_frames, run_amps, run_pitch, run_speed, voice, wavephase,
