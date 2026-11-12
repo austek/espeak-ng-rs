@@ -1,0 +1,23 @@
+[package]
+name = "espeak-ng-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.espeak-ng]
+path = ".."
+
+[workspace]
+
+[[bin]]
+name = "translate_text"
+path = "fuzz_targets/translate_text.rs"
+test = false
+doc = false
+bench = false
