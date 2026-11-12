@@ -532,28 +532,128 @@ fn run_compile_mbrola(src_arg: &str, cli: &Cli) -> std::io::Result<()> {
     Ok(())
 }
 
-/// `--voices` / `--voices=<lang>`: print the available voices as a table,
-/// optionally filtered to those whose language code starts with the argument.
+type Voice = espeak_ng::voices::VoiceEntry;
+
+/// C's `ScoreVoice` for a language-only request (`spec` is lower-cased).
+fn voice_language_score(spec: &str, v: &Voice) -> i32 {
+    let spec_parts = 1 + spec.matches('-').count() as i32;
+    let base = v
+        .languages
+        .iter()
+        .map(|(code, prio)| language_code_score(spec, spec_parts, code, *prio))
+        .fold(0, i32::max);
+    if base == 0 {
+        return 0;
+    }
+    (base + gender_age_bonus(v)).max(1)
+}
+
+fn language_code_score(spec: &str, spec_parts: i32, code: &str, prio: u8) -> i32 {
+    let code_parts = 1 + code.matches('-').count() as i32;
+    let matching = count_matching_parts(spec, code);
+    if matching == 0 {
+        return 0;
+    }
+    let x = 5 - (spec_parts - matching).max(0) - (code_parts - matching).max(0);
+    x * 100 - i32::from(prio) * 2
+}
+
+/// Parts of `code` that equal the same-position part of `spec`, counted the
+/// way C does: each part ending in `-` while all earlier characters matched,
+/// plus the whole string if it matched to the end.
+fn count_matching_parts(spec: &str, code: &str) -> i32 {
+    let (s, c) = (spec.as_bytes(), code.as_bytes());
+    let mut matching = true;
+    let mut parts = 0;
+    for ix in 0..=c.len() {
+        let c1 = match s.get(ix) { Some(b'-') | None => 0, Some(&b) => b };
+        let raw = c.get(ix).copied().unwrap_or(0);
+        let c2 = if raw == b'-' { 0 } else { raw };
+        matching &= c1 == c2;
+        if raw == b'-' && matching {
+            parts += 1;
+        }
+    }
+    parts + i32::from(matching)
+}
+
+fn gender_age_bonus(v: &Voice) -> i32 {
+    let female_bonus = if v.gender == 'F' && v.age > 12 { 5 } else { 0 };
+    if v.age == 0 {
+        return female_bonus;
+    }
+    let age = i32::from(v.age);
+    let ratio = 3000 / age;
+    let ratio = if ratio < 100 { 10000 / ratio } else { ratio };
+    female_bonus + (5 - (ratio - 100) / 10).min(0)
+}
+
+/// `espeak_ListVoices`: all voices by language, priority and name, or the
+/// voices matching a language request by descending score then name.
+fn listed_voices(data: &Path, all: Vec<Voice>, filter: Option<&str>) -> Vec<Voice> {
+    let mut all = all;
+    all.sort_by(|a, b| {
+        a.language
+            .cmp(&b.language)
+            .then(a.priority.cmp(&b.priority))
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    let Some(f) = filter.filter(|f| !f.is_empty()) else {
+        all.retain(|v| v.language != "variant" && !v.file.starts_with("mb/"));
+        return all;
+    };
+    if f.starts_with("all") {
+        return all;
+    }
+    let spec = f.to_ascii_lowercase();
+    let spec = if spec == "mbrola" { "mb".to_string() } else { spec };
+    let dir_prefix = (!spec.contains('-') && data.join("voices").join(&spec).is_dir())
+        .then(|| format!("{spec}/"));
+    let score = |v: &Voice| match &dir_prefix {
+        Some(p) => if v.file.starts_with(p.as_str()) { 100 } else { 0 },
+        None => voice_language_score(&spec, v),
+    };
+    let mut scored: Vec<(i32, Voice)> = all
+        .into_iter()
+        .map(|v| (score(&v), v))
+        .filter(|(s, _)| *s > 0)
+        .collect();
+    scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.name.cmp(&b.1.name)));
+    scored.into_iter().map(|(_, v)| v).collect()
+}
+
+fn pad_bytes(s: &str, width: usize) -> String {
+    format!("{s}{}", " ".repeat(width.saturating_sub(s.len())))
+}
+
+fn voice_line(v: &Voice) -> String {
+    let age = if v.age == 0 { " --".to_string() } else { format!("{:>3}", v.age) };
+    let name = v.name.replace(' ', "_");
+    let mut line = format!(
+        "{:>2}  {}{}/{}      {} {} ",
+        v.languages[0].1,
+        pad_bytes(&v.languages[0].0, 15),
+        age,
+        v.gender,
+        pad_bytes(&name, 18),
+        pad_bytes(&v.file, 20),
+    );
+    for (code, prio) in &v.languages[1..] {
+        line.push_str(&format!("({code} {prio})"));
+    }
+    line
+}
+
+/// `--voices[=<lang>]`, byte for byte as C's `DisplayVoices`.
 fn print_voices(cli: &Cli) {
     let data = resolved_data_dir(cli.path_override.as_deref());
-    let voices = espeak_ng::voices::list_voices(&data);
-    let filter = cli.voices_filter.as_deref().map(str::to_ascii_lowercase);
-
-    println!("Pty Language       Age/Gender VoiceName            File");
+    let voices =
+        listed_voices(&data, espeak_ng::voices::list_catalog(&data), cli.voices_filter.as_deref());
+    println!(
+        "Pty Language       Age/Gender VoiceName          File                 Other Languages"
+    );
     for v in &voices {
-        if let Some(ref f) = filter {
-            let hit = std::iter::once(&v.language)
-                .chain(v.other_languages.iter())
-                .any(|l| l.to_ascii_lowercase().starts_with(f.as_str()));
-            if !hit {
-                continue;
-            }
-        }
-        let age = if v.age == 0 { "--".to_string() } else { format!("{:>2}", v.age) };
-        println!(
-            "{:>2}  {:<15}{}/{}       {:<20} {}",
-            v.priority, v.language, age, v.gender, v.name, v.file
-        );
+        println!("{}", voice_line(v));
     }
 }
 

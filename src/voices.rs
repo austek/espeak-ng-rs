@@ -161,6 +161,18 @@ pub fn list_voices(data_dir: &Path) -> Vec<VoiceEntry> {
     out
 }
 
+/// Every voice file C's `espeak_ListVoices` scans: `<data_dir>/voices/` (variants
+/// and MBROLA voices included, named relative to `voices/`) followed by
+/// `<data_dir>/lang/`.  Unsorted.
+pub fn list_catalog(data_dir: &Path) -> Vec<VoiceEntry> {
+    let mut out = Vec::new();
+    for sub in ["voices", "lang"] {
+        let root = data_dir.join(sub);
+        collect_dir(&root, &root, &mut out);
+    }
+    out
+}
+
 /// A request for a voice, matched against the available [`VoiceEntry`] list.
 /// Any field left `None` is not constrained.  Mirrors the fields eSpeak NG's
 /// `SetVoiceScores` scores against.
@@ -284,7 +296,7 @@ fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
     let mut language = String::new();
     let mut other_languages = Vec::new();
     let mut languages: Vec<(String, u8)> = Vec::new();
-    let mut gender = '-';
+    let mut gender = 'M';
     let mut age = 0u8;
     let mut dictionary = None;
     let mut pitch: Option<(i32, i32)> = None;
@@ -302,8 +314,9 @@ fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
     let mut extra = VoiceExtras::default();
 
     for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with("//") {
+        let raw = line.trim_end().split("//").next().unwrap_or("");
+        let line = raw.trim();
+        if line.is_empty() {
             continue;
         }
         let mut it = line.split_whitespace();
@@ -312,7 +325,7 @@ fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
             continue;
         }
         match key {
-            "name" => name = it.collect::<Vec<_>>().join(" "),
+            "name" => name = raw.trim_start().strip_prefix("name").unwrap_or("").trim_start().to_string(),
             "language" => {
                 let Some(code) = it.next() else { continue };
                 // Optional per-line priority (default 5, eSpeak's default).
@@ -326,13 +339,10 @@ fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
                 }
             }
             "gender" => {
-                gender = match it.next().map(|g| g.to_ascii_lowercase()).as_deref() {
-                    Some("male") => 'M',
+                gender = match it.next() {
                     Some("female") => 'F',
-                    _ => '-',
+                    _ => 'M',
                 };
-            }
-            "age" => {
                 if let Some(a) = it.next().and_then(|a| a.parse::<u8>().ok()) {
                     age = a;
                 }
@@ -399,10 +409,10 @@ fn parse_voice_file(root: &Path, path: &Path) -> Option<VoiceEntry> {
     if language.is_empty() {
         return None; // not a voice definition
     }
-    if name.is_empty() {
-        name = language.clone();
-    }
     let file = path.strip_prefix(root).ok()?.to_string_lossy().replace('\\', "/");
+    if name.is_empty() {
+        name = file.clone();
+    }
     Some(VoiceEntry {
         priority, language, other_languages, languages, name, file, gender, age,
         intonation, stress_length, stress_opt, spelling_stress, pitch, dictionary, stress_rule, words, replace,
