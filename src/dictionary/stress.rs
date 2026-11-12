@@ -463,7 +463,7 @@ fn lang_name(lang: &str) -> u32 {
 /// Scans the phoneme list from the end and devoices the last consonant if it
 /// is a phVSTOP (5) or phVFRICATIVE (7) with a non-zero end_type.
 /// Stops if a vowel or pause is encountered before a voiced stop/fricative.
-pub fn apply_word_final_devoicing(phonemes: &mut Vec<u8>, phdata: &PhonemeData) {
+pub fn apply_word_final_devoicing(phonemes: &mut [u8], phdata: &PhonemeData) {
     // Find last voiced stop/fricative at word end (after all vowels)
     // Scan backwards, skipping null terminator and stress markers
     for i in (0..phonemes.len()).rev() {
@@ -502,7 +502,7 @@ pub fn apply_word_final_devoicing(phonemes: &mut Vec<u8>, phdata: &PhonemeData) 
 /// - phoneme with mnemonic "o" → replace with phoneme with mnemonic "O"
 ///
 /// This handles Turkish vowel quality under primary stress (e→ɛ, o→ɔ).
-pub fn apply_alt_stress_upgrade(phonemes: &mut Vec<u8>, phdata: &PhonemeData) {
+pub fn apply_alt_stress_upgrade(phonemes: &mut [u8], phdata: &PhonemeData) {
     apply_special_attribute2(phonemes, phdata, false)
 }
 
@@ -1216,10 +1216,8 @@ pub fn set_word_stress(
                     } else if stressflags & S_NO_DIM != 0
                         || v == 1
                         || v == vowel_count - 1
-                    {
-                        v_stress = STRESS_IS_UNSTRESSED as i32;
-                    } else if v == vowel_count - 2
-                        && vowel_stress[(vowel_count-1) as usize] <= STRESS_IS_UNSTRESSED
+                        || (v == vowel_count - 2
+                            && vowel_stress[(vowel_count-1) as usize] <= STRESS_IS_UNSTRESSED)
                     {
                         v_stress = STRESS_IS_UNSTRESSED as i32;
                     } else {
@@ -1237,7 +1235,7 @@ pub fn set_word_stress(
                 // Emit if DIMINISHED (0) or > UNSTRESSED (1)
                 let own_mark = (v_stress == STRESS_IS_DIMINISHED as i32
                     || v_stress > STRESS_IS_UNSTRESSED as i32)
-                    .then(|| STRESS_PHONEMES[v_stress.max(0).min(6) as usize]);
+                    .then(|| STRESS_PHONEMES[v_stress.clamp(0, 6) as usize]);
                 // A syllabic consonant does not consume the stress that was
                 // pending for it: the next syllable without a mark of its own
                 // takes it too.
@@ -1308,17 +1306,17 @@ pub fn change_word_stress(
 
     if new_stress >= STRESS_IS_PRIMARY as i32 {
         // Promote: find first vowel at max_stress level and raise it
-        for ix in 1..vowel_count as usize {
-            if vowel_stress[ix] as i32 >= max_stress {
-                vowel_stress[ix] = new_stress as i8;
-                break;
-            }
+        if let Some(vs) = vowel_stress[1..vowel_count as usize]
+            .iter_mut()
+            .find(|vs| **vs as i32 >= max_stress)
+        {
+            *vs = new_stress as i8;
         }
     } else {
         // Demote: lower all vowels above new_stress
-        for ix in 1..vowel_count as usize {
-            if vowel_stress[ix] as i32 > new_stress {
-                vowel_stress[ix] = new_stress as i8;
+        for vs in vowel_stress[1..vowel_count as usize].iter_mut() {
+            if *vs as i32 > new_stress {
+                *vs = new_stress as i8;
             }
         }
     }
@@ -1342,7 +1340,7 @@ pub fn change_word_stress(
         if is_vowel && v < vowel_count {
             let vs = vowel_stress[v as usize] as i32;
             if vs == STRESS_IS_DIMINISHED as i32 || vs > STRESS_IS_UNSTRESSED as i32 {
-                output.push(STRESS_PHONEMES[vs.max(0).min(6) as usize]);
+                output.push(STRESS_PHONEMES[vs.clamp(0, 6) as usize]);
             }
             v += 1;
         }

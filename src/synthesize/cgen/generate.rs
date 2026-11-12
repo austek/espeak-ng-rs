@@ -360,6 +360,7 @@ impl<'a> Generator<'a> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)] // mirrors the C AdjustFormants() argument list
     fn adjust_formants(&mut self, fr: usize, target: i32, min: i32, max: i32, f1_adj: i32, f3_adj: i32, hf_reduce: i32, flags: i32) {
         let target = target * self.voice.formant_factor / 256;
         let f = &mut self.frames[fr];

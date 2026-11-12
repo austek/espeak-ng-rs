@@ -65,11 +65,6 @@ pub fn is_letter(letter_bits: &[u8; 256], c: u32, group: usize) -> bool {
     (letter_bits[idx] >> group) & 1 != 0
 }
 
-/// Letter-group check that applies `letter_bits_offset` correctly.
-///
-/// Use this instead of `is_letter` when you have a raw Unicode codepoint
-/// and the dictionary's `letter_bits_offset`.
-
 /// `remove_accent` — a rough 7-bit ASCII equivalent for every accented letter
 /// from U+00C0 up to U+025D (schwa), transcribed from `dictionary.c`.
 ///
@@ -1046,6 +1041,7 @@ pub struct RulesResult {
 /// This is a simplified port of `TranslateRules()` in dictionary.c.
 /// Missing features: digit handling, language switches, unpronounceable
 /// detection, alphabet switching — these will be added as needed.
+#[allow(clippy::too_many_arguments)] // mirrors the C TranslateRules() argument list
 pub fn translate_rules(
     dict: &Dictionary,
     word_buf: &[u8],
@@ -1065,6 +1061,7 @@ pub fn translate_rules(
 /// IPA-level phoneme resolution (used for language-specific overrides).
 ///
 /// [`PhonemeData`]: crate::phoneme::load::PhonemeData
+#[allow(clippy::too_many_arguments)] // mirrors the C TranslateRules() argument list
 pub fn translate_rules_phdata(
     dict: &Dictionary,
     word_buf: &[u8],

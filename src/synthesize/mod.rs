@@ -1452,6 +1452,7 @@ fn set_frame_rms(fr: &mut phondata::SpectFrame, new_rms: i32) {
 /// `formant_factor` (×256) scales the F2 target for a voice pitched away from
 /// the default — a higher-pitched voice has a shorter vocal tract, so its
 /// formants sit higher.
+#[allow(clippy::too_many_arguments)] // mirrors the C AdjustFormants() argument list
 fn adjust_formants(
     fr: &mut phondata::SpectFrame,
     target: i32, min: i32, max: i32,
@@ -1630,6 +1631,7 @@ enum PhonemeRender {
 /// continuous frame sequence and append the PCM to `output`, then clear the run.
 /// Because the whole run is rendered together, adjacent phonemes' frames
 /// interpolate smoothly across their boundary (cross-phoneme continuity).
+#[allow(clippy::too_many_arguments)] // threads the whole per-run render state
 fn flush_run(
     run_frames: &mut Vec<phondata::SpectFrame>,
     run_amps: &mut Vec<f64>,

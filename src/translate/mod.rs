@@ -2485,12 +2485,12 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
 }
 
 /// Whether an uppercase `next` is the last uppercase of a run that should be
-/// split off under espeak's upper→lower CamelCase rule (`HTMLParser` → "HTML"
-/// + "Parser").  It splits when `next` is followed by a lowercase letter and
-/// then another alphabetic character.  The Dutch word-initial "IJ" digraph is
-/// exempt (`dutch_ij`).  `chars` is positioned with `next` still at its front
-/// (already `peek`ed), so the clone skips it before reading the two look-ahead
-/// characters — mirroring C's `next_in` / `next2_in`.
+/// split off under espeak's upper→lower CamelCase rule (`HTMLParser` becomes
+/// "HTML" and "Parser").  It splits when `next` is followed by a lowercase
+/// letter and then another alphabetic character.  The Dutch word-initial "IJ"
+/// digraph is exempt (`dutch_ij`).  `chars` is positioned with `next` still at
+/// its front (already `peek`ed), so the clone skips it before reading the two
+/// look-ahead characters, mirroring C's `next_in` / `next2_in`.
 fn caps_run_ends_here<I>(
     chars: &std::iter::Peekable<I>,
     next: char,
@@ -2788,6 +2788,7 @@ pub struct LiaisonCtx {
 /// keeps every language's own definition.
 ///
 /// Returns the replacement code, or `None` when the program specifies no change.
+#[allow(clippy::too_many_arguments)] // mirrors the C phoneme-program interpreter state
 fn resolve_virtual_phoneme(
     code: u8,
     idx: usize,
@@ -2814,6 +2815,7 @@ fn resolve_virtual_phoneme(
 /// they were no-ops here, which is why English lost its linking `r-`
 /// ("sofa area" → `sˈəʊfə ˈeəɹiə` instead of `sˈəʊfəɹ ˈeəɹiə`) and the `;` glide
 /// after `aI` ("my apple").
+#[allow(clippy::too_many_arguments)] // mirrors the C phoneme-program interpreter state
 fn phoneme_program_effects(
     code: u8,
     idx: usize,
@@ -8316,6 +8318,7 @@ fn symbol_ends_clause(tokens: &[Token], token_ix: usize) -> bool {
         .any(|t| matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_)))
 }
 
+#[allow(clippy::too_many_arguments)] // each argument is an independent voice or text setting
 pub(crate) fn build_translate_entries(
     tokens: &[Token],
     dict: &Dictionary,

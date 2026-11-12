@@ -164,12 +164,12 @@ pub const LENGTH_MODS_EN0: [u8; 100] = [
 ///
 /// # Parameters
 /// * `stress`        — phoneme stress level (0-7).  **Already after the
-///                     0↔1 swap** that CalcLengths applies.
+///   0↔1 swap** that CalcLengths applies.
 /// * `next_lm`       — `ph->length_mod` of the **next** phoneme (0-9).
 /// * `next2_lm`      — `ph->length_mod` of the phoneme after that (0-9).
 /// * `more_syllables`— `false` if this is the **last syllable** of its word.
 /// * `end_of_clause` — `true` if this is the last syllable before the
-///                     clause boundary.
+///   clause boundary.
 /// * `std_length`    — `ph->std_length` of this vowel (in mS/2 units).
 ///
 /// Returns `length_mod`: a 256-based scale factor (256 = no change).

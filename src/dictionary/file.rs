@@ -229,8 +229,8 @@ impl Dictionary {
         let mut hashtab = [0usize; N_HASH_DICT];
         {
             let mut pos = 8usize;
-            for hash in 0..N_HASH_DICT {
-                hashtab[hash] = pos;
+            for (hash, slot) in hashtab.iter_mut().enumerate() {
+                *slot = pos;
                 // Skip entries in this bucket (each starts with its total length).
                 loop {
                     if pos >= data.len() {
@@ -665,7 +665,7 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
             // The table is indexed by `(codepoint - offset) & 0x7f`, and all
             // Indic offsets are the block start, so index = position within block.
             let set = |bits: &mut [u8; 256], lo: usize, hi: usize, group: u8| {
-                for i in lo..=hi { bits[i] |= 1 << group; }
+                for b in &mut bits[lo..=hi] { *b |= 1 << group; }
             };
             set(&mut bits, 0x15, 0x39, 2); // consonants → C
             set(&mut bits, 0x58, 0x5F, 2); // nukta consonant forms → C
@@ -683,7 +683,7 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
             // si_rules key the drop on group B (`ක (B → k`).  Layout differs
             // from ISCII, so the positions are Sinhala-specific.
             let set = |bits: &mut [u8; 256], lo: usize, hi: usize, group: u8| {
-                for i in lo..=hi { bits[i] |= 1 << group; }
+                for b in &mut bits[lo..=hi] { *b |= 1 << group; }
             };
             set(&mut bits, 0x1A, 0x46, 2); // consonants ක–ෆ → C
             set(&mut bits, 0x05, 0x16, 0); // independent vowels අ–ඖ → A
