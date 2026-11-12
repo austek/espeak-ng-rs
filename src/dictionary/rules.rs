@@ -1025,6 +1025,9 @@ pub struct RulesResult {
     /// An unrecognised letter abandoned the word (C's `FLAG_SPELLWORD`): the
     /// caller reads its letters one by one.  `phonemes` is empty.
     pub aborted: bool,
+    /// A bracket or quote character no rule covers sits in the word: C raises
+    /// the pause before the following word (`pre_pause`).
+    pub bracket_pause: bool,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1112,6 +1115,7 @@ pub fn translate_rules_ext(
     let mut out_stem_ph_len = 0usize; // length of stem phonemes when suffix rule fired
     let mut spellword = false;
     let mut aborted = false;
+    let mut bracket_pause = false;
     let mut any_alpha = 0u32;
 
     // word_buf is indexed with word_start pointing to the first char.
@@ -1248,6 +1252,10 @@ pub fn translate_rules_ext(
                     next_pos1 = np;
                 }
 
+                if match1.points == 0 && matches!(char::from_u32(wc), Some('\'' | '"' | '`')) {
+                    bracket_pause = true;
+                }
+
                 // No rule for an accented letter inside a word: replace it by its
                 // unaccented base and translate the word again from the start
                 // (LOPT_DIERESES languages carry on from the letter instead).
@@ -1282,6 +1290,7 @@ pub fn translate_rules_ext(
                             phonemes,
                             spellword,
                             aborted,
+                            bracket_pause,
                             ..RulesResult::default()
                         };
                     }
@@ -1355,6 +1364,7 @@ pub fn translate_rules_ext(
                         suffix_start: out_suffix_start,
                         spellword,
                         aborted,
+                        bracket_pause,
                     };
                 }
                 // Update vowel/stress counts from appended phonemes
@@ -1439,6 +1449,7 @@ pub fn translate_rules_ext(
         suffix_start: out_suffix_start,
         spellword,
         aborted,
+        bracket_pause,
     }
 }
 

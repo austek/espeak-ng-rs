@@ -171,6 +171,7 @@ jobs:
           --test regressive_voicing_hr
           --test ku_arabic_script_words
           --test sep_lengthen
+          --test apostrophe_word_pause
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

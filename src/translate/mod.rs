@@ -6676,8 +6676,23 @@ fn dict_knows_word(word: &str, dict: &Dictionary) -> bool {
 /// Whether the rules abandon `word` at a letter they do not cover (C's
 /// `FLAG_SPELLWORD`).
 fn rules_abort_word(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
+    word_rules(word, dict, lang_opts, true).is_some_and(|r| r.aborted)
+}
+
+/// Whether the rules leave a quote character of `word` uncovered, which makes
+/// C pause before the next word.
+fn rules_bracket_pause(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
+    word_rules(word, dict, lang_opts, false).is_some_and(|r| r.bracket_pause)
+}
+
+fn word_rules(
+    word: &str,
+    dict: &Dictionary,
+    lang_opts: &LangOptions,
+    want_ending: bool,
+) -> Option<crate::dictionary::rules::RulesResult> {
     if dict.rules().is_empty() {
-        return false;
+        return None;
     }
     let word = lowercase_for_lang(word, &lang_opts.lang);
     let word = dict.apply_replacements(&word).unwrap_or(word);
@@ -6687,7 +6702,7 @@ fn rules_abort_word(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> b
     buf.extend_from_slice(word.as_bytes());
     buf.extend_from_slice(&[b' ', 0]);
     let (mut vowels, mut stressed) = (0i32, 0i32);
-    crate::dictionary::rules::translate_rules(
+    Some(crate::dictionary::rules::translate_rules_ext(
         dict,
         &buf,
         1,
@@ -6697,8 +6712,9 @@ fn rules_abort_word(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> b
         lang_opts.dict_condition,
         &mut vowels,
         &mut stressed,
-    )
-    .aborted
+        None,
+        want_ending,
+    ))
 }
 
 /// A word switched to another voice by its script, whose rules there abandon
@@ -6730,6 +6746,25 @@ fn spell_aborted_switch(
         items.extend(letter);
     }
     Some(items)
+}
+
+/// The word before `token_ix` in its clause holds a quote the rules do not cover.
+fn previous_word_has_open_quote(
+    tokens: &[Token],
+    token_ix: usize,
+    dict: &Dictionary,
+    options: &LangOptions,
+) -> bool {
+    let previous = tokens[..token_ix]
+        .iter()
+        .rev()
+        .find(|t| !matches!(t, Token::Space | Token::WordJoin));
+    match previous {
+        Some(Token::Word(w)) if w.contains('\'') => {
+            rules_bracket_pause(&lowercase_for_lang(w, &options.lang), dict, options)
+        }
+        _ => false,
+    }
 }
 
 /// Whether the dictionary list pronounces `word` (`Mª`, `kg`), seen with the
@@ -10070,6 +10105,9 @@ impl Translator {
                                 pre_pause = 4;
                                 prepause_timeout = 3;
                             }
+                        }
+                        if is_word(token) && previous_word_has_open_quote(&tokens, token_ix, dict, &self.options) {
+                            pre_pause = pre_pause.max(i32::from(self.options.bracket_pause.0));
                         }
                         // The pause goes *before* the word separator, so it
                         // reads as part of the previous word (`hab'aRi_! za`).
