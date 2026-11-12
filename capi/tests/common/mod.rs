@@ -34,13 +34,16 @@ fn tmp() -> PathBuf {
 /// The profile directory holding the library, after building it there.
 ///
 /// `cargo test` does not build a package's cdylib in every profile, so the
-/// helper runs `cargo build` for the profile the test binary came from, once.
+/// helper runs `cargo build` for the profile the tests were compiled in
+/// (`debug_assertions` on means debug), once.
 pub fn profile_dir() -> &'static PathBuf {
     static PROFILE: OnceLock<PathBuf> = OnceLock::new();
     PROFILE.get_or_init(|| {
-        let exe = std::env::current_exe().expect("test exe");
-        let dir = exe.parent().and_then(Path::parent).expect("profile dir").to_path_buf();
-        let target = dir.parent().expect("target dir");
+        // The test binary's own location is not reliable (newer cargo keeps
+        // it under `target/<profile>/build/`), so derive both from stable facts.
+        let target = tmp().parent().expect("target dir").to_path_buf();
+        let release = !cfg!(debug_assertions);
+        let dir = target.join(if release { "release" } else { "debug" });
         let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
         let mut build = Command::new(cargo);
         build
