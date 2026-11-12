@@ -1,0 +1,11 @@
+prefix=@PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: espeak-ng
+Description: eSpeak NG text-to-speech library (pure Rust implementation)
+Version: @VERSION@
+Libs: -L${libdir} -lespeak-ng
+Libs.private: -lm -ldl -lpthread
+Cflags: -I${includedir}

@@ -1,0 +1,19 @@
+[package]
+name        = "espeak-ng-capi"
+version     = "0.2.0"
+edition     = "2021"
+description = "C ABI for the pure Rust eSpeak NG port: a drop-in libespeak-ng"
+license     = "GPL-3.0-or-later"
+publish     = false
+build       = "build.rs"
+
+[lib]
+# Cargo rejects hyphens in library names, so the artifacts are
+# `libespeak_ng_capi.{so,a}`; `scripts/package.sh` installs them as
+# `libespeak-ng.so.1`, `libespeak-ng.so` and `libespeak-ng.a`.
+name       = "espeak_ng_capi"
+path       = "src/lib.rs"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+espeak-ng = { path = "..", default-features = false }

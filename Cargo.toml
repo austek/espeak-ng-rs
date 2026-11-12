@@ -2,8 +2,10 @@
 # Workspace
 # ---------------------------------------------------------------------------
 [workspace]
+default-members = [".", "capi"]
 members = [
     ".",
+    "capi",
     "data-crates/espeak-ng-data-phonemes",
     "data-crates/espeak-ng-data-dict-*",
     "data-crates/espeak-ng-data-dicts",

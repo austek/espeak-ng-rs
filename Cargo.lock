@@ -316,6 +316,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "espeak-ng-capi"
+version = "0.2.0"
+dependencies = [
+ "espeak-ng",
+]
+
+[[package]]
 name = "espeak-ng-data-dict-ab"
 version = "0.2.0"
 
