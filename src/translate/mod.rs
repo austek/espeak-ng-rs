@@ -6349,6 +6349,26 @@ fn ellipsis_for_dot_runs(text: &str) -> std::borrow::Cow<'_, str> {
     std::borrow::Cow::Owned(out)
 }
 
+/// Phoneme tables loaded for language switches, kept so a text that switches
+/// thousands of times reads each table's files once.
+#[derive(Default)]
+pub struct SwitchTables(Vec<(String, Option<PhonemeData>)>);
+
+impl SwitchTables {
+    /// The table for `target`, loaded on first use; `None` when it has none.
+    pub fn get(&mut self, data_dir: &Path, target: &str) -> Option<&PhonemeData> {
+        let known = self.0.iter().position(|(name, _)| name == target);
+        let ix = known.unwrap_or_else(|| {
+            let table = PhonemeData::load(data_dir).ok().and_then(|mut d| {
+                select_phoneme_table(&mut d, data_dir, target).ok().map(|_| d)
+            });
+            self.0.push((target.to_string(), table));
+            self.0.len() - 1
+        });
+        self.0[ix].1.as_ref()
+    }
+}
+
 const TRANSLATE_PIECE_BYTES: usize = 64 * 1024;
 const MAX_RESERVED_CODES: usize = 8 * 1024 * 1024;
 
@@ -9575,14 +9595,8 @@ impl Translator {
     /// key — so `he @` is "at sign", not the short reading of `@` ("at") that
     /// re-translating the character itself would give.
     pub(crate) fn char_name_phonemes(&self, c: char) -> Option<Vec<u8>> {
-        let dict_stem = resolve_dict_stem(&self.data_dir, &self.options.lang)?;
-        let dict_path = dict_path(&self.data_dir, &dict_stem)?;
-        let dict_bytes = std::fs::read(&dict_path).ok()?;
-        let mut dict = Dictionary::from_bytes(&dict_stem, dict_bytes).ok()?;
-        dict.dict_condition = self.options.dict_condition;
-        let mut phdata = PhonemeData::load(&self.data_dir).ok()?;
-        select_phoneme_table(&mut phdata, &self.data_dir, &self.options.lang).ok()?;
-        let stress_opts = StressOpts::for_lang_in(&self.options.lang, &self.data_dir);
+        let loaded = self.loaded_data().ok()?;
+        let (dict, phdata, stress_opts) = (&loaded.dict, &loaded.phdata, &loaded.stress_opts);
         // A letter is named as `LookupLetter` does, ending in the accent tables.
         if c.is_alphabetic() {
             let mut name = letter_name(c, &dict, &phdata, &stress_opts, &self.options);

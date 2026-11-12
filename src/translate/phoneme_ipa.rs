@@ -177,7 +177,8 @@ pub fn codes_to_ipa_opts(
 
     let mut out = String::new();
     // The table the codes that follow belong to; `None` = the clause's own.
-    let mut switched: Option<PhonemeData> = None;
+    let mut switched: Option<String> = None;
+    let mut tables = super::SwitchTables::default();
     let mut straight_quote_open = false;
     // `--sep` bookkeeping: whether a phoneme has been written in this clause,
     // whether a word break has just happened (no separator straight after one,
@@ -248,16 +249,13 @@ pub fn codes_to_ipa_opts(
             } else {
                 after_word_break = false;
             }
-            switched = if target == lang {
-                None
-            } else {
-                PhonemeData::load(data_dir).ok().and_then(|mut d| {
-                    super::select_phoneme_table(&mut d, data_dir, target).ok().map(|_| d)
-                })
-            };
+            switched = (target != lang).then(|| target.to_string());
             continue;
         }
-        let phdata: &PhonemeData = switched.as_ref().unwrap_or(phdata);
+        let phdata: &PhonemeData = switched
+            .as_deref()
+            .and_then(|t| tables.get(data_dir, t))
+            .unwrap_or(phdata);
 
         if pc.is_boundary || pc.code == PHON_END_WORD {
             out.push_str(&std::mem::take(&mut pending_stress));

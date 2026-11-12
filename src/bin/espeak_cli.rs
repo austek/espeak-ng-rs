@@ -1059,7 +1059,8 @@ fn format_x(
     let mut out = String::new();
     let mut word_units: Vec<String> = Vec::new();
     // The table the codes that follow belong to; `None` = the clause's own.
-    let mut switched: Option<PhonemeData> = None;
+    let mut switched: Option<String> = None;
+    let mut tables = espeak_ng::translate::SwitchTables::default();
 
     // A stress marker is written as part of the phoneme it precedes, as in C,
     // where the separator goes *before* the stress: `tS.'i:.z`, not `tS.'.i:.z`.
@@ -1107,20 +1108,14 @@ fn format_x(
             if trailing_space {
                 out.push(' ');
             }
-            switched = if target == lang {
-                None
-            } else {
-                // Load the target's table; if it has none, keep resolving with
-                // the clause's table rather than dropping the word.
-                PhonemeData::load(data_dir).ok().and_then(|mut d| {
-                    espeak_ng::translate::select_phoneme_table(&mut d, data_dir, target)
-                        .ok()
-                        .map(|_| d)
-                })
-            };
+            switched = (target != lang).then(|| target.to_string());
             continue;
         }
-        let phdata: &PhonemeData = switched.as_ref().unwrap_or(phdata);
+        // A target with no table keeps resolving with the clause's own.
+        let phdata: &PhonemeData = switched
+            .as_deref()
+            .and_then(|t| tables.get(data_dir, t))
+            .unwrap_or(phdata);
 
         if pc.is_boundary && pc.code == 15 {
             // A word boundary flushes whatever stress is pending with it.
