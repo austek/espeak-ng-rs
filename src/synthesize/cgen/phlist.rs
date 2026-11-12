@@ -219,9 +219,12 @@ fn set_word_stress(list: &mut [Ph]) {
     }
 }
 
-/// The consecutive-unstressed-vowel pass of `MakePhonemeList`.
+/// The consecutive-unstressed-vowel pass of `MakePhonemeList`.  Its test for
+/// "a stressed word" reads C's `word_stress`, which still holds the clause's
+/// last word's stress from the pass that set `wordstress`.
 fn diminish_unstressed(list: &mut [Ph], stress_flags: u32) {
     const S_NO_DIM: u32 = 0x02;
+    let word_stress = list.len().checked_sub(3).map_or(0, |i| list[i].wordstress);
     let mut unstress_count = 0;
     for i in 1..list.len() {
         if list[i].typ != PH_VOWEL {
@@ -236,7 +239,7 @@ fn diminish_unstressed(list: &mut [Ph], stress_flags: u32) {
             diminish_pair(list, i);
         } else if unstress_count > 1 && unstress_count & 1 == 0 {
             let next_word = list.get(i + 1).is_some_and(|n| n.newword != 0);
-            if stress_flags & S_NO_DIM != 0 || (list[i].wordstress > 3 && next_word) {
+            if stress_flags & S_NO_DIM != 0 || (word_stress > 3 && next_word) {
                 unstress_count = 1;
             } else {
                 list[i].stresslevel = 0;
