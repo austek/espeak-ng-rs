@@ -6349,6 +6349,26 @@ fn ellipsis_for_dot_runs(text: &str) -> std::borrow::Cow<'_, str> {
     std::borrow::Cow::Owned(out)
 }
 
+/// For each token, whether an earlier / later token of the same clause has a
+/// spoken (non-empty) entry. One pass each way instead of a scan per token.
+fn clause_spoken_flags(tokens: &[Token], entries: &[TranslateEntry]) -> (Vec<bool>, Vec<bool>) {
+    let spoken = |i: usize| entries[i].phonemes.iter().any(|&b| b != 0);
+    let boundary = |i: usize| matches!(tokens[i], Token::ClauseBoundary(_));
+    let mut before = Vec::with_capacity(tokens.len());
+    let mut seen = false;
+    for i in 0..tokens.len() {
+        before.push(seen);
+        seen = !boundary(i) && (seen || spoken(i));
+    }
+    let mut after = vec![false; tokens.len()];
+    let mut ahead = false;
+    for i in (0..tokens.len()).rev() {
+        after[i] = ahead;
+        ahead = !boundary(i) && (ahead || spoken(i));
+    }
+    (before, after)
+}
+
 /// Phoneme tables loaded for language switches, kept so a text that switches
 /// thousands of times reads each table's files once.
 #[derive(Default)]
@@ -9942,6 +9962,8 @@ impl Translator {
         // may not pause again.  Reset at each clause.
         let mut prepause_timeout = 0u8;
 
+        let (spoken_before_clause, spoken_after) = clause_spoken_flags(&tokens, &entries);
+
         for (token_ix, (token, entry)) in tokens.iter().zip(entries.iter()).enumerate() {
             if tracking {
                 owners.resize(codes.len(), owner_now);
@@ -10104,29 +10126,14 @@ impl Translator {
                         // pause as the *next* word's pre-pause, so a bracket with
                         // no word after it in the clause — `(hello)` — pauses
                         // only on the opening one.
-                        let word_follows = tokens[token_ix + 1..]
-                            .iter()
-                            .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
-                            .zip(entries[token_ix + 1..].iter())
-                            .any(|(_, e)| e.phonemes.iter().any(|&b| b != 0));
+                        let word_follows = spoken_after[token_ix];
                         // An apostrophe's pause is C's `pre_pause_add`, which
                         // `words[0].pre_pause = 0` discards at the start of a
                         // clause ("don't add extra pause at beginning of
                         // clause") — so `'hello` has no pause while the curly
                         // `‘hello`, a real bracket, keeps its own.
-                        let clause_initial_quote = *c == '\''
-                            && !tokens[..token_ix]
-                                .iter()
-                                .rev()
-                                .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
-                                .zip(entries[..token_ix].iter().rev())
-                                .any(|(_, e)| e.phonemes.iter().any(|&b| b != 0));
-                        let spoken_before = !tokens[..token_ix]
-                            .iter()
-                            .rev()
-                            .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
-                            .zip(entries[..token_ix].iter().rev())
-                            .all(|(_, e)| e.phonemes.iter().all(|&b| b == 0));
+                        let clause_initial_quote = *c == '\'' && !spoken_before_clause[token_ix];
+                        let spoken_before = spoken_before_clause[token_ix];
                         let pause_dash = *c == '-' && spaced_dash(&tokens, token_ix) && spoken_before;
                         if (is_bracket(*c) || pause_dash)
                             && !clause_initial_quote
