@@ -391,11 +391,15 @@ pub fn decode_wav_mono16(bytes: &[u8], target_rate: u32) -> Result<Vec<i16>> {
     let interleaved: Vec<f32> = match (af, bits) {
         (1, 8) => data.iter().map(|&b| (b as f32 - 128.0) / 128.0).collect(),
         (1, 16) => data
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0)
             .collect(),
         (1, 24) => data
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|c| {
                 // little-endian signed 24-bit → sign-extend into i32
                 let v = ((c[0] as i32) | ((c[1] as i32) << 8) | ((c[2] as i32) << 16)) << 8 >> 8;
@@ -403,15 +407,21 @@ pub fn decode_wav_mono16(bytes: &[u8], target_rate: u32) -> Result<Vec<i16>> {
             })
             .collect(),
         (1, 32) => data
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]]) as f32 / 2_147_483_648.0)
             .collect(),
         (3, 32) => data
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
             .collect(),
         (3, 64) => data
-            .chunks_exact(8)
+            .as_chunks::<8>()
+            .0
+            .iter()
             .map(|c| f64::from_le_bytes([c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7]]) as f32)
             .collect(),
         _ => return Err(err(&format!("unsupported format tag {af} / {bits}-bit"))),

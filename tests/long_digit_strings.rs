@@ -15,7 +15,7 @@ fn english() -> Option<Translator> {
 }
 
 fn nines(scale_words: &[&str]) -> String {
-    let mut parts = vec![format!("{GROUP}")];
+    let mut parts = vec![GROUP.to_string()];
     for word in scale_words {
         parts.push(format!("{word} {HUNDRED} {GROUP}"));
     }

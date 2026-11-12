@@ -24,7 +24,7 @@ fn render(args: &[&str], text: &str) -> Vec<i16> {
     assert!(status.success());
     let bytes = std::fs::read(&out).expect("read wav");
     let _ = std::fs::remove_file(&out);
-    bytes[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    bytes[44..].as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
 }
 
 fn rms(x: &[i16]) -> f64 {

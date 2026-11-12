@@ -140,7 +140,9 @@ pub struct Tune {
 
 /// Parse the `intonations` file into its `TUNE` records (68 bytes each).
 pub fn parse_tunes(data: &[u8]) -> Vec<Tune> {
-    data.chunks_exact(68)
+    data.as_chunks::<68>()
+        .0
+        .iter()
         .map(|t| Tune {
             name: t[..12]
                 .iter()

@@ -545,13 +545,12 @@ impl<'a> Generator<'a> {
     }
 
     fn scale_lengths(&mut self, frames: &mut [FrameRef], length1: i32, which: i32, this: &Ph, fmt: &Fmt) {
-        let factor;
-        if which == 2 {
+        let factor = if which == 2 {
             let mut length_std = (fmt.std_length + self.seq_len_adjust - 45).max(10);
             if this.synthflags & SFLAG_LENGTHEN != 0 {
                 length_std += self.phdata.get(PHON_LENGTHEN).map_or(0, |p| p.std_length as i32) * 2;
             }
-            factor = (length_std * 256) / length1;
+            (length_std * 256) / length1
         } else {
             if which == 1 {
                 if fmt.fmt_control == 1 && fmt.std_length < 130 {
@@ -563,8 +562,8 @@ impl<'a> Generator<'a> {
             if self.seq_len_adjust == 0 {
                 return;
             }
-            factor = ((length1 + self.seq_len_adjust) * 256) / length1;
-        }
+            ((length1 + self.seq_len_adjust) * 256) / length1
+        };
         for f in frames.iter_mut() {
             f.length = (f.length * factor) / 256;
         }
