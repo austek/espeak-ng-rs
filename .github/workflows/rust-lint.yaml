@@ -19,9 +19,6 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Report-only: the tree currently carries 128+ clippy warnings, too many for a mechanical
-    # fix. Remove continue-on-error once they are cleared so -D warnings gates again.
-    continue-on-error: true
     permissions:
       contents: read
       security-events: write
