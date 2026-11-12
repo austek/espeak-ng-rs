@@ -31,10 +31,33 @@ fn tmp() -> PathBuf {
     PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
 }
 
+/// The profile directory holding the library, after building it there.
+///
+/// `cargo test` does not build a package's cdylib in every profile, so the
+/// helper runs `cargo build` for the profile the test binary came from, once.
+pub fn profile_dir() -> &'static PathBuf {
+    static PROFILE: OnceLock<PathBuf> = OnceLock::new();
+    PROFILE.get_or_init(|| {
+        let exe = std::env::current_exe().expect("test exe");
+        let dir = exe.parent().and_then(Path::parent).expect("profile dir").to_path_buf();
+        let target = dir.parent().expect("target dir");
+        let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+        let mut build = Command::new(cargo);
+        build
+            .args(["build", "-p", "espeak-ng-capi", "--target-dir"])
+            .arg(target)
+            .arg("--manifest-path")
+            .arg(manifest_dir().join("Cargo.toml"));
+        if dir.file_name().is_some_and(|n| n == "release") {
+            build.arg("--release");
+        }
+        assert!(build.status().expect("run cargo build").success(), "cargo build failed");
+        dir
+    })
+}
+
 fn built_library() -> PathBuf {
-    let exe = std::env::current_exe().expect("test exe");
-    let profile_dir = exe.parent().and_then(Path::parent).expect("profile dir");
-    let lib = profile_dir.join("libespeak_ng_capi.so");
+    let lib = profile_dir().join("libespeak_ng_capi.so");
     assert!(lib.exists(), "library not built: {}", lib.display());
     lib
 }

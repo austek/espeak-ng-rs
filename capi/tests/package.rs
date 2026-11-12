@@ -16,7 +16,7 @@ fn installed_package_links_through_pkg_config() {
         eprintln!("[SKIP] no pkg-config");
         return;
     }
-    let profile = std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().to_path_buf();
+    let profile = profile_dir().clone();
     let prefix = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("prefix");
     let status = Command::new("bash")
         .arg(manifest_dir().join("scripts/package.sh"))
