@@ -461,7 +461,28 @@ fn unnamed(env: &LetterEnv, alphabet: Option<&Alphabet>, letter: char) -> Vec<It
         out.extend(spelled);
     }
     out.push(PHON_PAUSE);
+    if env.tr.lang() != voice.lang() {
+        out = restress_under(env.tr.phdata, &out);
+    }
     bytes_as_items(&out)
+}
+
+/// The name is read in the voice but staged under the other translator's
+/// phoneme table, so a stress mark survives only before a vowel of that table.
+fn restress_under(phdata: &PhonemeData, bytes: &[u8]) -> Vec<u8> {
+    let mut pending: Option<u8> = None;
+    let mut out = Vec::with_capacity(bytes.len());
+    for &b in bytes {
+        match phdata.get(b).map(|p| p.typ) {
+            Some(crate::phoneme::PH_STRESS) => pending = Some(b),
+            Some(crate::phoneme::PH_VOWEL) => {
+                out.extend(pending.take());
+                out.push(b);
+            }
+            _ => out.push(b),
+        }
+    }
+    out
 }
 
 fn named_by_tr(env: &LetterEnv, letter: char) -> (char, Vec<u8>) {

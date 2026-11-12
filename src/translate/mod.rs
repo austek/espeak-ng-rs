@@ -6701,6 +6701,37 @@ fn rules_abort_word(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> b
     .aborted
 }
 
+/// A word switched to another voice by its script, whose rules there abandon
+/// a letter, comes back as `FLAG_SPELLWORD`: C redoes it as one-letter words
+/// in the original voice.
+fn spell_aborted_switch(
+    phonemes: &[u8],
+    word: &str,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+    alts: &letters::AltLangs,
+) -> Option<Vec<letters::Item>> {
+    if phonemes.first() != Some(&crate::phoneme::PHON_SWITCH) || word.chars().count() < 2 {
+        return None;
+    }
+    let target = String::from_utf8_lossy(&phonemes[1..]).trim_end_matches('\0').to_string();
+    let tr = alts.get(&target)?;
+    if !rules_abort_word(word, &tr.dict, &tr.options) {
+        return None;
+    }
+    let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
+    let mut items = Vec::new();
+    for c in word.chars().filter(|c| c.is_alphabetic()) {
+        let mut letter = letters::spell_in_switched(voice, alts, &target, c)?;
+        let after_pause = usize::from(letter.first() == Some(&letters::Item::Ph(crate::phoneme::PHON_PAUSE)));
+        letter.insert(after_pause, letters::Item::Ph(crate::phoneme::PHON_END_WORD));
+        items.extend(letter);
+    }
+    Some(items)
+}
+
 /// Whether the dictionary list pronounces `word` (`Mª`, `kg`), seen with the
 /// capitalisation the word was written in.
 fn dict_lists_word(word: &str, dict: &Dictionary, options: &LangOptions) -> bool {
@@ -8288,6 +8319,19 @@ pub(crate) fn build_translate_entries(
                     }) {
                         wr.phonemes.remove(0);
                     }
+                if let Some(items) = spell_aborted_switch(&wr.phonemes, word_script, dict, phdata, stress_opts, options, alts) {
+                    entries.push(TranslateEntry {
+                        phonemes: letters::encode(&items),
+                        dict_flags: 0,
+                        kind: TranslateEntryKind::Stream,
+                        word_lower: Some(word.clone()),
+                        no_word_gap: false,
+                        word_group: None,
+                        found_in_list: false,
+                    });
+                    prev_word = None;
+                    continue;
+                }
                 // A lone letter handed to another voice (`it м` → `_^_RU`, a
                 // Devanagari letter in `de`) is spelled by that voice, with the
                 // alphabet's name first, as `TranslateLetter` does; a word
