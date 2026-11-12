@@ -725,7 +725,7 @@ impl EspeakNg {
                     }
                 }
                 crate::soundicon::Piece::Icon(idx) => {
-                    out.extend(std::iter::repeat(0i16).take(pause));
+                    out.extend(std::iter::repeat_n(0i16, pause));
                     out.extend(crate::soundicon::scale_icon_samples(table.samples(idx)));
                 }
             }

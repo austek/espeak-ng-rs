@@ -843,7 +843,7 @@ impl Synthesizer {
                     flush_run(&mut run_frames, &mut run_amps, &mut run_pitch, &mut run_speed, &mut run_centres,
                               &mut output_i16, &self.voice, &mut wavephase);
                     let n = sil_samples(*ms, embed_speed);
-                    output_i16.extend(std::iter::repeat(0i16).take(n));
+                    output_i16.extend(std::iter::repeat_n(0i16, n));
                 }
                 AnnCode::ClauseBoundary(ms) => {
                     // Acoustically identical to the old `Pause(200)` clause gap
@@ -854,7 +854,7 @@ impl Synthesizer {
                     flush_run(&mut run_frames, &mut run_amps, &mut run_pitch, &mut run_speed, &mut run_centres,
                               &mut output_i16, &self.voice, &mut wavephase);
                     let n = sil_samples(*ms, embed_speed);
-                    output_i16.extend(std::iter::repeat(0i16).take(n));
+                    output_i16.extend(std::iter::repeat_n(0i16, n));
                     let start = flushed + output_i16.len();
                     sentence_marks.push(start);
                     word_marks.push(start);
@@ -878,7 +878,7 @@ impl Synthesizer {
                     flush_run(&mut run_frames, &mut run_amps, &mut run_pitch, &mut run_speed, &mut run_centres,
                               &mut output_i16, &self.voice, &mut wavephase);
                     let n = sil_samples(WORD_GAP_MS, embed_speed);
-                    output_i16.extend(std::iter::repeat(0i16).take(n));
+                    output_i16.extend(std::iter::repeat_n(0i16, n));
                     word_idx += 1;
                     // Start sample of the word that follows this boundary.
                     word_marks.push(flushed + output_i16.len());
@@ -886,7 +886,7 @@ impl Synthesizer {
                 AnnCode::PrepauseSamples(n) => {
                     flush_run(&mut run_frames, &mut run_amps, &mut run_pitch, &mut run_speed, &mut run_centres,
                               &mut output_i16, &self.voice, &mut wavephase);
-                    output_i16.extend(std::iter::repeat(0i16).take(*n));
+                    output_i16.extend(std::iter::repeat_n(0i16, *n));
                 }
                 AnnCode::Phoneme(info) => {
                     let _ = total_phonemes;
@@ -937,7 +937,7 @@ impl Synthesizer {
                                 flush_run(&mut run_frames, &mut run_amps, &mut run_pitch,
                                           &mut run_speed, &mut run_centres, &mut output_i16,
                                           &self.voice, &mut wavephase);
-                                output_i16.extend(std::iter::repeat(0i16).take(lead_silence));
+                                output_i16.extend(std::iter::repeat_n(0i16, lead_silence));
                             }
                             // `+variant` per-stress amplitude override (no-op by default).
                             let amp_factor = amp_factor
@@ -953,7 +953,7 @@ impl Synthesizer {
                                     .unwrap();
                                 run_centres.push(run_frames.len() + rel);
                             }
-                            run_amps.extend(std::iter::repeat(amp_factor).take(frames.len()));
+                            run_amps.extend(std::iter::repeat_n(amp_factor, frames.len()));
                             match glide {
                                 Some(syl) if frames.len() > 1 => {
                                     let last = (frames.len() - 1) as f64;
@@ -977,15 +977,15 @@ impl Synthesizer {
                                     );
                                 }
                                 _ => run_pitch
-                                    .extend(std::iter::repeat(ph_pitch).take(frames.len())),
+                                    .extend(std::iter::repeat_n(ph_pitch, frames.len())),
                             }
-                            run_speed.extend(std::iter::repeat(embed_speed).take(frames.len()));
+                            run_speed.extend(std::iter::repeat_n(embed_speed, frames.len()));
                             run_frames.extend(frames);
                             if trail_silence > 0 {
                                 flush_run(&mut run_frames, &mut run_amps, &mut run_pitch,
                                           &mut run_speed, &mut run_centres, &mut output_i16,
                                           &self.voice, &mut wavephase);
-                                output_i16.extend(std::iter::repeat(0i16).take(trail_silence));
+                                output_i16.extend(std::iter::repeat_n(0i16, trail_silence));
                             }
                         }
                         PhonemeRender::Pcm(pcm) => {
@@ -1005,7 +1005,7 @@ impl Synthesizer {
         // not when a streaming sink asked to stop early).
         // Suppressed by `-z` (`no_final_pause`).
         if (!output_i16.is_empty() || flushed > 0) && !self.voice.no_final_pause && !stopped {
-            output_i16.extend(std::iter::repeat(0i16).take(sil_samples(END_SILENCE_MS, embed_speed)));
+            output_i16.extend(std::iter::repeat_n(0i16, sil_samples(END_SILENCE_MS, embed_speed)));
         }
 
         // `+variant` echo post-pass (no-op unless a variant set it) — applied last
@@ -1772,7 +1772,7 @@ fn synthesize_phoneme_info(
                 }
                 let mut out = vec![0i16; lead_silence];
                 out.extend_from_slice(&pcm);
-                out.extend(std::iter::repeat(0i16).take(trail_silence));
+                out.extend(std::iter::repeat_n(0i16, trail_silence));
                 return PhonemeRender::Pcm(out);
             }
         }
