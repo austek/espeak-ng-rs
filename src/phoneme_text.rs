@@ -141,9 +141,10 @@ pub fn format_mnemonics(
             PHON_STRESS_P | PHON_STRESS_P2 | PHON_STRESS_TONIC => pending_stress.push('\''),
             PHON_STRESS_2 | PHON_STRESS_3 => pending_stress.push(','),
             PHON_STRESS_U | PHON_STRESS_PREV => {}
-            PHON_LENGTHEN => {
-                push_unit(":".to_string(), &mut word_units, &mut pending_stress);
-            }
+            PHON_LENGTHEN => match word_units.last_mut() {
+                Some(last) if pending_stress.is_empty() => last.push(':'),
+                _ => push_unit(":".to_string(), &mut word_units, &mut pending_stress),
+            },
             0 if !pc.is_boundary => {}
             c => {
                 if let Some(ph) = phdata.get(c) {

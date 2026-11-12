@@ -170,6 +170,7 @@ jobs:
           --test voice_keywords
           --test regressive_voicing_hr
           --test ku_arabic_script_words
+          --test sep_lengthen
       - name: Switch closing tag tests
         run: cargo test --release --test switch_closing_tag -- --ignored
         env:
