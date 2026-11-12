@@ -5686,7 +5686,7 @@ fn word_to_phonemes_inner(
         word_start, // past the leading space and any in-word pre-context
         rule_word_flags | expect.hyphen_flags,
         rules_flags,
-        &letter_bits,
+        letter_bits,
         lang_opts.dict_condition,
         &mut vowel_count,
         &mut stressed_count,
@@ -5719,7 +5719,7 @@ fn word_to_phonemes_inner(
             word_start,
             rule_word_flags,
             rules_flags,
-            &letter_bits,
+            letter_bits,
             lang_opts.dict_condition,
             &mut vc,
             &mut sc,
@@ -5848,7 +5848,7 @@ fn word_to_phonemes_inner(
             // which is how a 440-byte `s's's…` smashed its stack (#2495).
             let keeps_stem_stress = result.end_type & crate::dictionary::SUFX_T != 0;
             let peeled =
-                peel_stacked_suffixes(word, &result, dict, &letter_bits, lang_opts, phdata);
+                peel_stacked_suffixes(word, &result, dict, letter_bits, lang_opts, phdata);
             let word = peeled.word.as_str();
             let result_end_type = peeled.end_type;
             let result_end_phonemes = peeled.end_phonemes;
@@ -5923,7 +5923,7 @@ fn word_to_phonemes_inner(
                         1,
                         stem_word_flags,
                         rules_flags,
-                        &letter_bits,
+                        letter_bits,
                         lang_opts.dict_condition,
                         &mut stem_vc,
                         &mut stem_sc,
@@ -9619,7 +9619,7 @@ impl Translator {
         let (dict, phdata, stress_opts) = (&loaded.dict, &loaded.phdata, &loaded.stress_opts);
         // A letter is named as `LookupLetter` does, ending in the accent tables.
         if c.is_alphabetic() {
-            let mut name = letter_name(c, &dict, &phdata, &stress_opts, &self.options);
+            let mut name = letter_name(c, dict, phdata, stress_opts, &self.options);
             if name.is_empty() {
                 return None;
             }
@@ -9632,7 +9632,7 @@ impl Translator {
         for key in [format!("_{c}"), c.to_string()] {
             let expect = PosExpect { no_replace: true, ..PosExpect::default() };
             let wr = word_to_phonemes_inner(
-                &key, &dict, &phdata, &stress_opts, &self.options, 0, expect,
+                &key, dict, phdata, stress_opts, &self.options, 0, expect,
             );
             if wr.phonemes.iter().any(|&b| b != 0) {
                 return Some(wr.phonemes);
@@ -9664,16 +9664,16 @@ impl Translator {
             dict_condition: self.options.dict_condition,
             ..Default::default()
         };
-        if by_name && lookup(&dict, &format!("_{c}"), &ctx).is_some_and(|r| r.flags1.found()) {
+        if by_name && lookup(dict, &format!("_{c}"), &ctx).is_some_and(|r| r.flags1.found()) {
             return Some(format!("_{c}"));
         }
-        let entry = lookup(&dict, &c.to_string(), &ctx).filter(|r| r.flags1.found())?;
+        let entry = lookup(dict, &c.to_string(), &ctx).filter(|r| r.flags1.found())?;
         if !entry.flags1.textmode() {
             return Some(c.to_string());
         }
         let text = String::from_utf8_lossy(&entry.phonemes).into_owned();
         let words: Vec<&str> = text.trim_end_matches('\0').split_whitespace().collect();
-        let listed = lookup(&dict, words.first()?, &LookupCtx::default()).is_some();
+        let listed = lookup(dict, words.first()?, &LookupCtx::default()).is_some();
         listed.then(|| if by_name { format!("_{c}") } else { words.join(" ") })
     }
 
@@ -9883,17 +9883,17 @@ impl Translator {
         // Empty when disabled.
         let cap_codes: Vec<u8> = match self.options.capitals {
             1 => vec![crate::phoneme::PHON_PAUSE_SHORT, crate::phoneme::PHON_CAPITAL],
-            2 => word_to_phonemes("_cap", &dict, &phdata, &stress_opts, &self.options).phonemes,
+            2 => word_to_phonemes("_cap", dict, phdata, stress_opts, &self.options).phonemes,
             _ => Vec::new(),
         };
 
         let text = normalize_apostrophes(text);
         let text = schwa_for_article_apostrophe(&text, lang);
-        let number_grammar = with_dict_ordinal_suffixes(&self.options.number_grammar, &text, &dict);
+        let number_grammar = with_dict_ordinal_suffixes(&self.options.number_grammar, &text, dict);
         let mut tokens = split_overlong_clauses(tokenize_opts(&text, &number_grammar));
-        split_unrecognised_ordinals(&mut tokens, &dict, &number_grammar);
-        merge_digit_follow(&mut tokens, &dict);
-        expand_dotted_phrases(&mut tokens, &dict, lang);
+        split_unrecognised_ordinals(&mut tokens, dict, &number_grammar);
+        merge_digit_follow(&mut tokens, dict);
+        expand_dotted_phrases(&mut tokens, dict, lang);
         tokens = announce_clause_punctuation(tokens, &self.options);
         suppress_abbreviation_periods(&mut tokens);
         apply_time_reading(&mut tokens, lang);
@@ -9903,7 +9903,7 @@ impl Translator {
         apply_space_grouping(&mut tokens, &self.options.number_grammar);
         apply_fractions(&mut tokens, lang);
         apply_exponents(&mut tokens, lang);
-        let spelled = split_abandoned_words(&mut tokens, &dict, &self.options);
+        let spelled = split_abandoned_words(&mut tokens, dict, &self.options);
         let english: std::cell::OnceCell<Option<(Translator, Dictionary)>> =
             std::cell::OnceCell::new();
         let english_word = |c: char, by_name: bool| {
@@ -9919,18 +9919,18 @@ impl Translator {
         let alts = letters::AltLangs::new(&self.data_dir);
         let mut entries = build_translate_entries(
             &tokens,
-            &dict,
-            &phdata,
-            &stress_opts,
+            dict,
+            phdata,
+            stress_opts,
             &self.options,
             &english_word,
             &alts,
             &spelled,
         );
         let outer_continues = self.options.switched && !self.options.switched_last;
-        promote_translate_entries(&mut entries, &phdata, lang, outer_continues);
+        promote_translate_entries(&mut entries, phdata, lang, outer_continues);
         if primary_bcp47_subtag(lang) == "en" {
-            apply_en_or_linking_r(&mut entries, &phdata);
+            apply_en_or_linking_r(&mut entries, phdata);
         }
 
         debug_assert_eq!(tokens.len(), entries.len());
@@ -10358,7 +10358,7 @@ impl Translator {
                     let plain = if entry.kind == TranslateEntryKind::Stream {
                         Vec::new()
                     } else {
-                        consume_word_break_syllabic(&entry.phonemes, &phdata)
+                        consume_word_break_syllabic(&entry.phonemes, phdata)
                     };
                     for &b in &plain {
                         // `phonX1` is a marker, not a sound: C reads it as
@@ -10511,20 +10511,20 @@ impl Translator {
             }
             own_flags.resize(own.len(), false);
             collapse_repeated_lengthen(own, own_flags);
-            apply_voice_replacements(own, &phdata, &replacements);
+            apply_voice_replacements(own, phdata, replacements);
             own_flags.resize(own.len(), false);
             // Before the phoneme programs run, as in C's `MakePhonemeList`.
-            double_lengthened_consonants(own, own_flags, &phdata);
-            resolve_virtual_phonemes_in_codes(own, &phdata, own_flags, stress_opts.reduce);
+            double_lengthened_consonants(own, own_flags, phdata);
+            resolve_virtual_phonemes_in_codes(own, phdata, own_flags, stress_opts.reduce);
             apply_list_editing_instructions(
                 own,
-                &phdata,
+                phdata,
                 stress_opts.vowel_pause,
                 stress_opts.word_gap,
             );
-            drop_syllabic_after_vowel(own, &phdata);
+            drop_syllabic_after_vowel(own, phdata);
             if primary_bcp47_subtag(lang) == "fr" {
-                drop_unsurfaced_liaison(own, &phdata);
+                drop_unsurfaced_liaison(own, phdata);
             }
             out.append(own);
             own_flags.clear();
@@ -10550,16 +10550,16 @@ impl Translator {
         if stress_opts.regressive_voicing != 0 {
             set_regressive_voicing(
                 &mut out,
-                &phdata,
+                phdata,
                 stress_opts.regressive_voicing,
                 &self.options.lang,
             );
         }
         // The inter-word pause insertion runs over the finished list.
         if self.options.word_gap == 0 {
-            insert_word_gaps(&mut out, &phdata, stress_opts.vowel_pause, stress_opts.word_gap);
+            insert_word_gaps(&mut out, phdata, stress_opts.vowel_pause, stress_opts.word_gap);
         }
-        promote_clause_tonics(&mut out, &phdata, &self.options.lang, stress_opts.stress_flags);
+        promote_clause_tonics(&mut out, phdata, &self.options.lang, stress_opts.stress_flags);
 
         // Boundary coordinates back into indices.  A token's codes run from its
         // own first code to the *next* token's, so the separator's boundary and

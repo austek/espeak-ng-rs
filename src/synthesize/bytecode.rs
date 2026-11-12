@@ -1515,12 +1515,12 @@ mod tests {
 
         // next = vowel → condition false → default FMT(B)
         let nb_v = Neighbours { this: 10, next: 20, ..Default::default() };
-        let r = interpret_phoneme(PROG, &phonindex, &nb_v, &lookup);
+        let r = interpret_phoneme(PROG, &phonindex, &nb_v, lookup);
         assert_eq!(r.fmt_addr, Some(b), "next=vowel should reach default FMT(B)");
 
         // next = consonant → condition true → FMT(A)
         let nb_c = Neighbours { this: 10, next: 30, ..Default::default() };
-        let r = interpret_phoneme(PROG, &phonindex, &nb_c, &lookup);
+        let r = interpret_phoneme(PROG, &phonindex, &nb_c, lookup);
         assert_eq!(r.fmt_addr, Some(a), "next=consonant should reach FMT(A)");
     }
 
@@ -1549,12 +1549,12 @@ mod tests {
 
         // prev = t → FMT(A)
         let nb_t = Neighbours { this: 10, prev: 30, ..Default::default() };
-        let r = interpret_phoneme(PROG, &phonindex, &nb_t, &lookup);
+        let r = interpret_phoneme(PROG, &phonindex, &nb_t, lookup);
         assert_eq!(r.fmt_addr, Some(a), "prev=t should reach FMT(A)");
 
         // prev = p → FMT(B)
         let nb_p = Neighbours { this: 10, prev: 31, ..Default::default() };
-        let r = interpret_phoneme(PROG, &phonindex, &nb_p, &lookup);
+        let r = interpret_phoneme(PROG, &phonindex, &nb_p, lookup);
         assert_eq!(r.fmt_addr, Some(b), "prev=p should reach default FMT(B)");
     }
 
