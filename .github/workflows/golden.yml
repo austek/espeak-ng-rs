@@ -59,6 +59,8 @@ jobs:
           --test robustness_final_long_stress
           --test robustness_ssml_unterminated_tag
           --test robustness_switch_tables
+          --test crash_safety
+          --test fuzz_parsers
           --test number_apostrophe_suffix
           --test synth_parity
           --test tr_phoneme_program_context

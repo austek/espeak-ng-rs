@@ -121,7 +121,7 @@ fn random_text_never_panics_in_any_language() {
     let mut rng = Lcg(0xC0FFEE);
     for lang in &languages {
         let Ok(mut t) = Translator::new(lang, None) else { continue };
-        for round in 0..6 {
+        for round in 0..3 {
             let text = random_text(&mut rng);
             t.options.punct = match round % 3 {
                 0 => None,

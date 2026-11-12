@@ -164,3 +164,19 @@ fn translation_with_a_corrupt_dictionary_does_not_panic() {
         }
     }
 }
+
+#[test]
+fn random_bytes_as_text_never_panic_in_the_translator() {
+    let Some(_) = data_dir() else { return };
+    let mut rng = Lcg::new(0xFEED);
+    for lang in ["en", "de", "fr", "ru", "ar", "cmn", "ja", "hi", "om", "ku", "tr", "vi"] {
+        let Ok(t) = espeak_ng::Translator::new(lang, None) else { continue };
+        for _ in 0..25 {
+            let len = (rng.next_u8() as usize) + 1;
+            let text = String::from_utf8_lossy(&rng.bytes(len)).into_owned();
+            let _ = t.text_to_ipa(&text);
+            let _ = t.text_to_ipa_ssml(&text);
+            let _ = t.translate_to_codes(&text);
+        }
+    }
+}
