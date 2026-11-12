@@ -2718,10 +2718,10 @@ fn liaison_surfaces_before(
 ) -> bool {
     let b = liaison.mnemonic.to_le_bytes();
     next.typ == 2 /* phVOWEL */
-        || match (b[0], b[1], next.mnemonic_str().as_str()) {
-            (b'z' | b't', b'2', "j") | (b'z', _, "w/") => true,
-            _ => false,
-        }
+        || matches!(
+            (b[0], b[1], next.mnemonic_str().as_str()),
+            (b'z' | b't', b'2', "j") | (b'z', _, "w/")
+        )
 }
 
 /// Context a token's neighbours provide for resolving French liaison phonemes at
@@ -3422,9 +3422,7 @@ fn remove_standard_prefix(word: &str, end_type: u32) -> Option<(String, u32)> {
         .char_indices()
         .nth(n_chars.saturating_sub(1))
         .map(|(idx, c)| idx + c.len_utf8());
-    let Some(start_after) = cut_end else {
-        return None;
-    };
+    let start_after = cut_end?;
     if start_after > word.len() {
         return None;
     }
@@ -8707,13 +8705,13 @@ fn assign_default_tones(entries: &mut [TranslateEntry], phdata: &PhonemeData, ba
 
     // Index of the last syllable that takes a tone, for Vietnamese's clause-final rule.
     let mut last_toneless: Option<(usize, usize)> = None;
-    for ei in 0..entries.len() {
-        if entries[ei].kind != TranslateEntryKind::Word {
+    for (ei, entry) in entries.iter_mut().enumerate() {
+        if entry.kind != TranslateEntryKind::Word {
             continue;
         }
         let mut i = 0;
-        while i < entries[ei].phonemes.len() {
-            let code = entries[ei].phonemes[i];
+        while i < entry.phonemes.len() {
+            let code = entry.phonemes[i];
             if code == 0 {
                 break;
             }
@@ -8721,12 +8719,12 @@ fn assign_default_tones(entries: &mut [TranslateEntry], phdata: &PhonemeData, ba
                 i += 1;
                 continue;
             }
-            let has_tone = entries[ei]
+            let has_tone = entry
                 .phonemes
                 .get(i + 1)
                 .is_some_and(|&c| is_tone_phoneme(c, phdata));
             if !has_tone {
-                entries[ei].phonemes.insert(i + 1, PHON_DEFAULT_TONE);
+                entry.phonemes.insert(i + 1, PHON_DEFAULT_TONE);
                 last_toneless = Some((ei, i + 1));
                 i += 1;
             }
@@ -11389,8 +11387,7 @@ fn resolve_virtual_phonemes_in_codes(
         };
         let (mut next_vowel, mut next_vowel_stress) = (0u8, NO_STRESS_LEVEL);
         let mut from = i;
-        for k in (n + 1)..real.len() {
-            let at = real[k];
+        for &at in &real[(n + 1)..] {
             if crosses(from, at) {
                 break;
             }
