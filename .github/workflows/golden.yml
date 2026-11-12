@@ -30,6 +30,7 @@ jobs:
         run: >
           cargo test --release
           --test cli_invalid_utf8
+          --test cli_data_path
           --test dictionary_bounds
           --test english_letter_group_y
           --test italian_rule_stress

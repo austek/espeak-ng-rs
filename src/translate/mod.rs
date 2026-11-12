@@ -33,6 +33,17 @@ mod ordinal;
 
 use std::path::{Path, PathBuf};
 
+/// Resolve a `--path` / `ESPEAK_DATA_PATH` value as C's `check_data_path`
+/// does: `<path>/espeak-ng-data` when that directory exists, else `path`
+/// itself when it is a directory, else `None`.
+pub fn data_dir_from_path(path: &Path) -> Option<PathBuf> {
+    let nested = path.join("espeak-ng-data");
+    if nested.is_dir() {
+        return Some(nested);
+    }
+    path.is_dir().then(|| path.to_path_buf())
+}
+
 /// Return the default espeak-ng data directory.
 ///
 /// Resolution order:
@@ -41,9 +52,19 @@ use std::path::{Path, PathBuf};
 ///    executable (useful when the crate is used as a standalone binary).
 /// 3. `/usr/share/espeak-ng-data` (system installation).
 pub fn default_data_dir() -> String {
-    // 1. Explicit environment variable overrides everything.
-    if let Ok(path) = std::env::var("ESPEAK_DATA_PATH") {
-        return path;
+    // 1. `ESPEAK_DATA_PATH` (as C: the parent of `espeak-ng-data`, or the data
+    //    directory itself), then `$HOME/espeak-ng-data`.
+    if let Some(dir) = std::env::var("ESPEAK_DATA_PATH")
+        .ok()
+        .and_then(|p| data_dir_from_path(Path::new(&p)))
+    {
+        return dir.to_string_lossy().into_owned();
+    }
+    if let Some(dir) = std::env::var_os("HOME")
+        .map(|h| PathBuf::from(h).join("espeak-ng-data"))
+        .filter(|d| d.is_dir())
+    {
+        return dir.to_string_lossy().into_owned();
     }
 
     // 2. espeak-ng-data/ relative to the binary.

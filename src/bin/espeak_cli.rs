@@ -1048,16 +1048,9 @@ fn gather_text(cli: &Cli) -> std::io::Result<String> {
 }
 
 fn resolved_data_dir(path_arg: Option<&Path>) -> PathBuf {
-    if let Some(p) = path_arg {
-        if p.join("espeak-ng-data").join("en_dict").exists() {
-            return p.join("espeak-ng-data");
-        }
-        if p.join("en_dict").exists() {
-            return p.to_path_buf();
-        }
-        return p.to_path_buf();
-    }
-    PathBuf::from(default_data_dir())
+    path_arg
+        .and_then(espeak_ng::translate::data_dir_from_path)
+        .unwrap_or_else(|| PathBuf::from(default_data_dir()))
 }
 
 /// `--split=<minutes>`: write the audio as `<name>_01<ext>`, `<name>_02<ext>`, …
