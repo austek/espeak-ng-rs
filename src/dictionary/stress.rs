@@ -411,7 +411,7 @@ impl StressOpts {
                 opts.regressive_voicing = 0x107;
             }
             // `case L('r','u'): case L('s','k'): case L('c','s'):` share one arm.
-            "cs" | "sk" | "sr" => opts.regressive_voicing = 0x03,
+            "cs" | "sk" | "sr" | "hr" | "bs" => opts.regressive_voicing = 0x03,
             "pl" => opts.regressive_voicing = 0x09, // propagates through liquids/nasals
             "ru" | "uk" => {
                 // `Translator_Russian`: `LOPT_REGRESSIVE_VOICING = 0x03`, and
