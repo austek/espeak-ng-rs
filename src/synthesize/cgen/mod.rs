@@ -2,6 +2,7 @@
 //! `Generate` and `wavegen.c`, driven clause by clause from the translator's
 //! phoneme codes.
 
+pub mod breath;
 pub mod generate;
 pub mod langtab;
 pub mod lengths;
@@ -208,7 +209,7 @@ impl<'a> Renderer<'a> {
         ev[EMBED_A] = params.user_volume as i32;
         let mut speed = Speed::default();
         speed.set(3, rate, &voice);
-        let wavegen = Wavegen::new(voice.clone(), ev);
+        let wavegen = Wavegen::new(voice.clone(), ev, params.rand_seed);
         Renderer {
             phdata,
             voice,

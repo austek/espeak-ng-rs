@@ -58,3 +58,15 @@ fn mixed_case_variants_match_c_byte_for_byte() {
         (&["-v", "es+Henrique"], "Hace buen tiempo hoy.", 31641, 0x2d20c912fd4ff14b),
     ]);
 }
+
+/// Variants with `breath` add resonator-filtered `espeak_rand` noise; `-D`
+/// seeds the generator as C's deterministic mode does.
+#[test]
+fn breath_variants_match_c_byte_for_byte() {
+    check(&[
+        (&["-D", "-v", "en+f2"], "The weather is lovely today.", 36893, 0x8ecccde34315f91f),
+        (&["-D", "-v", "en+f3"], "The weather is lovely today.", 35815, 0x660581d065a0430f),
+        (&["-D", "-v", "en+f5"], "The weather is lovely today.", 36864, 0xa381a2ba92b7ef51),
+        (&["-D", "-v", "en+whisper"], "The weather is lovely today.", 36152, 0x522b83e6639c2f71),
+    ]);
+}

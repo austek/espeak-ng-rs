@@ -1,5 +1,6 @@
 //! Port of `wavegen.c`: plays the command queue `generate` builds.
 
+use super::breath::Breath;
 use super::voice::WVoice;
 use super::{Env, Wcmd};
 use crate::synthesize::envelopes::ENVELOPE_DATA;
@@ -186,6 +187,7 @@ pub struct Wavegen {
     echo_length: i32,
     echo_complete: i32,
     voicing: i32,
+    breath: Breath,
     pub out: Vec<i16>,
 }
 
@@ -197,7 +199,9 @@ fn env_table(env: Env, phondata: &[u8]) -> &[u8] {
 }
 
 impl Wavegen {
-    pub fn new(voice: WVoice, embedded_value: [i32; N_EMBEDDED_VALUES]) -> Self {
+    /// The generator for `voice`; `rand_seed` seeds `espeak_rand` as
+    /// `espeak_srand` does.
+    pub fn new(voice: WVoice, embedded_value: [i32; N_EMBEDDED_VALUES], rand_seed: u32) -> Self {
         let wdata = WData {
             pitch_env: Env::Builtin(0),
             pitch: 0,
@@ -254,6 +258,7 @@ impl Wavegen {
             echo_length: 0,
             echo_complete: 0,
             voicing: 64,
+            breath: Breath::new(rand_seed),
             out: Vec::new(),
         };
         w.general_amplitude = w.get_amplitude();
@@ -529,6 +534,8 @@ impl Wavegen {
         self.harmspect = self.hswitch;
         self.hswitch ^= 1;
         self.maxh2 = self.peaks_to_harmspect(self.wdata.pitch << 4, self.hswitch, 1);
+        let peaks = &self.peaks;
+        self.breath.set(&self.voice, |pk| peaks[pk].freq);
     }
 
     fn quiet_point(&mut self, phondata: &[u8]) {
@@ -690,6 +697,10 @@ impl Wavegen {
         let mut total = self.harmonic_sum(waveph);
         if self.voicing != 64 {
             total = (total >> 6) * self.voicing;
+        }
+        if self.voice.breath[0] != 0 {
+            let peaks = &self.peaks;
+            total = total.wrapping_add(self.breath.apply(&self.voice, |pk| peaks[pk].height));
         }
         let z2 = self.mix_sample(phondata);
         let mut z1 = z2 + (((total >> 8) * self.amplitude2) >> 13);
