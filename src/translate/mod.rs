@@ -1404,6 +1404,13 @@ fn glued_number_suffixes(text: &str) -> Vec<String> {
     found
 }
 
+/// Whether the language's `.replace` table turns `c` into another character.
+/// C reads only ASCII digits as numbers; another script's digit is spoken only
+/// where this table maps it to one.
+fn rules_read_char(dict: &Dictionary, c: char) -> bool {
+    dict.apply_replacements(&c.to_string()).is_some()
+}
+
 /// `grammar` extended with the glued suffixes of `text` that the dictionary
 /// defines as ordinal markers (`_#<suffix>`), which is how C decides, and with
 /// the number symbols (`²`, `½`) it lists as words of its own.
@@ -1419,6 +1426,16 @@ fn with_dict_ordinal_suffixes(grammar: &NumberGrammar, text: &str, dict: &Dictio
         .into_iter()
         .filter(|c| lookup(dict, &c.to_string(), &LookupCtx::default()).is_some_and(|r| r.flags1.found()))
         .collect();
+    let mut unread: Vec<char> = text
+        .chars()
+        .filter(|&c| {
+            (native_digit_to_ascii(c).is_some() || matches!(c, '\u{066A}'..='\u{066C}'))
+                && !rules_read_char(dict, c)
+        })
+        .collect();
+    unread.sort_unstable();
+    unread.dedup();
+    extended.listed_symbols.extend(unread);
     extended.ordinals.dict_suffixes = glued_number_suffixes(text)
         .into_iter()
         .filter(|suffix| !lookup_num_phonemes(dict, &format!("_#{suffix}")).is_empty())
