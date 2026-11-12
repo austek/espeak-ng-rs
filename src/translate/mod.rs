@@ -1496,7 +1496,7 @@ fn pt_group(n: u32) -> String {
     if n / 100 > 0 {
         parts.push(H[(n / 100) as usize].to_string());
     }
-    if n % 100 > 0 {
+    if !n.is_multiple_of(100) {
         parts.push(tens_units(n % 100));
     }
     parts.join(" e ")
@@ -3832,7 +3832,7 @@ fn append_group_body(
         let wants_and = group.value < 100
             && (grammar.hundreds.use_conjunction_with_remainder
                 || (grammar.hundreds.conjunction_before_simple_remainder
-                    && (group.value % 10 == 0
+                    && (group.value.is_multiple_of(10)
                         || !lookup_num_phonemes(dict, &num_key(group.value)).is_empty())));
         if preceded && wants_and {
             let and = lookup_num_phonemes(dict, "_0and");
@@ -4074,7 +4074,7 @@ fn num3_phonemes_g(
         // Only when the remainder is a single word (round ten, or a number with
         // a direct dictionary entry) — a compound remainder already has its own
         // conjunction, so a second one would be wrong ("honderd vier-en-dertig").
-        let simple = tensunits % 10 == 0
+        let simple = tensunits.is_multiple_of(10)
             || !lookup_num_phonemes(dict, &num_key(tensunits)).is_empty();
         if simple {
             hundreds_part.append_lookup_suffix(&lookup_num_phonemes(dict, "_0and"));
@@ -4722,7 +4722,7 @@ fn try_ordinal_number(
 /// leading group below 100 (1, 2, 5 or 6… digits, no leading zero) starts with
 /// the marker, and `SetWordStress` puts its vowel break before it.
 fn starts_with_word_break(digits: &str) -> bool {
-    !digits.starts_with('0') && (digits.len() <= 2 || (digits.len() > 4 && digits.len() % 3 != 0))
+    !digits.starts_with('0') && (digits.len() <= 2 || (digits.len() > 4 && !digits.len().is_multiple_of(3)))
 }
 
 /// Stress every word of a grouped number separately, as C does when it
@@ -7906,7 +7906,7 @@ fn apply_decades(tokens: &mut Vec<Token>, lang: &str) {
 /// year reads as a number ("nineteen"); the decade pluralises ("eighties").
 fn decade_reading(digits: &str) -> Option<Vec<Token>> {
     let n: u32 = digits.parse().ok()?;
-    if n % 10 != 0 {
+    if !n.is_multiple_of(10) {
         return None;
     }
     let tens_plural = |t: u32| -> Option<&'static str> {
@@ -11242,7 +11242,7 @@ fn tonic_position(
             l
         } else {
             run += 1;
-            match (run > 1 && run % 2 == 0, no_dim) {
+            match (run > 1 && run.is_multiple_of(2), no_dim) {
                 (true, true) => { run = 1; l }
                 (true, false) => 0,
                 _ => l,

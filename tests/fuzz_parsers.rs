@@ -63,7 +63,7 @@ fn hammer(real: &[u8], mut f: impl FnMut(&[u8])) {
         if copy.is_empty() {
             break;
         }
-        let bias = (rng.next_u8() as usize) % 4 == 0;
+        let bias = (rng.next_u8() as usize).is_multiple_of(4);
         let pos = if bias {
             (rng.next_u8() as usize) % copy.len().min(64)
         } else {

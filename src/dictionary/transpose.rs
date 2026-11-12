@@ -293,7 +293,7 @@ pub fn transpose_alphabet(word: &str, cfg: &TransposeConfig) -> TransposeResult 
     }
 
     // ── Step 3: pack 6-bit codes into bytes. ─────────────────────────────
-    let mut out: Vec<u8> = Vec::with_capacity((codes.len() * 6 + 7) / 8);
+    let mut out: Vec<u8> = Vec::with_capacity((codes.len() * 6).div_ceil(8));
     let mut acc: u32 = 0;
     let mut bits: u32 = 0;
 

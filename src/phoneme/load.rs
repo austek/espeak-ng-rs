@@ -450,7 +450,7 @@ impl PhonemeData {
                 }
                 // data = number of UTF-8 bytes; packed two per instruction word
                 let mut ipa_bytes = Vec::with_capacity(data);
-                let n_words = (data + 1) / 2;
+                let n_words = data.div_ceil(2);
                 for j in 0..n_words {
                     let word_off = (prog + i + 1 + j) * 2;
                     if word_off + 2 > phonindex.len() { break; }

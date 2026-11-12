@@ -70,7 +70,7 @@ pub fn num_instn_words(instn: u16) -> usize {
             let opcode = (instn >> 8) as u8;
             if opcode == I_IPA_NAME as u8 {
                 let data = (instn & 0xff) as usize; // UTF-8 byte count
-                1 + (data + 1) / 2                  // header + ceil(data/2) words
+                1 + data.div_ceil(2)                  // header + ceil(data/2) words
             } else {
                 1
             }
@@ -691,7 +691,7 @@ where
                     }
                     bytes.truncate(n);
                     result.ipa_string = String::from_utf8(bytes).ok();
-                    pc += 1 + (data + 1) / 2; // header + ceil(data/2) UTF-8 words
+                    pc += 1 + data.div_ceil(2); // header + ceil(data/2) UTF-8 words
                 } else {
                     let param = (instn & 0xff) as u8;
                     match instn2 as u16 {
