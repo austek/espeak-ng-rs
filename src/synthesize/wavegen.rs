@@ -179,12 +179,12 @@ fn frame_to_peaks(fr: &SpectFrame) -> [Peak; 9] {
         if ix < 7 {
             peaks[ix].freq = (fr.ffreq[ix] as i64 * VOICE_FREQ[ix] as i64) << 8;
         }
-        peaks[ix].height = (fr.fheight[ix] as i64 * VOICE_HEIGHT[ix] as i64) << 6;
+        peaks[ix].height = (fr.fheight[ix] as i64 * VOICE_HEIGHT[ix]) << 6;
         if ix <= 5 {
-            let width = (fr.fwidth[ix] as i64 * VOICE_WIDTH[ix.min(8)] as i64) << 10;
+            let width = (fr.fwidth[ix] as i64 * VOICE_WIDTH[ix.min(8)]) << 10;
             peaks[ix].left = width;
             if ix < 3 {
-                let rw = (fr.fright[ix] as i64 * VOICE_WIDTH[ix.min(8)] as i64) << 10;
+                let rw = (fr.fright[ix] as i64 * VOICE_WIDTH[ix.min(8)]) << 10;
                 peaks[ix].right = rw;
             } else {
                 peaks[ix].right = width;
@@ -548,7 +548,7 @@ pub fn wavegen_segment(
             let h = if pitch > 0 { ((freq_hz16 / (pitch * 8) + 1) / 2).max(0) as u32 } else { 0 };
             peak_harmonic[k] = if h <= hmax_sr { h } else { 0 };
             // C: x = peaks.height >> 14; peak_height = (x*x*5)/2
-            let x = (interp[fk].height >> 14) as i64;
+            let x = interp[fk].height >> 14;
             peak_height[k] = if peak_harmonic[k] > 0 { (x * x * 5) / 2 } else { 0 };
         }
     }

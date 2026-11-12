@@ -1332,7 +1332,7 @@ mod tests {
 
     /// Build phonindex with: [i_IPA_NAME(2 bytes) | i_FMT]
     fn make_ipa_then_fmt(fmt_addr: u32) -> Vec<u8> {
-        let ipa_instn: u16 = ((I_IPA_NAME as u16) << 8) | 2; // 0x0d02
+        let ipa_instn: u16 = (I_IPA_NAME << 8) | 2; // 0x0d02
         let ipa_data:  u16 = u16::from_be_bytes([b'e', b':']);
         let fmt_instn: u16 = 0xb000 | (((fmt_addr >> 18) & 0xf) as u16);
         let fmt_next:  u16 = ((fmt_addr >> 2) & 0xffff) as u16;
@@ -1418,7 +1418,7 @@ mod tests {
     #[test]
     fn num_instn_words_ipa_name_4bytes() {
         // IPA_NAME with 4 bytes of data: 1 header + ceil(4/2) = 1 + 2 = 3 words
-        let instn: u16 = ((I_IPA_NAME as u16) << 8) | 4;
+        let instn: u16 = (I_IPA_NAME << 8) | 4;
         assert_eq!(num_instn_words(instn), 3);
     }
 

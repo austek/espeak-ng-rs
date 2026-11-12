@@ -5589,7 +5589,7 @@ fn word_to_phonemes_inner(
                 return WordResult { phonemes, dict_flags, found_in_list: true, prefix: None, skip_words: 0, late_suffix: Vec::new() };
             }
             // Apply stress placement
-            set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags as u32), -1, 0);
+            set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags), -1, 0);
             // (No stressed-vowel upgrading here: the pronunciation came from the
             // list, and C's `isTranslationGiven` gate keeps the vowel changes off
             // a word whose phonemes were given — `tr b` is `b'e`, not `b'E`.)
@@ -5811,7 +5811,7 @@ fn word_to_phonemes_inner(
                 // itself the stem of an outer prefix leaves all stress to the
                 // outermost call, which sees the whole prefix run.
                 if !expect.defer_stress {
-                    let flags = Some(stress_dict_flags as u32);
+                    let flags = Some(stress_dict_flags);
                     if prefix_flags || prefix_stressed {
                         if stress_opts.prefixes || result.end_type & crate::dictionary::SUFX_T != 0 {
                             stem_ph.push(0);
@@ -5989,7 +5989,7 @@ fn word_to_phonemes_inner(
 
         // Apply stress placement; use dict flags from FLAGS-only entry if available
         let flags_for_stress = if stress_dict_flags != 0 {
-            Some(stress_dict_flags as u32)
+            Some(stress_dict_flags)
         } else {
             Some(0)  // non-NULL mirrors C's behavior of passing non-NULL dictionary_flags
         };

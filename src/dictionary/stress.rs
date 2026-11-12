@@ -599,7 +599,7 @@ pub fn get_vowel_stress(
             if phcode == PHON_STRESS_PREV {
                 // Retroactive primary stress on the PRECEDING vowel
                 let mut j = count - 1;
-                while j > 0 && stressed_syllable == 0 && (vowel_stress[j as usize] as i8) < STRESS_IS_PRIMARY {
+                while j > 0 && stressed_syllable == 0 && vowel_stress[j as usize] < STRESS_IS_PRIMARY {
                     let vs = vowel_stress[j as usize];
                     if vs != STRESS_IS_DIMINISHED && vs != STRESS_IS_UNSTRESSED {
                         vowel_stress[j as usize] = STRESS_IS_PRIMARY;
@@ -745,10 +745,10 @@ pub fn set_word_stress(
     let dflags = dictionary_flags.unwrap_or(0) as i32;
 
     // Extract explicit stress position from dict flags bits 0-2
-    let mut stressed_syllable = (dflags & 0x7) as i32;
+    let mut stressed_syllable = dflags & 0x7;
     let unstressed_word = (dflags & 0x8) != 0;
     if unstressed_word {
-        stressed_syllable = (dflags & 0x3) as i32;
+        stressed_syllable = dflags & 0x3;
     }
 
     // Build internal phoneme copy for GetVowelStress
