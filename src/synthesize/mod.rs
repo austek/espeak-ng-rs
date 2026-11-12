@@ -56,6 +56,7 @@ pub mod setlengths;
 pub mod sample;
 pub mod klatt;
 pub mod tempo;
+pub mod cgen;
 
 use crate::error::{Error, Result};
 use crate::phoneme::{PH_PAUSE, PH_VOWEL};
@@ -258,6 +259,13 @@ pub struct VoiceParams {
     /// "unset" for that level (fall back to the built-in `STRESS_AMPS_EN`); the
     /// all-zero default therefore leaves every phoneme's amplitude unchanged.
     pub stress_amps: [i32; 8],
+    /// The language whose translator options and voice file apply.
+    pub lang: String,
+    /// The voice's `pitch <base> <range>`, when the voice or variant sets one.
+    pub voice_pitch: Option<(i32, i32)>,
+    /// The data directory, for the voice file's synthesis keywords.  `None`
+    /// keeps the approximate renderer.
+    pub data_dir: Option<std::path::PathBuf>,
 }
 
 impl VoiceParams {
@@ -311,6 +319,9 @@ impl Default for VoiceParams {
             echo_amp:           0,
             flutter:            0,
             stress_amps:        [0; 8],
+            lang:               String::new(),
+            voice_pitch:        None,
+            data_dir:           None,
         }
     }
 }
@@ -680,6 +691,9 @@ impl Synthesizer {
         if codes.is_empty() {
             return Ok(Vec::new());
         }
+        if let Some(dir) = self.voice.data_dir.clone().filter(|_| !self.voice.klatt) {
+            return Ok(self.render_c(codes, phdata, &dir, word_marks, sentence_marks, sink));
+        }
 
         // `VoiceParams::speed_percent` is derived from upstream's `speed_lookup`
         // curve (`setlengths::speed_duration_factor`) and already carries the
@@ -999,6 +1013,41 @@ impl Synthesizer {
         apply_echo(&mut output_i16, self.voice.echo_delay_samples, self.voice.echo_amp);
 
         Ok(output_i16)
+    }
+
+    /// The C-faithful back end (`cgen`); clauses stream to `sink` except the
+    /// last, which is returned.
+    fn render_c(
+        &self,
+        codes: &[crate::translate::PhonemeCode],
+        phdata: &crate::phoneme::PhonemeData,
+        dir: &std::path::Path,
+        word_marks: &mut Vec<usize>,
+        sentence_marks: &mut Vec<usize>,
+        sink: &mut Option<&mut dyn FnMut(&[i16], bool) -> bool>,
+    ) -> PcmBuffer {
+        let mut held: Vec<i16> = Vec::new();
+        let mut stopped = false;
+        let mut emit = |pcm: &[i16]| {
+            if stopped {
+                return;
+            }
+            match sink.as_mut() {
+                Some(s) if !held.is_empty() => {
+                    stopped = s(&held, false);
+                    held.clear();
+                }
+                _ => {}
+            }
+            held.extend_from_slice(pcm);
+        };
+        let (words, sentences) = cgen::render(codes, phdata, dir, &self.voice, &mut emit);
+        *word_marks = if words.is_empty() { vec![0] } else { words };
+        if let Some(first) = word_marks.first_mut() {
+            *first = 0;
+        }
+        *sentence_marks = sentences.into_iter().skip(1).collect();
+        held
     }
 
     /// Return the sample rate used by this synthesizer.

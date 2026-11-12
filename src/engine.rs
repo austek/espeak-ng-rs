@@ -1198,6 +1198,16 @@ impl EspeakNg {
             echo_amp,
             flutter,
             stress_amps,
+            lang: self.voice_spec.effective_lang().to_string(),
+            voice_pitch: self
+                .voice_spec
+                .variant
+                .as_ref()
+                .and_then(|var| crate::voices::load_variant(&self.data_dir, var))
+                .and_then(|vp| vp.pitch)
+                .or(self.voice_pitch)
+                .or_else(|| crate::voices::voice_pitch(&self.data_dir, self.voice_spec.effective_lang())),
+            data_dir: Some(self.data_dir.clone()),
             ..VoiceParams::default()
         }
     }

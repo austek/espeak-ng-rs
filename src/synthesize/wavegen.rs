@@ -63,7 +63,7 @@ include!("sintab_data.rs");
 
 /// Peak shape table 2 (used by espeak-ng by default).
 /// Source: wavegen.c `pk_shape2[257]`.
-static PK_SHAPE2: [u8; 257] = [
+pub(crate) static PK_SHAPE2: [u8; 257] = [
     255, 254, 254, 254, 254, 254, 254, 254, 254, 254, 253, 253, 253, 253, 252, 252,
     252, 251, 251, 251, 250, 250, 249, 249, 248, 248, 247, 247, 246, 245, 245, 244,
     243, 243, 242, 241, 239, 237, 235, 233, 231, 229, 227, 225, 223, 221, 218, 216,
@@ -86,7 +86,7 @@ static PK_SHAPE2: [u8; 257] = [
 /// Wavemult window — Hanning window for HF peak synthesis.
 /// Preset for 22050 Hz sample rate; 128 entries (N_WAVEMULT=128).
 /// Mirrors `wavemult[N_WAVEMULT]` in wavegen.c.
-static WAVEMULT: [u8; 128] = [
+pub(crate) static WAVEMULT: [u8; 128] = [
       0,   0,   0,   2,   3,   5,   8,  11,  14,  18,  22,  27,  32,  37,  43,  49,
      55,  62,  69,  76,  83,  90,  98, 105, 113, 121, 128, 136, 144, 152, 159, 166,
     174, 181, 188, 194, 201, 207, 213, 218, 224, 228, 233, 237, 240, 244, 246, 249,

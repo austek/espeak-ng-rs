@@ -11172,8 +11172,8 @@ fn promote_clause_tonics(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData, lan
         if let Some(p) = tonic_position(clause, &own[start..end], phdata, no_dim, adjacent_dim) {
             let (first, vowel) = promote_vowel(codes, start + p);
             let vowel_own = own[vowel];
-            own.splice(first..vowel, [vowel_own]);
-            end = end + 1 - (vowel - first);
+            own.splice(first..vowel, [vowel_own, vowel_own]);
+            end = end + 2 - (vowel - first);
         }
         start = end + 1;
     }
@@ -11273,7 +11273,14 @@ fn diminish_adjacent_unstressed(
 fn promote_vowel(codes: &mut Vec<PhonemeCode>, vowel: usize) -> (usize, usize) {
     let is_stress = |c: &PhonemeCode| matches!(c.code, 2..=7 | PHON_STRESS_TONIC) && !c.is_boundary;
     let first = (0..vowel).rev().take_while(|&i| is_stress(&codes[i])).last().unwrap_or(vowel);
-    codes.splice(first..vowel, [PhonemeCode { code: PHON_STRESS_P, ..Default::default() }]);
+    let original = if first < vowel { codes[vowel - 1].code } else { 0 };
+    codes.splice(
+        first..vowel,
+        [
+            PhonemeCode { marker: Some(CodeMarker::PromotedTonic(original)), ..Default::default() },
+            PhonemeCode { code: PHON_STRESS_P, ..Default::default() },
+        ],
+    );
     (first, vowel)
 }
 
@@ -11700,6 +11707,8 @@ fn resolve_virtual_phonemes_in_codes(
             prev_vowel_stress,
             vowels_tracked: true,
             after_stress: after_stress(i, n, &real, &level, &crosses),
+            this_next_pause: false,
+            pre_voicing: false,
         };
         let extract = crate::synthesize::bytecode::interpret_phoneme_ctl(
             ph.program,
@@ -11788,6 +11797,10 @@ pub enum CodeMarker {
     /// IPA output (`preserve_punctuation`) prints it; every other consumer skips
     /// the marker like any other.
     Punctuation(char),
+    /// The stress mark that follows was raised to primary because the clause
+    /// had none (C's `count_pitch_vowels`); this is the stress code it
+    /// replaced, `0` for none.  The synthesizer redoes that promotion itself.
+    PromotedTonic(u8),
 }
 
 // ---------------------------------------------------------------------------

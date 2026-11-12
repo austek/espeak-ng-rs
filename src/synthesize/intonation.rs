@@ -225,7 +225,7 @@ fn set_pitch(syl: &mut Syllable, base: i32, drop: i32) {
 }
 
 /// Where the tonic syllable falls, and how many syllables precede/follow it.
-struct Layout {
+pub(crate) struct Layout {
     number_pre: usize,
     number_tail: usize,
     tone_posn: usize,
@@ -236,7 +236,7 @@ struct Layout {
 }
 
 /// `count_pitch_vowels()`.
-fn count_pitch_vowels(syls: &mut [Syllable], start: usize, end: usize, clause_end: usize, no_tonic: bool) -> Layout {
+pub(crate) fn count_pitch_vowels(syls: &mut [Syllable], start: usize, end: usize, clause_end: usize, no_tonic: bool) -> Layout {
     let mut max_stress = 0u8;
     let mut max_stress_posn = start;
     let mut max_stress_posn2 = start;
@@ -500,7 +500,7 @@ fn calc_pitch_segment(
 }
 
 /// `calc_pitches2()` — assign pitches using a `TUNE` from the data file.
-fn calc_pitches_tune(syls: &mut [Syllable], start: usize, end: usize, tune: &Tune, layout: &Layout, no_tonic: bool) -> u8 {
+pub(crate) fn calc_pitches_tune(syls: &mut [Syllable], start: usize, end: usize, tune: &Tune, layout: &Layout, no_tonic: bool) -> u8 {
     let mut ix = start;
     set_pitch_gradient(syls, ix, ix + layout.number_pre, tune.prehead_start as i32, tune.prehead_end as i32);
     ix += layout.number_pre;
@@ -537,7 +537,7 @@ fn calc_pitches_tune(syls: &mut [Syllable], start: usize, end: usize, tune: &Tun
 }
 
 /// `calc_pitches()` with `control != 0` — the built-in tone head/nucleus tables.
-fn calc_pitches_table(syls: &mut [Syllable], start: usize, end: usize, tune_number: usize, layout: &Layout, no_tonic: bool) -> u8 {
+pub(crate) fn calc_pitches_table(syls: &mut [Syllable], start: usize, end: usize, tune_number: usize, layout: &Layout, no_tonic: bool) -> u8 {
     let th = &TONE_HEAD_TABLE[tune_number.min(TONE_HEAD_TABLE.len() - 1)];
     let tn = &TONE_NUCLEUS_TABLE[tune_number.min(TONE_NUCLEUS_TABLE.len() - 1)];
     let continuing = start > 0;

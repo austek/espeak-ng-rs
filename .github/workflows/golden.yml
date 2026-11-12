@@ -57,6 +57,7 @@ jobs:
           --test robustness_linear_time
           --test robustness_wav_stream
           --test number_apostrophe_suffix
+          --test synth_parity
           --test tr_phoneme_program_context
           --test tr_next_phoneme_word_end
           --test max_digits

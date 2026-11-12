@@ -166,6 +166,14 @@ pub struct PhonemeExtract {
     /// Because it is read off the *executed* path, it is context-sensitive in
     /// the same way C's is: Italian `*` is `r` between vowels and `ɾ` elsewhere.
     pub ipa_string: Option<String>,
+
+    /// C's `phdata->sound_addr[]` and `sound_param[]`, indexed by `pd_FMT`,
+    /// `pd_WAV`, `pd_VWLSTART`, `pd_VWLEND`, `pd_ADDWAV`.
+    pub sound_addr: [u32; 5],
+    pub sound_param: [i32; 5],
+    /// `phdata->pitch_env` and `amp_env` (phondata offsets, 0 = none).
+    pub pitch_env: u32,
+    pub amp_env: u32,
 }
 
 // ---------------------------------------------------------------------------
@@ -529,6 +537,11 @@ pub struct Neighbours {
     pub vowels_tracked: bool,
     /// An earlier phoneme of this word carries stress >= 4 (C's `isAfterStress`).
     pub after_stress: bool,
+    /// The phoneme being interpreted carries `SFLAG_NEXT_PAUSE`: `Generate`
+    /// found an unreleased stop, so `isBreak` holds whatever follows.
+    pub this_next_pause: bool,
+    /// `InterpretPhoneme` control bit 0: the voiced lead-in of a stop.
+    pub pre_voicing: bool,
 }
 
 /// `next_stress`/`wordstress` value meaning "the caller doesn't track this".
@@ -555,6 +568,8 @@ impl Default for Neighbours {
             prev_vowel_stress: STRESS_UNKNOWN,
             vowels_tracked: false,
             after_stress: false,
+            this_next_pause: false,
+            pre_voicing: false,
             this_wordstart: false,
             prev_wordstart: false,
             next_wordstart: false,
@@ -796,8 +811,15 @@ where
                             pc += 2;
                         }
                     }
+                    2 => {
+                        result.pitch_env = data as u32;
+                        pc += 2;
+                    }
+                    3 => {
+                        result.amp_env = data as u32;
+                        pc += 2;
+                    }
                     _ => {
-                        // PITCHENV (2) / AMPENV (3): not needed for FMT selection.
                         pc += 2;
                     }
                 }
@@ -873,6 +895,11 @@ where
     if sound_addr[3] != 0 {
         result.vwlending_addr = Some(sound_addr[3]);
     }
+    result.sound_addr = sound_addr;
+    result.sound_param = std::array::from_fn(|i| match i {
+        2 | 3 => sound_param[i] as i32,
+        _ => sound_param[i] as u8 as i32,
+    });
     result.change_phoneme_code = change_phoneme;
     result.vowel_transition = vowel_transition;
     result
@@ -925,8 +952,9 @@ where
     let instn2 = (instn >> 8) as usize; // 0..15
 
     if instn2 >= 14 {
-        // Other conditions (PreVoicing / Klatt / Mbrola): false at synthesis.
-        return false;
+        // Other conditions: only PreVoicing can hold (Klatt and MBROLA voices
+        // do not reach this interpreter).
+        return instn2 == 0xf && data == 1 && nb.pre_voicing;
     }
 
     let mut which = instn2 % 7;
@@ -1051,7 +1079,7 @@ where
             OTHER_IS_VOICED => {
                 ph.typ == PH_VOWEL || ph.typ == PH_LIQUID || (ph.phflags & PH_VOICED_FLAG) != 0
             }
-            OTHER_IS_BREAK => ph.typ == PH_PAUSE,
+            OTHER_IS_BREAK => ph.typ == PH_PAUSE || nb.this_next_pause,
             OTHER_IS_WORD_START => match which {
                 0 | 5 => nb.prev_wordstart,
                 1 => nb.this_wordstart,
