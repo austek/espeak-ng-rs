@@ -155,7 +155,7 @@ fn load_multiple_languages() {
     for lang in langs {
         let path = dir.join(format!("{}_dict", lang));
         if !path.exists() { continue; }
-        let dict = Dictionary::load(lang, &dir).expect(&format!("load {}_dict", lang));
+        let dict = Dictionary::load(lang, &dir).unwrap_or_else(|_| panic!("load {}_dict", lang));
         assert_eq!(dict.lang, lang);
         assert!(dict.rules_offset > 0);
     }

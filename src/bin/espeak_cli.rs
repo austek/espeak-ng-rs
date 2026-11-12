@@ -248,7 +248,7 @@ fn run() -> std::io::Result<()> {
         b = b.range(pr);
     }
     let mut engine = b.build().map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, format!("{e}"))
+        std::io::Error::other(format!("{e}"))
     })?;
     apply_runtime_params(&mut engine, &cli);
     engine.set_voice_file(loaded_voice);
@@ -271,7 +271,7 @@ fn run() -> std::io::Result<()> {
     {
         if !cli.stdout_wav {
             let (pcm, rate, events) = engine.synth_with_events(&text).map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::Other, format!("{e}"))
+                std::io::Error::other(format!("{e}"))
             })?;
             return write_split_wavs(&path, &pcm, rate, &events, minutes);
         }
@@ -513,7 +513,7 @@ fn run_compile(lang_arg: &str, cli: &Cli) -> std::io::Result<()> {
     }
 
     let mut phdata = PhonemeData::load(&data_dir).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, format!("cannot load phoneme data: {e}"))
+        std::io::Error::other(format!("cannot load phoneme data: {e}"))
     })?;
     // Resolve mnemonics against the voice's phoneme table — honour a `phonemes
     // <name>` voice directive (e.g. bs→hr, nb→no) so a shared-table language
@@ -523,8 +523,7 @@ fn run_compile(lang_arg: &str, cli: &Cli) -> std::io::Result<()> {
         && phdata.select_table_by_name(&lang).is_err()
     {
         phdata.select_table_by_name("en").map_err(|e| {
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
+            std::io::Error::other(
                 format!("no phoneme table for '{lang}' (voice table '{table}') or en: {e}"),
             )
         })?;
@@ -532,7 +531,7 @@ fn run_compile(lang_arg: &str, cli: &Cli) -> std::io::Result<()> {
 
     let transpose = TransposeConfig::for_lang(&lang);
     let bytes = compile_dictionary(&data_dir, &lang, &phdata, &transpose).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, format!("compiling {lang}_dict: {e}"))
+        std::io::Error::other(format!("compiling {lang}_dict: {e}"))
     })?;
 
     let out = data_dir.join(format!("{lang}_dict"));
@@ -981,7 +980,7 @@ fn pho_output(cli: &Cli, text: &str) -> std::io::Result<()> {
 fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
     let data_dir = resolved_data_dir(cli.path_override.as_deref());
     let mut translator = Translator::new(&cli.voice, Some(&data_dir)).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, format!("{e}"))
+        std::io::Error::other(format!("{e}"))
     })?;
     if let Some(k) = cli.capitals {
         translator.options.capitals = k as u8;
@@ -1004,7 +1003,7 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
             translator.text_to_ipa(text)
         }
         .map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("{e}"))
+            std::io::Error::other(format!("{e}"))
         })?;
         ipa
     } else {
@@ -1021,10 +1020,10 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
             text.to_string()
         };
         let codes = translator.translate_to_codes(&src).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("{e}"))
+            std::io::Error::other(format!("{e}"))
         })?;
         let mut phdata = PhonemeData::load(&data_dir).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("{e}"))
+            std::io::Error::other(format!("{e}"))
         })?;
         // Same resolution as the library path (voice `phonemes` directive, then
         // the primary subtag) so a regional locale without its own table — pt-br,
@@ -1034,7 +1033,7 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
             &data_dir,
             translator.options.lang.as_str(),
         )
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{e}")))?;
+        .map_err(|e| std::io::Error::other(format!("{e}")))?;
         format_x(&codes, &phdata, cli.sep, cli.tie, &data_dir, translator.options.lang.as_str())
     };
 

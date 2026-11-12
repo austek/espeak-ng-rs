@@ -198,8 +198,7 @@ fn espeak_cli_ipa(bin: &str, data_dir: &Path, voice: &str, text: &str) -> std::i
         .output()?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             format!("status {:?}: {stderr}", output.status),
         ));
     }
