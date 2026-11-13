@@ -81,6 +81,7 @@ jobs:
           --test ssml_markup_parity
           --test synth_parity_tone
           --test synth_parity_klatt
+          --test synth_parity_next3
           --test tr_phoneme_program_context
           --test tr_next_phoneme_word_end
           --test max_digits

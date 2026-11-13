@@ -867,9 +867,13 @@ impl<'a> Generator<'a> {
             this_next_pause: p.synthflags & SFLAG_NEXT_PAUSE != 0,
             pre_voicing,
             klatt_synth: self.voice.klatt != 0,
+            next3: code(get(ix + 3)),
+            next3_wordstart: (1..=3).any(|d| get(ix + d).is_some_and(|q| q.newword != 0)),
+            prev2: ix.checked_sub(2).and_then(get).map(Ph::code),
+            prev2_wordstart: p.newword != 0 || ix.checked_sub(1).and_then(get).is_some_and(|q| q.newword != 0),
             ..word_vowels(list, ix)
         };
-        let window: Vec<&Ph> = (ix.saturating_sub(1)..(ix + 3).min(list.len())).map(|i| &list[i]).collect();
+        let window: Vec<&Ph> = (ix.saturating_sub(2)..(ix + 4).min(list.len())).map(|i| &list[i]).collect();
         let lookup = |c: u8| {
             window.iter().find(|q| q.code() == c).map(|q| q.ph.clone()).or_else(|| self.phdata.get(c).cloned())
         };
