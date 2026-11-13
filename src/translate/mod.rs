@@ -9028,7 +9028,7 @@ fn apply_tone_sandhi(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang:
                 }
                 let replacement = match prevw_tone.as_str() {
                     "55" => "22",
-                    "53" => "33",
+                    "35" => "33",
                     "214" => "44",
                     _ => "",
                 };
