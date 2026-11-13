@@ -10056,7 +10056,7 @@ impl Translator {
             let bracket_here = matches!(token, Token::Punctuation(c) if is_bracket(*c))
                 && entry.phonemes.is_empty();
             if open_switch.is_some()
-                && (!entry.phonemes.is_empty()
+                && (entry.phonemes.iter().any(|&b| b != 0 && b != crate::phoneme::PHON_END_WORD)
                     || bracket_here
                     || entry.kind == TranslateEntryKind::ClauseBoundary)
             {

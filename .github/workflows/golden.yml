@@ -214,6 +214,7 @@ jobs:
           --test silent_symbol_clause_word
           --test punctuation_before_any_word
           --test closing_clause_engine
+          --test switch_over_silent_entries
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config
