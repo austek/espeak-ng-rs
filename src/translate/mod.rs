@@ -7211,7 +7211,11 @@ fn letter_word_phonemes(
     options: &LangOptions,
     expect: PosExpect,
 ) -> WordResult {
-    let symbol_ctx = LookupCtx { lookup_symbol: true, ..LookupCtx::default() };
+    let symbol_ctx = LookupCtx {
+        lookup_symbol: true,
+        dict_condition: options.dict_condition,
+        ..LookupCtx::default()
+    };
     let listed = lookup_with_follow(dict, lower, &symbol_ctx, &[]).filter(|r| {
         r.flags1.found()
             && !r.flags1.textmode()
