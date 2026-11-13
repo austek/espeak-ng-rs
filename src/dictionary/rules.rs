@@ -1025,9 +1025,41 @@ pub struct RulesResult {
     /// An unrecognised letter abandoned the word (C's `FLAG_SPELLWORD`): the
     /// caller reads its letters one by one.  `phonemes` is empty.
     pub aborted: bool,
-    /// A bracket or quote character no rule covers sits in the word: C raises
-    /// the pause before the following word (`pre_pause`).
-    pub bracket_pause: bool,
+}
+
+thread_local! {
+    static UNCOVERED_BRACKET_WORDS: std::cell::RefCell<std::collections::HashSet<String>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+    static RECORDING: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+fn record_uncovered_bracket(word_buf: &[u8], word_start: usize) {
+    if !RECORDING.with(std::cell::Cell::get) {
+        return;
+    }
+    let tail = &word_buf[word_start.min(word_buf.len())..];
+    let end = tail.iter().position(|&b| b == b' ' || b == 0).unwrap_or(tail.len());
+    let word = String::from_utf8_lossy(&tail[..end]).into_owned();
+    UNCOVERED_BRACKET_WORDS.with(|s| s.borrow_mut().insert(word));
+}
+
+/// Whether a translation of `word` has left a bracket or quote to the default
+/// group with no rule (C raises `pre_pause` there, so the next word pauses).
+pub fn word_hit_uncovered_bracket(word: &str) -> bool {
+    UNCOVERED_BRACKET_WORDS.with(|s| s.borrow().contains(word))
+}
+
+/// Forgets the words recorded so far.
+pub fn clear_uncovered_brackets() {
+    UNCOVERED_BRACKET_WORDS.with(|s| s.borrow_mut().clear());
+}
+
+/// Runs `f` without recording uncovered brackets (probe translations).
+pub fn without_bracket_recording<T>(f: impl FnOnce() -> T) -> T {
+    let prev = RECORDING.with(|r| r.replace(false));
+    let out = f();
+    RECORDING.with(|r| r.set(prev));
+    out
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1115,7 +1147,6 @@ pub fn translate_rules_ext(
     let mut out_stem_ph_len = 0usize; // length of stem phonemes when suffix rule fired
     let mut spellword = false;
     let mut aborted = false;
-    let mut bracket_pause = false;
     let mut any_alpha = 0u32;
 
     // word_buf is indexed with word_start pointing to the first char.
@@ -1252,8 +1283,8 @@ pub fn translate_rules_ext(
                     next_pos1 = np;
                 }
 
-                if match1.points == 0 && matches!(char::from_u32(wc), Some('\'' | '"' | '`')) {
-                    bracket_pause = true;
+                if match1.points == 0 && char::from_u32(wc).is_some_and(crate::translate::is_bracket) {
+                    record_uncovered_bracket(word_buf, word_start);
                 }
 
                 // No rule for an accented letter inside a word: replace it by its
@@ -1290,7 +1321,6 @@ pub fn translate_rules_ext(
                             phonemes,
                             spellword,
                             aborted,
-                            bracket_pause,
                             ..RulesResult::default()
                         };
                     }
@@ -1364,7 +1394,6 @@ pub fn translate_rules_ext(
                         suffix_start: out_suffix_start,
                         spellword,
                         aborted,
-                        bracket_pause,
                     };
                 }
                 // Update vowel/stress counts from appended phonemes
@@ -1449,7 +1478,6 @@ pub fn translate_rules_ext(
         suffix_start: out_suffix_start,
         spellword,
         aborted,
-        bracket_pause,
     }
 }
 

@@ -6672,20 +6672,18 @@ fn dict_knows_word(word: &str, dict: &Dictionary) -> bool {
 /// Whether the rules abandon `word` at a letter they do not cover (C's
 /// `FLAG_SPELLWORD`).
 fn rules_abort_word(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
-    word_rules(word, dict, lang_opts, true).is_some_and(|r| r.aborted)
+    crate::dictionary::rules::without_bracket_recording(|| {
+        word_rules(word, dict, lang_opts, true).is_some_and(|r| r.aborted)
+    })
 }
 
 /// Whether the rules hand `word` on to yet another voice; C then returns
 /// `FLAG_SPELLWORD` instead of switching twice.
 fn rules_switch_again(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
-    word_rules(word, dict, lang_opts, false)
-        .is_some_and(|r| r.phonemes.first() == Some(&crate::phoneme::PHON_SWITCH))
-}
-
-/// Whether the rules leave a quote character of `word` uncovered, which makes
-/// C pause before the next word.
-fn rules_bracket_pause(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
-    word_rules(word, dict, lang_opts, false).is_some_and(|r| r.bracket_pause)
+    crate::dictionary::rules::without_bracket_recording(|| {
+        word_rules(word, dict, lang_opts, false)
+            .is_some_and(|r| r.phonemes.first() == Some(&crate::phoneme::PHON_SWITCH))
+    })
 }
 
 fn word_rules(
@@ -6820,7 +6818,6 @@ fn arabic_stream(e: &TranslateEntry) -> bool {
 fn previous_word_has_open_quote(
     tokens: &[Token],
     token_ix: usize,
-    dict: &Dictionary,
     options: &LangOptions,
 ) -> bool {
     let previous = tokens[..token_ix]
@@ -6829,7 +6826,7 @@ fn previous_word_has_open_quote(
         .find(|t| !matches!(t, Token::Space | Token::WordJoin));
     match previous {
         Some(Token::Word(w)) if w.contains('\'') => {
-            rules_bracket_pause(&lowercase_for_lang(w, &options.lang), dict, options)
+            crate::dictionary::rules::word_hit_uncovered_bracket(&lowercase_for_lang(w, &options.lang))
         }
         _ => false,
     }
@@ -7945,7 +7942,7 @@ fn is_clause_punctuation(c: char) -> bool {
 }
 
 /// C's `IsBracket()`: a bracket or quote, which pauses rather than speaks.
-fn is_bracket(c: char) -> bool {
+pub(crate) fn is_bracket(c: char) -> bool {
     matches!(c,
         '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | '"' | '\'' | '`'
         | '\u{ab}' | '\u{bb}'          // « »
@@ -8182,6 +8179,7 @@ pub(crate) fn build_translate_entries(
     alts: &letters::AltLangs,
     spelled: &[Option<usize>],
 ) -> Vec<TranslateEntry> {
+    crate::dictionary::rules::clear_uncovered_brackets();
     let mut entries: Vec<TranslateEntry> = Vec::with_capacity(tokens.len());
     // `$max3` bookkeeping: which symbol is repeating, and how many times so far.
     let mut repeat_of_symbol: Option<char> = None;
@@ -10210,7 +10208,7 @@ impl Translator {
                         if option_emphasis >= 3 && pre_pause < 1 && is_word(token) {
                             pre_pause = 1;
                         }
-                        if is_word(token) && previous_word_has_open_quote(&tokens, token_ix, dict, &self.options) {
+                        if is_word(token) && previous_word_has_open_quote(&tokens, token_ix, &self.options) {
                             pre_pause = pre_pause.max(i32::from(self.options.bracket_pause.0));
                         }
                         // The pause goes *before* the word separator, so it
