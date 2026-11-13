@@ -731,6 +731,7 @@ pub fn voice_dict_condition(data_dir: &Path, lang: &str) -> u32 {
     voices
         .iter()
         .find(|v| v.language.eq_ignore_ascii_case(lang))
+        .or_else(|| select_voice_by_name(&voices, lang))
         .map(|v| v.dict_rules.iter().fold(0u32, |acc, &n| acc | (1u32 << n)))
         .unwrap_or(0)
 }

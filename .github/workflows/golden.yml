@@ -179,6 +179,7 @@ jobs:
           --test cmn_neutral_tone_unstressed
           --test cmn_neutral_tone_level
           --test cmn_pinyin_u_after_palatal
+          --test yue_jyutping_voice_rules
           --test voice_names
           --test voice_keywords
           --test regressive_voicing_hr
