@@ -155,8 +155,22 @@ fn carry_stress(list: &mut [Ph]) {
     }
 }
 
+/// C gives a neutral-tone syllable the word's stress and lowers it to 0 only
+/// in the tone pass; the translator already leaves it unstressed, so the
+/// last-stressed-syllable search would skip it.
+fn restore_neutral_stress(list: &mut [Ph]) {
+    for p in list.iter_mut().filter(|p| p.typ == PH_VOWEL && p.stresslevel < 4) {
+        if mnemonic(p) == M_TONE_11 {
+            p.stresslevel = 4;
+        }
+    }
+}
+
 /// Give every syllable of the clause its pitch from its tone phoneme.
 pub fn calc_pitches_tone(list: &mut [Ph], kind: ToneLang, phdata: &PhonemeData) {
+    if kind == ToneLang::Mandarin {
+        restore_neutral_stress(list);
+    }
     carry_stress(list);
     let fs = final_stressed(list);
     list[fs].stresslevel = 7;
