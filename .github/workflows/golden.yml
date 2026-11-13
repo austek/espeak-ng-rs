@@ -65,6 +65,7 @@ jobs:
           --test my_tone_only_word
           --test digits_without_number_grammar
           --test shn_my_script_words
+          --test unknown_letter_byte_walk
           --test vi_final_tone_and_vowels
           --test ru_voice_replace
           --test unspaced_ascii_punctuation

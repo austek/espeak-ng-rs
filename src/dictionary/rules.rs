@@ -178,11 +178,26 @@ fn script_switch(dict: &Dictionary, wc: u32) -> Option<&'static str> {
 ///
 /// C tests the byte after the letter as a signed `char`, so only an ASCII
 /// character counts as "another letter follows" for a word's first letter.
-fn abandons_word(wc: u32, next: Option<&u8>, any_alpha: u32, wide_at_zero_offset: bool) -> bool {
-    let followed = |limit: u8| next.is_some_and(|b| *b > b' ' && *b < limit);
+fn abandons_word(wc: u32, next: Option<&u8>, any_alpha: u32) -> bool {
     is_alpha_c(wc)
         && !(0x300..=0x36f).contains(&wc)
-        && (any_alpha > 1 || followed(0x80) || (wide_at_zero_offset && followed(0xff)))
+        && (any_alpha > 1 || next.is_some_and(|b| *b > b' ' && *b < 0x80))
+}
+
+/// C's `utf8_in`: the character at `pos`, or after it when `pos` is inside
+/// a character.  Returns `(codepoint, extra_bytes)`; skipped continuation
+/// bytes are not counted.
+fn utf8_in(buf: &[u8], pos: usize) -> (u32, usize) {
+    let start = buf[pos..].iter().position(|b| b & 0xc0 != 0x80).map_or(buf.len(), |i| pos + i);
+    let Some(&b0) = buf.get(start) else { return (0, 0) };
+    let (lead, n) = match b0 {
+        b if b & 0xe0 == 0xc0 => (b & 0x1f, 1),
+        b if b & 0xf0 == 0xe0 => (b & 0x0f, 2),
+        b if b & 0xf8 == 0xf0 => (b & 0x07, 3),
+        b => (b, 0),
+    };
+    let tail = buf[start + 1..].iter().take(n).take_while(|&&b| b != 0);
+    tail.fold((lead as u32, 0), |(wc, k), &b| ((wc << 6) + (b & 0x3f) as u32, k + 1))
 }
 
 pub fn is_digit(c: u32) -> bool {
@@ -1171,7 +1186,7 @@ pub fn translate_rules_ext(
         let c = word_buf[pos];
         if c == 0 || c == b' ' { break; }
 
-        let (wc, wc_bytes) = utf8_decode(word_buf, pos);
+        let (wc, wc_bytes) = utf8_in(word_buf, pos);
         if is_alpha_c(wc) {
             any_alpha += 1;
         }
@@ -1190,7 +1205,6 @@ pub fn translate_rules_ext(
         // letter.  Such a letter that matches no rule is passed over silently
         // (Russian `ь` before a consonant); only the others abandon the word.
         let mut group_exists = false;
-        let mut script_group_exists = false;
         let mut match1 = MatchRecord::empty_best();
         let mut next_pos1 = pos + 1;
 
@@ -1225,7 +1239,6 @@ pub fn translate_rules_ext(
                     next_pos1 = np;
                     found = match1.points > 0 || np > pos;
                     group_exists = true;
-                    script_group_exists = true;
                 }
             }
         }
@@ -1337,9 +1350,8 @@ pub fn translate_rules_ext(
                     // word).  Unless the word is abandoned here, scanning goes
                     // on after the letter.
                     spellword = true;
-                    let wide = dict.letter_bits_offset == 0 && wc >= 0x800;
-                    if !abandons_word(wc, buf.get(pos + wc_bytes + 1), any_alpha, wide) {
-                        pos += wc_bytes + 1;
+                    if !abandons_word(wc, buf.get(next_pos1 + wc_bytes), any_alpha) {
+                        pos = next_pos1 + wc_bytes;
                         continue;
                     }
                 }
@@ -1352,14 +1364,8 @@ pub fn translate_rules_ext(
         // letter from being skipped: Russian reads the Serbian `његов` as
         // `'egVf`, passing over the `њ` its rules don't cover.
         if match1.points == 0
-            && !script_group_exists
-            && !(group_exists && buf.get(pos + wc_bytes + 1).is_none_or(|&b| b == b' '))
-            && abandons_word(
-                wc,
-                buf.get(pos + wc_bytes + 1),
-                any_alpha,
-                dict.letter_bits_offset == 0 && wc >= 0x800,
-            )
+            && !group_exists
+            && abandons_word(wc, buf.get(next_pos1 + wc_bytes), any_alpha)
         {
             out_phonemes.clear();
             out_end_phonemes.clear();
@@ -1465,9 +1471,10 @@ pub fn translate_rules_ext(
         }
 
         // Advance position.
-        if match1.points == 0 {
-            // C: `p += (wc_bytes-1)` — an unmatched letter is skipped whole.
-            next_pos1 = next_pos1.max(pos + wc_bytes + 1);
+        if match1.points == 0 && !group_exists {
+            // C: `p += (wc_bytes-1)`.  A group match moves by its own length,
+            // which can stop inside a letter; the next pass starts from there.
+            next_pos1 += wc_bytes;
         }
         if next_pos1 <= pos {
             // Avoid infinite loop
