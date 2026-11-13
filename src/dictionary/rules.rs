@@ -587,6 +587,9 @@ pub fn match_rule(
                             if is_digit(letter_w) {
                                 add_points = 20 - distance_right;
                                 post_ptr += xbytes;
+                            } else if tone_numbers(&dict.lang) {
+                                add_points = 20 - distance_right;
+                                post_ptr -= 1;
                             } else { failed = 1; }
                         }
                         RULE_NONALPHA => {
@@ -1484,6 +1487,13 @@ pub fn translate_rules_ext(
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Languages whose rules read a number after letters as a tone number
+/// (`langopts.tone_numbers`), so a digit in a post-context is optional.
+fn tone_numbers(lang: &str) -> bool {
+    let base = lang.split(['-', '_']).next().unwrap_or(lang);
+    matches!(base, "cmn" | "zh" | "yue" | "hak")
+}
 
 #[allow(clippy::too_many_arguments)]
 fn make_ctx<'a>(

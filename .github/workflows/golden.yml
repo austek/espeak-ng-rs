@@ -178,6 +178,7 @@ jobs:
           --test fullwidth_clause_punctuation
           --test cmn_neutral_tone_unstressed
           --test cmn_neutral_tone_level
+          --test cmn_pinyin_u_after_palatal
           --test voice_names
           --test voice_keywords
           --test regressive_voicing_hr
