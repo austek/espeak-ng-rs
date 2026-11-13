@@ -6764,12 +6764,28 @@ fn spell_aborted_switch(
     let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
     let mut items = Vec::new();
     for c in word.chars().filter(|c| c.is_alphabetic()) {
-        let mut letter = letters::spell_in_switched(voice, alts, &target, c)?;
+        let mut letter = spell_lone_letter(c, voice, alts)?;
         let after_pause = usize::from(letter.first() == Some(&letters::Item::Ph(crate::phoneme::PHON_PAUSE)));
         letter.insert(after_pause, letters::Item::Ph(crate::phoneme::PHON_END_WORD));
         items.extend(letter);
     }
     Some(items)
+}
+
+/// One letter of a spelled word, read as a word of its own in the original
+/// voice: handed to the voice its script names, or spoken by `TranslateLetter`.
+fn spell_lone_letter(c: char, voice: letters::Ctx, alts: &letters::AltLangs) -> Option<Vec<letters::Item>> {
+    let own = word_rules(&c.to_string(), voice.dict, voice.options, false)
+        .map(|r| r.phonemes)
+        .filter(|p| p.first() == Some(&crate::phoneme::PHON_SWITCH));
+    let handed = |p: &[u8]| letters::spell_in_switched(voice, alts, &letters::switch_language(p), c);
+    match own {
+        Some(p) => handed(&p),
+        None => match letters::translate_letter(&letters::LetterEnv { voice, tr: voice, alts }, c) {
+            letters::LetterOut::Items(items) => Some(items),
+            letters::LetterOut::HandOver(name) => handed(&name),
+        },
+    }
 }
 
 /// A spelled word that opens with its own pause, after which C starts the word.

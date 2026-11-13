@@ -14,6 +14,16 @@ fn silent(lang: &str, text: &str) {
 }
 
 #[test]
+fn spelled_letters_stay_in_the_original_voice() {
+    let Some(t) = Translator::new("kk", None).ok() else {
+        eprintln!("[SKIP] no kk data");
+        return;
+    };
+    assert_eq!(t.text_to_ipa("ᎣᏏᏲ").unwrap().trim(), "lˈetəbˈɪrˈuʃˈefˈeːj");
+    assert_eq!(t.text_to_ipa("ᏏᏴᏫ").unwrap().trim(), "lˈetəbˈɪrˈuʃˈefsˈiː");
+}
+
+#[test]
 fn cherokee_word_is_silent_in_cherokee_voice() {
     silent("chr", "ᎠᏚ");
     silent("chr", "ᎠᏚᎢᏍᏘᎠᎵᏚᎶ");
