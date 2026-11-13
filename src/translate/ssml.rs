@@ -568,11 +568,8 @@ impl Walker {
 
             "say-as" => {
                 if is_close {
-                    match self.sayas_stack.pop() {
-                        Some(SayAsKind::Spell) => {
-                            self.spell_depth = self.spell_depth.saturating_sub(1);
-                        }
-                        _ => {}
+                    if let Some(SayAsKind::Spell) = self.sayas_stack.pop() {
+                        self.spell_depth = self.spell_depth.saturating_sub(1);
                     }
                 } else if !self_close {
                     let ia = get_attr(attrs, "interpret-as").unwrap_or_default();
