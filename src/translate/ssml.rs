@@ -289,11 +289,7 @@ struct Walker {
     /// C's `ignore_text`: a flag, not a depth, so any closing `<sub>`,
     /// `<metadata>`, `<script>` or `<style>` re-enables text.
     ignore_text: bool,
-    /// One bool per open `<phoneme>` — true when its content is suppressed
-    /// (i.e. a `ph` attribute was present and emitted as `[[…]]`).
-    phoneme_stack: Vec<bool>,
     spell_depth: usize,
-    suppress_depth: usize,
     /// One entry per open `<prosody>`: the rate / volume / pitch in force when
     /// it opened, so `</prosody>` can restore them.
     ///
@@ -322,9 +318,7 @@ impl Default for Walker {
             sayas_stack: Vec::new(),
             interpret: SayAs::default(),
             ignore_text: false,
-            phoneme_stack: Vec::new(),
             spell_depth: 0,
-            suppress_depth: 0,
             prosody_stack: Vec::new(),
             // Start at the engine's own parameters, so a span that changes
             // nothing emits nothing.
@@ -361,7 +355,7 @@ impl Walker {
     }
 
     fn emit_char(&mut self, c: char) {
-        if self.suppress_depth > 0 || self.ignore_text {
+        if self.ignore_text {
             return;
         }
         if self.spell_depth > 0 && !c.is_whitespace() {
@@ -377,10 +371,6 @@ impl Walker {
     /// changed — the same embedded commands upstream writes, so the change
     /// applies from here to the closing tag rather than to the whole utterance.
     fn emit_prosody(&mut self, next: (i32, i32, i32)) {
-        if self.suppress_depth > 0 {
-            self.prosody = next;
-            return;
-        }
         for (cur, new, letter) in [
             (self.prosody.0, next.0, 'S'),
             (self.prosody.1, next.1, 'A'),
@@ -401,9 +391,7 @@ impl Walker {
     /// tokenizer; [`BREAK_LETTER`] documents the encoding.
     fn emit_break_ms(&mut self, ms: u32) {
         self.push_break_cmd(ms, false);
-        if self.suppress_depth == 0 {
-            self.cur.push(SSML_BREAK);
-        }
+        self.cur.push(SSML_BREAK);
     }
 
     /// `\x01[+]<ms>Z`: the pause length, and whether it is wall-clock exact.
@@ -411,9 +399,6 @@ impl Walker {
     /// rate so the requested duration is what the listener gets, while its
     /// `strength` pauses are clause units that get faster with the voice.
     fn push_break_cmd(&mut self, ms: u32, exact: bool) {
-        if self.suppress_depth != 0 {
-            return;
-        }
         self.cur.push(crate::translate::CTRL_EMBEDDED);
         if exact {
             self.cur.push('+');
@@ -426,9 +411,6 @@ impl Walker {
     /// word command whose `pre_pause` change never reaches a word, so all that
     /// is heard is the short pause `DoEmbedded` puts before any command.
     fn emit_weak_break(&mut self, level: u32) {
-        if self.suppress_depth != 0 {
-            return;
-        }
         self.cur.push(crate::translate::CTRL_EMBEDDED);
         self.cur.push_str(&level.to_string());
         self.cur.push('B');
@@ -467,9 +449,7 @@ impl Walker {
         }
         if weak.is_none() || exact {
             self.push_break_cmd(ms, exact);
-            if self.suppress_depth == 0 {
-                self.cur.push(SSML_BREAK);
-            }
+            self.cur.push(SSML_BREAK);
         }
     }
 
@@ -607,36 +587,11 @@ impl Walker {
             }
 
             "phoneme" => {
-                if is_close {
-                    // Match the most recent open `<phoneme>`; only lift the
-                    // suppression it started.
-                    if let Some(true) = self.phoneme_stack.pop() {
-                        self.suppress_depth = self.suppress_depth.saturating_sub(1);
-                    }
-                } else {
-                    // `ph` holds eSpeak phoneme mnemonics; emit them as an
-                    // inline-phoneme span so the always-on `[[…]]` tokenizer
-                    // renders them, and drop the element's readable content.
-                    match get_attr(attrs, "ph").filter(|p| !p.is_empty()) {
-                        Some(ph) => {
-                            if self.suppress_depth == 0 {
-                                self.cur.push_str("[[");
-                                self.cur.push_str(&ph);
-                                self.cur.push_str("]]");
-                            }
-                            if !self_close {
-                                self.phoneme_stack.push(true);
-                                self.suppress_depth += 1;
-                            }
-                        }
-                        // No usable `ph`: behave like an unknown tag (strip the
-                        // tag, keep content). Track the open so the close pops.
-                        None => {
-                            if !self_close {
-                                self.phoneme_stack.push(false);
-                            }
-                        }
-                    }
+                let espeak = get_attr(attrs, "alphabet").as_deref() == Some("espeak");
+                if !is_close && espeak {
+                    self.cur.push_str("[[");
+                    self.cur.push_str(&get_attr(attrs, "ph").unwrap_or_default());
+                    self.cur.push_str("]]");
                 }
             }
 
@@ -959,36 +914,25 @@ mod tests {
 
     #[test]
     fn phoneme_ph_becomes_inline_brackets() {
-        // `ph` is emitted as inline-phoneme brackets; content is discarded.
+        // C only honours `alphabet="espeak"`, and then reads the content as well.
         assert_eq!(
-            strip_markup(r#"<phoneme ph="h@l'oU">hello</phoneme>"#),
-            "[[h@l'oU]]"
+            strip_markup(r#"<phoneme alphabet="espeak" ph="h@l'oU">hello</phoneme>"#),
+            "[[h@l'oU]]hello"
         );
-        assert_eq!(
-            strip_markup(r#"x <phoneme ph="k">see</phoneme> y"#),
-            "x [[k]] y"
-        );
-        // Self-closing form: no content to discard.
-        assert_eq!(strip_markup(r#"<phoneme ph="t"/>"#), "[[t]]");
-        // alphabet attribute is tolerated; ph still passes through.
-        assert_eq!(
-            strip_markup(r#"<phoneme alphabet="espeak" ph="s">ess</phoneme>"#),
-            "[[s]]"
-        );
-        // No `ph`: strip the tag, keep the content (unknown-tag behaviour).
+        assert_eq!(strip_markup(r#"<phoneme alphabet="espeak" ph="t"/>"#), "[[t]]");
+        // Any other alphabet, or none, leaves the content to be read.
+        assert_eq!(strip_markup(r#"<phoneme ph="k">see</phoneme>"#), "see");
+        assert_eq!(strip_markup(r#"<phoneme alphabet="ipa" ph="k">see</phoneme>"#), "see");
         assert_eq!(strip_markup("<phoneme>hello</phoneme>"), "hello");
-        // Empty `ph`: treated as no `ph`.
-        assert_eq!(strip_markup(r#"<phoneme ph="">hi</phoneme>"#), "hi");
     }
 
     #[test]
-    fn phoneme_suppression_is_balanced_with_siblings() {
-        // Text after a </phoneme> must not stay suppressed.
+    fn phoneme_does_not_suppress_siblings() {
         assert_eq!(
             strip_markup(r#"a <phoneme ph="k">x</phoneme> b <sub alias="cee">c</sub> d"#)
                 .split_whitespace()
                 .collect::<Vec<_>>(),
-            ["a", "[[k]]", "b", "cee", "d"]
+            ["a", "x", "b", "cee", "d"]
         );
     }
 

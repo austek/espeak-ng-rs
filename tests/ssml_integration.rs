@@ -99,13 +99,11 @@ fn say_as_date_and_time() {
 #[test]
 fn phoneme_ph_matches_inline_phonemes() {
     let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
-    // `<phoneme ph="X">…</phoneme>` pronounces X (eSpeak mnemonics) and drops
-    // the readable content — identical to the always-on `[[X]]` syntax.
-    assert_markup_eq_plain(&t, r#"<phoneme ph="h@l'oU">hello</phoneme>"#, "[[h@l'oU]]");
-    assert_markup_eq_plain(&t, r#"say <phoneme ph="k">see</phoneme> now"#, "say [[k]] now");
-    // Self-closing form.
-    assert_markup_eq_plain(&t, r#"x <phoneme ph="t"/> y"#, "x [[t]] y");
-    // No `ph`: strip tag, keep content.
+    // C honours only `alphabet="espeak"`, and still reads the content.
+    assert_markup_eq_plain(&t, r#"<phoneme alphabet="espeak" ph="k">see</phoneme>"#, "[[k]]see");
+    assert_markup_eq_plain(&t, r#"x <phoneme alphabet="espeak" ph="t"/> y"#, "x [[t]] y");
+    // Without it the tag has no effect and the content is read.
+    assert_markup_eq_plain(&t, r#"say <phoneme ph="k">see</phoneme> now"#, "say see now");
     assert_markup_eq_plain(&t, "<phoneme>hello</phoneme>", "hello");
 }
 

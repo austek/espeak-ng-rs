@@ -46,6 +46,16 @@ fn ignored_text_elements_and_sub_flag() {
     ]);
 }
 
+/// Only `alphabet="espeak"` emits `[[ph]]`; the element content is read either way.
+#[test]
+fn phoneme_needs_the_espeak_alphabet_and_keeps_its_content() {
+    check(&[
+        ("<phoneme alphabet=\"espeak\" ph=\"k\">see</phoneme> now", "k sˈiː nˈaʊ", "k s'i: n'aU"),
+        ("<phoneme alphabet=\"ipa\" ph=\"k\">see</phoneme> now", "sˈiː nˈaʊ", "s'i: n'aU"),
+        ("say <phoneme ph=\"k\">see</phoneme> now", "sˈeɪ sˈiː nˈaʊ", "s'eI s'i: n'aU"),
+    ]);
+}
+
 /// C starts a tag only when `<` is followed by `/`, a letter, `!` or `?`.
 #[test]
 fn lt_before_a_non_tag_character_is_literal() {
