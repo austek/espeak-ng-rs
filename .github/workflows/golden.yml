@@ -43,6 +43,7 @@ jobs:
           --test faroese_default_stress
           --test hbs_spelling_stress
           --test spelling_stress_langs
+          --test time_colon_rule
           --test punctuation_only_clause
           --test letter_name_conditions
           --test ligurian_halflong_consonant

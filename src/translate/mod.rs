@@ -7744,12 +7744,41 @@ fn suppress_abbreviation_periods(tokens: &mut [Token]) {
 /// trente" / "dieci e trenta").  A field must be *exactly* two digits, so `10:3`
 /// and `10:300` are not times (their `:` stays a boundary).  The minute keeps its
 /// leading zero (`10:05` → "…zero five"), matching espeak-ng.
+fn time_connector(lang: &str) -> Vec<Token> {
+    match primary_bcp47_subtag(lang) {
+        "fr" => vec![Token::Word("heures".to_string()), Token::Space],
+        "de" => vec![Token::InlinePhonemes("_|%u:r".to_string()), Token::Space],
+        "it" => vec![Token::InlinePhonemes("_%%E_".to_string()), Token::Space],
+        _ => Vec::new(),
+    }
+}
+
+fn normalized_hour(h: &str) -> String {
+    let trimmed = h.trim_start_matches('0');
+    if trimmed.is_empty() { "0" } else { trimmed }.to_string()
+}
+
+/// The context of the `_L05_) : (_L06D_` rules: a whole-word hour 0-9 or 00-23
+/// before the colon and a two-digit minute whose tens digit is 0-5 after it.
+fn time_rule_matches(hour: &str, minute: &str) -> bool {
+    let hour_ok = hour.len() <= 2 && hour.parse::<u32>().is_ok_and(|v| v <= 23);
+    hour_ok && minute.as_bytes().first().is_some_and(|b| (b'0'..=b'5').contains(b))
+}
+
+/// A `.` plus digit right after the minute keeps the word from ending there.
+fn dot_decimal_follows(tokens: &[Token], at: usize) -> bool {
+    matches!(tokens.get(at), Some(Token::Punctuation('.'))) && matches!(tokens.get(at + 1), Some(Token::Number(_)))
+}
+
+/// Index just after a run of colons that starts at `from` or after one space.
+fn colon_run_end(tokens: &[Token], from: usize) -> Option<usize> {
+    let start = from + usize::from(matches!(tokens.get(from), Some(Token::Space)));
+    let run = tokens.iter().skip(start).take_while(|t| matches!(t, Token::Punctuation(':'))).count();
+    (run > 0).then_some(start + run)
+}
+
 fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
-    let connector = match primary_bcp47_subtag(lang) {
-        "fr" => Some("heures"),
-        _ => None,
-    };
-    let is_colon = |t: Option<&Token>| matches!(t, Some(Token::Punctuation(':')));
+    let connector = time_connector(lang);
     let read_colon = primary_bcp47_subtag(lang) == "en";
     // A cardinal token whose surface is exactly two digits (a minute/second).
     let two_digit = |t: Option<&Token>| -> Option<String> {
@@ -7773,41 +7802,29 @@ fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
             _ => None,
         };
         if let Some(h) = hour {
-            if is_colon(tokens.get(i + 1)) {
-                if let Some(minute) = two_digit(tokens.get(i + 2)) {
-                    // Hour with leading zeros stripped, but never to nothing.
-                    let h_trim = h.trim_start_matches('0');
-                    let h_norm = if h_trim.is_empty() { "0" } else { h_trim };
-                    let h_val: u32 = h.parse().unwrap_or(u32::MAX);
-                    out.push(Token::Number(NumberToken::Cardinal(h_norm.to_string())));
-                    out.push(Token::Space);
-                    if let Some(word) = connector {
-                        if h_val <= 23 {
-                            out.push(Token::Word(word.to_string()));
-                            out.push(Token::Space);
-                        }
-                    } else if primary_bcp47_subtag(lang) == "de" && h_val <= 23 {
-                        out.push(Token::InlinePhonemes("_|%u:r".to_string()));
-                        out.push(Token::Space);
-                    } else if primary_bcp47_subtag(lang) == "it" && h_val <= 23 {
-                        // The Italian rule `_L16_) : (_L17D_` gives the colon a
-                        // paused, diminished "e" of its own rather than the word.
-                        out.push(Token::InlinePhonemes("_%%E_".to_string()));
-                        out.push(Token::Space);
-                    }
-                    out.push(Token::Number(NumberToken::Cardinal(minute)));
-                    let mut j = i + 3;
-                    // Optional ":SS" seconds — colon silent, no connector.
-                    if is_colon(tokens.get(j)) {
-                        if let Some(sec) = two_digit(tokens.get(j + 1)) {
-                            out.push(Token::Space);
-                            out.push(Token::Number(NumberToken::Cardinal(sec)));
-                            j += 2;
-                        }
-                    }
-                    i = j;
-                    continue;
+            let colons = colon_run_end(tokens, i + 1);
+            if let Some(minute) = colons.and_then(|e| two_digit(tokens.get(e))) {
+                let minute_at = colons.unwrap_or(i + 1);
+                let h_norm = if h.len() <= 2 { normalized_hour(&h) } else { h.clone() };
+                out.push(Token::Number(NumberToken::Cardinal(h_norm)));
+                out.push(Token::Space);
+                if time_rule_matches(&h, &minute) && !dot_decimal_follows(tokens, minute_at + 1) {
+                    out.extend(connector.clone());
                 }
+                out.push(Token::Number(NumberToken::Cardinal(minute.clone())));
+                let mut j = minute_at + 1;
+                if let Some(e) = colon_run_end(tokens, j) {
+                    if let Some(sec) = two_digit(tokens.get(e)) {
+                        out.push(Token::Space);
+                        if time_rule_matches(&minute, &sec) {
+                            out.extend(connector.clone());
+                        }
+                        out.push(Token::Number(NumberToken::Cardinal(sec)));
+                        j = e + 1;
+                    }
+                }
+                i = j;
+                continue;
             }
         }
         // A ':' that isn't a valid time (a ratio like "3:2"): English reads it as
