@@ -11693,6 +11693,17 @@ fn resolve_virtual_phonemes_in_codes(
             next_vowel_stress,
             prev_vowel,
             prev_vowel_stress,
+            prev2: n.checked_sub(2).map(|k| {
+                if deleted.contains(&real[k]) { 1 } else { codes[real[k]].code }
+            }),
+            prev2_wordstart: starts[n] || n.checked_sub(1).is_some_and(|k| starts[k]),
+            next3: real
+                .get(n + 3)
+                .filter(|&&k| !clause_break(i, k))
+                .map_or(0, |&k| codes[k].code),
+            next3_wordstart: (n..n + 3)
+                .filter_map(|k| Some((real.get(k)?, real.get(k + 1)?)))
+                .any(|(&a, &b)| crosses(a, b)),
             vowels_tracked: true,
             after_stress: after_stress(i, n, &real, &level, &crosses),
             this_next_pause: false,

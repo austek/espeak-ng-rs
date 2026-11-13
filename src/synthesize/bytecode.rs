@@ -517,6 +517,15 @@ pub struct Neighbours {
     pub prev_wordstart: bool,
     pub next_wordstart: bool,
     pub next2_wordstart: bool,
+    /// The phoneme two before this one (`prev2PhW`), `None` when the list does
+    /// not reach back that far; `prev2_wordstart` is true when a word starts at
+    /// this phoneme or the one before it.
+    pub prev2: Option<u8>,
+    pub prev2_wordstart: bool,
+    /// The phoneme three after this one (`next3PhW`); `next3_wordstart` is true
+    /// when a word starts at any of the three following phonemes.
+    pub next3: u8,
+    pub next3_wordstart: bool,
     /// The next vowel **in this word**, and its syllable's stress level — C's
     /// `nextVowel` condition, which scans forward to the next vowel and stops
     /// at a word boundary rather than looking a fixed distance ahead.  `0`
@@ -574,6 +583,10 @@ impl Default for Neighbours {
             prev_wordstart: false,
             next_wordstart: false,
             next2_wordstart: false,
+            prev2: None,
+            prev2_wordstart: false,
+            next3: 0,
+            next3_wordstart: false,
         }
     }
 }
@@ -1031,7 +1044,20 @@ where
                 return false;
             }
         }
-        // next3PhW (9) / prev2PhW (10): outside our window → conservative false.
+        9 => {
+            if nb.next3_wordstart {
+                return false; // next3PhW across a word boundary
+            }
+            nb.next3
+        }
+        10 => {
+            let Some(code) = nb.prev2 else { return false };
+            if nb.prev2_wordstart {
+                return false; // prev2PhW across a word boundary
+            }
+            check_endtype = true;
+            code
+        }
         _ => return false,
     };
 

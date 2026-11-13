@@ -178,6 +178,7 @@ jobs:
           --test cli_sep_and_closing_clause
           --test ku_script_runs
           --test script_double_switch
+          --test indic_schwa_context
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config
