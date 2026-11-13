@@ -4900,6 +4900,21 @@ fn translate_number_token_with_tail(
     speak_symbol: &dyn Fn(&str) -> Vec<u8>,
     tail: Option<NumberTail>,
 ) -> Option<WordResult> {
+    let mut result =
+        translate_number_token_untoned(token, dict, phdata, stress_opts, grammar, speak_symbol, tail)?;
+    reorder_tone_phonemes(&mut result.phonemes, phdata, false);
+    Some(result)
+}
+
+fn translate_number_token_untoned(
+    token: &NumberToken,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    grammar: &NumberGrammar,
+    speak_symbol: &dyn Fn(&str) -> Vec<u8>,
+    tail: Option<NumberTail>,
+) -> Option<WordResult> {
     match token {
         NumberToken::Bare { separator, digits } => {
             let mut phonemes = speak_symbol(&format!("{separator}{digits}"));
@@ -4914,6 +4929,7 @@ fn translate_number_token_with_tail(
             let mut phonemes = individual_digit_word(digits, dict);
             phonemes.push(0);
             set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
+            reorder_tone_phonemes(&mut phonemes, phdata, false);
             Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() })
         }
         NumberToken::Decimal { integer, fractional, .. } if grammar.c_numbers == 0 => {
@@ -4921,6 +4937,7 @@ fn translate_number_token_with_tail(
             phonemes.extend(individual_digit_word(fractional, dict));
             phonemes.push(0);
             set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
+            reorder_tone_phonemes(&mut phonemes, phdata, false);
             Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() })
         }
         NumberToken::Ordinal(ordinal) => try_ordinal_number(ordinal, dict, phdata, stress_opts, grammar)

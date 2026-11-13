@@ -137,6 +137,7 @@ const C_NUMBER_FLAGS: &[(&str, u32, u32)] = &[
     ("uk", 0xa408, 0x20_0042),
     ("ur", 0x10, 0x0),
     ("uz", 0x0, 0x0),
+    ("xex", 0x0, 0x0),
     ("vi", 0xc08008, 0x0),
     ("yue", NUM_DEFAULT, 0x100000),
     ("zh", NUM_DEFAULT, 0x0),

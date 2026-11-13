@@ -60,6 +60,7 @@ jobs:
           --test my_asat_marks
           --test tone_later_replaces
           --test my_tone_only_word
+          --test digits_without_number_grammar
           --test shn_my_script_words
           --test vi_final_tone_and_vowels
           --test ru_voice_replace
