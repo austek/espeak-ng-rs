@@ -367,6 +367,35 @@ fn in_own_table(ctx: Ctx, bytes: &[u8]) -> Vec<Item> {
     codes.iter().map(|c| Item::Ph(c.code)).collect()
 }
 
+/// Run the phoneme programs over a letter name that stays in its own table
+/// (English `E2f` becomes `Ef`), table by table where the name switches.
+fn run_programs(items: Vec<Item>, first: Ctx, alts: &AltLangs) -> Vec<Item> {
+    fn flush(run: &mut Vec<PhonemeCode>, ctx: Option<Ctx>, out: &mut Vec<Item>) {
+        if let Some(ctx) = ctx {
+            let from_dict = vec![true; run.len()];
+            resolve_virtual_phonemes_in_codes(run, ctx.phdata, &from_dict, ctx.stress.reduce);
+        }
+        out.extend(run.drain(..).map(|c| Item::Ph(c.code)));
+    }
+    let mut out = Vec::with_capacity(items.len());
+    let mut run: Vec<PhonemeCode> = Vec::new();
+    let mut ctx = Some(first);
+    let mut held: Option<Rc<LangCtx>> = None;
+    for item in items {
+        match item {
+            Item::Ph(b) => run.push(code(b)),
+            Item::Switch(table) => {
+                flush(&mut run, ctx, &mut out);
+                held = alts.get(&table);
+                ctx = held.as_ref().map(|t| t.ctx());
+                out.push(Item::Switch(table));
+            }
+        }
+    }
+    flush(&mut run, ctx, &mut out);
+    out
+}
+
 /// The name of the letter's alphabet, spoken ahead of the letter (C: `ph_alphabet`).
 fn alphabet_name(env: &LetterEnv, alphabet: Option<&Alphabet>) -> Vec<Item> {
     let Some(a) = alphabet else { return Vec::new() };
@@ -513,7 +542,10 @@ pub(super) fn spell_in_switched(
         let tr = alts.get(&target)?;
         let env = LetterEnv { voice, tr: tr.ctx(), alts };
         match translate_letter(&env, letter) {
-            LetterOut::Items(items) => return Some(wrap_switched(items, &tr.options.lang, voice)),
+            LetterOut::Items(items) => {
+                let items = run_programs(items, tr.ctx(), alts);
+                return Some(wrap_switched(items, &tr.options.lang, voice));
+            }
             LetterOut::HandOver(name) if attempt == 0 => target = switch_language(&name),
             LetterOut::HandOver(_) => return Some(Vec::new()),
         }

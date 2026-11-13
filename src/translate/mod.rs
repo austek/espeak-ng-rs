@@ -9823,6 +9823,15 @@ impl Translator {
         None
     }
 
+    /// Run the phoneme programs over a letter name taken straight from the list:
+    /// English `f` is stored as `E2f`, and only the program turns `E2` into `E`.
+    fn resolve_programs(&self, codes: &mut Vec<PhonemeCode>) {
+        if let Ok(loaded) = self.loaded_data() {
+            let marks = vec![false; codes.len()];
+            resolve_virtual_phonemes_in_codes(codes, &loaded.phdata, &marks, loaded.stress_opts.reduce);
+        }
+    }
+
     pub(crate) fn load_dictionary(&self) -> Option<Dictionary> {
         let dict_stem = resolve_dict_stem(&self.data_dir, &self.options.lang)?;
         let dict_bytes = std::fs::read(dict_path(&self.data_dir, &dict_stem)?).ok()?;
@@ -10230,10 +10239,12 @@ impl Translator {
                                 .or_insert_with(|| tr.char_name_phonemes(c))
                                 .clone()
                                 .map(|ph| {
-                                ph.iter()
+                                let mut named = ph.iter()
                                     .filter(|&&b| b != 0)
                                     .map(|&b| PhonemeCode { code: b, ..Default::default() })
-                                    .collect::<Vec<_>>()
+                                    .collect::<Vec<_>>();
+                                tr.resolve_programs(&mut named);
+                                named
                             })
                         }),
                         None => switch_cache
