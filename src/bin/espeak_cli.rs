@@ -909,8 +909,48 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
         format_x(&codes, &phdata, cli.sep, cli.tie, &data_dir, translator.options.lang.as_str())
     };
 
-    let closing = if cli.markup || !closes_after_mark(text) { "" } else { "\n" };
+    let extra = if cli.markup { ends_with_clause_tag(text) } else { closes_after_mark(text) };
+    let closing = if extra { "\n" } else { "" };
     emit(cli, &format!("{line}\n{closing}"))
+}
+
+/// C's `ProcessSsmlTag` returns a clause terminator for these tags.  When one
+/// is the last thing in the text, `ReadClause` is called once more and the empty
+/// clause it returns prints a line of its own.
+fn ends_with_clause_tag(text: &str) -> bool {
+    let trimmed = text.trim_end();
+    let Some(body) = trimmed.strip_suffix('>') else { return false };
+    let Some(open) = body.rfind('<') else { return false };
+    let inner = &body[open + 1..];
+    let starts_tag = inner.chars().next().is_some_and(|c| c == '/' || c.is_alphabetic());
+    starts_tag && tag_ends_clause(inner.strip_suffix('/').unwrap_or(inner))
+}
+
+fn tag_ends_clause(inner: &str) -> bool {
+    let (closing, rest) = match inner.strip_prefix('/') {
+        Some(r) => (true, r),
+        None => (false, inner),
+    };
+    let name_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+    let name = rest[..name_end].to_ascii_lowercase();
+    let attrs = &rest[name_end..];
+    let block = matches!(
+        name.as_str(),
+        "s" | "p" | "h1" | "h2" | "h3" | "h4" | "hr" | "br" | "li" | "dd" | "img" | "td"
+    );
+    match name.as_str() {
+        "speak" => closing,
+        "break" => !closing && break_returns_terminator(attrs),
+        _ => block,
+    }
+}
+
+fn break_returns_terminator(attrs: &str) -> bool {
+    let strong = ["medium", "strong", "x-strong"]
+        .iter()
+        .any(|s| attrs.contains(&format!("strength=\"{s}\"")));
+    let has_strength = attrs.contains("strength=");
+    !has_strength || strong || attrs.contains("time=")
 }
 
 /// C ends a clause at a mark that a quote or bracket follows, and reads that

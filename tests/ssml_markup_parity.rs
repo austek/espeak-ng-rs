@@ -46,6 +46,40 @@ fn ignored_text_elements_and_sub_flag() {
     ]);
 }
 
+fn run_raw(flag: &str, text: &str) -> String {
+    let out = Command::new(env!("CARGO_BIN_EXE_espeak_cli"))
+        .args(["-q", flag, "-m", text])
+        .output()
+        .expect("run");
+    String::from_utf8_lossy(&out.stdout).to_string()
+}
+
+/// A tag that ends a clause at the very end of the text leaves one more, empty, clause line.
+#[test]
+fn trailing_clause_tag_adds_an_empty_clause_line() {
+    if !std::path::Path::new("espeak-ng-data/en_dict").exists() {
+        return;
+    }
+    let cases: &[(&str, &str, &str)] = &[
+        ("One</s>", "w\u{2c8}\u{252}n\n\n", "w'0n\n\n"),
+        ("<s>One</s>", "\nw\u{2c8}\u{252}n\n\n", "\nw'0n\n\n"),
+        ("One<br>", "w\u{2c8}\u{252}n\n\n", "w'0n\n\n"),
+        ("One</speak> ", "w\u{2c8}\u{252}n\n\n", "w'0n\n\n"),
+        ("One<p>", "w\u{2c8}\u{252}n\n\n", "w'0n\n\n"),
+        ("One<break strength=\"weak\"/>", "w\u{2c8}\u{252}n\n", "w'0n\n"),
+        ("One<emphasis>", "w\u{2c8}\u{252}n\n", "w'0n\n"),
+    ];
+    let bad: Vec<String> = cases
+        .iter()
+        .flat_map(|&(t, ipa, x)| [("--ipa", ipa, t), ("-x", x, t)])
+        .filter_map(|(f, want, t)| {
+            let got = run_raw(f, t);
+            (got != want).then(|| format!("{f} {t:?}: got {got:?}, C {want:?}"))
+        })
+        .collect();
+    assert!(bad.is_empty(), "differs from C:\n{}", bad.join("\n"));
+}
+
 /// Only `alphabet="espeak"` emits `[[ph]]`; the element content is read either way.
 #[test]
 fn phoneme_needs_the_espeak_alphabet_and_keeps_its_content() {
