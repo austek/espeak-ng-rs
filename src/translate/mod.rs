@@ -8749,6 +8749,9 @@ pub(crate) fn build_translate_entries(
                 if *c != '.'
                     && is_clause_punctuation(*c)
                     && !punct_covers(options, *c)
+                    && !(token_ix > 0
+                        && matches!(tokens[token_ix - 1], Token::Number(_))
+                        && matches!(tokens.get(token_ix + 1), Some(Token::Number(_))))
                     && stray_mark_phonemes(*c, dict, phdata, stress_opts, options).is_some() =>
             {
                 let phonemes = stray_mark_phonemes(*c, dict, phdata, stress_opts, options).unwrap_or_default();
