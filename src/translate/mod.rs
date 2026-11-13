@@ -1026,6 +1026,10 @@ impl NumberGrammar {
         (grammar.c_numbers, grammar.c_numbers2) = ordinal::c_number_flags(lang);
         (grammar.group_separator, grammar.decimal_separator, grammar.space_group) =
             ordinal::c_separators(lang, grammar.c_numbers);
+        if grammar.c_numbers == 0 {
+            grammar.max_digits = 0;
+            grammar.group_separator = None;
+        }
         grammar.ordinals.dot_marks_ordinal |= grammar.c_numbers & ordinal::NUM_ORDINAL_DOT != 0;
         grammar.ordinals.declines_alt_words = lang == "hu";
         grammar
@@ -4831,6 +4835,21 @@ fn translate_number_token_with_tail(
         NumberToken::Bare { separator, digits } => {
             let mut phonemes = speak_symbol(&format!("{separator}{digits}"));
             phonemes.extend(individual_digit_word(digits, dict));
+            phonemes.push(0);
+            set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
+            Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() })
+        }
+        NumberToken::Cardinal(digits) | NumberToken::Grouped(digits)
+            if grammar.c_numbers == 0 && !reads_digit_by_digit(digits, grammar) =>
+        {
+            let mut phonemes = individual_digit_word(digits, dict);
+            phonemes.push(0);
+            set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
+            Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() })
+        }
+        NumberToken::Decimal { integer, fractional, .. } if grammar.c_numbers == 0 => {
+            let mut phonemes = individual_digit_word(integer, dict);
+            phonemes.extend(individual_digit_word(fractional, dict));
             phonemes.push(0);
             set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
             Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() })
@@ -9865,7 +9884,9 @@ impl Translator {
         expand_dotted_phrases(&mut tokens, dict, lang);
         tokens = announce_clause_punctuation(tokens, &self.options);
         suppress_abbreviation_periods(&mut tokens);
-        apply_time_reading(&mut tokens, lang);
+        if number_grammar.c_numbers != 0 {
+            apply_time_reading(&mut tokens, lang);
+        }
         apply_dash_reading(&mut tokens, lang);
         apply_decades(&mut tokens, lang);
         apply_dimensions(&mut tokens, lang);
