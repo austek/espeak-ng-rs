@@ -2,7 +2,7 @@
 //! the stress handling `MakePhonemeList` does after translation.
 
 use crate::phoneme::{
-    PhonemeData, PhonemeTab, PHON_END_WORD, PHON_LENGTHEN, PHON_PAUSE, PHON_PAUSE_SHORT, PHON_SWITCH, PH_LIQUID,
+    PhonemeData, PhonemeTab, PHON_DEFAULTTONE, PHON_END_WORD, PHON_LENGTHEN, PHON_PAUSE, PHON_PAUSE_SHORT, PHON_SWITCH, PH_LIQUID,
     PH_NASAL, PH_PAUSE, PH_PREVOICE, PH_STRESS, PH_VFRICATIVE, PH_VOWEL, PH_VSTOP,
 };
 use crate::translate::{CodeMarker, EmbeddedCmd, PhonemeCode};
@@ -37,6 +37,18 @@ pub struct Ph {
     /// A pause `MakePhonemeList` inserts between words, after it has looked
     /// ahead from the phonemes before it.
     pub inserted: bool,
+    /// The tone phoneme of a tone-language syllable (C's `tone_ph`).
+    pub tone: Option<PhonemeTab>,
+    pub tone_env: ToneEnv,
+}
+
+/// What a tone phoneme's program selects: phondata offsets of its pitch and
+/// amplitude envelopes (0 = none) and the first byte of the pitch envelope.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ToneEnv {
+    pub pitch: u32,
+    pub amp: u32,
+    pub first: i32,
 }
 
 impl Ph {
@@ -56,6 +68,8 @@ impl Ph {
             pitch2: 255,
             embedded: Vec::new(),
             inserted: false,
+            tone: None,
+            tone_env: ToneEnv::default(),
         }
     }
 
@@ -131,6 +145,8 @@ pub fn build_list(
     let mut pending: Vec<EmbeddedCmd> = Vec::new();
     let mut table = phdata;
     let mut promoted: Option<u8> = None;
+    let mut prev_vowel: Option<usize> = None;
+    let mut next_tone: Option<PhonemeTab> = None;
     let mut inserted: Option<i32> = None;
     let mut gaps: Vec<(usize, i32)> = Vec::new();
     for c in codes {
@@ -161,9 +177,21 @@ pub fn build_list(
         }
         if c.code == PHON_END_WORD || (c.is_boundary && c.code == 0) {
             newword |= PHLIST_START_OF_WORD;
+            prev_vowel = None;
+            next_tone = None;
             continue;
         }
         let Some(t) = table.get(c.code) else { continue };
+        if t.typ == PH_STRESS && t.program != 0 {
+            // The translator writes the default tone for toneless syllables;
+            // C leaves those to CalcPitches_Tone.
+            let tone = (c.code != PHON_DEFAULTTONE).then(|| t.clone());
+            match (prev_vowel, tone) {
+                (Some(i), tone) => list[i].tone = tone,
+                (None, tone) => next_tone = tone,
+            }
+            continue;
+        }
         if t.typ == PH_STRESS {
             stress = match promoted.take() {
                 Some(0) => None,
@@ -189,6 +217,8 @@ pub fn build_list(
         }
         if t.typ == PH_VOWEL {
             p.synthflags |= SFLAG_SYLLABLE;
+            p.tone = next_tone.take();
+            prev_vowel = Some(list.len());
         }
         if !pending.is_empty() {
             p.synthflags |= SFLAG_EMBEDDED;

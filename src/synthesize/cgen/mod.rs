@@ -9,6 +9,7 @@ pub mod lengths;
 pub mod phlist;
 pub mod pitches;
 pub mod speed;
+pub mod tone;
 pub mod voice;
 pub mod voicefile;
 pub mod wavegen;
@@ -250,7 +251,7 @@ impl<'a> Renderer<'a> {
             clause_type = 4;
         }
         let mut c = phlist::build_list(codes, self.phdata, &self.switched, post_pause, start_sentence, self.tr.stress_flags);
-        pitches::calc_pitches(&mut c.list, &self.tr, &self.tunes, clause_type);
+        pitches::calc_pitches(&mut c.list, &self.tr, &self.tunes, clause_type, self.phdata);
         let speeds = speeds_along(&c.list, &mut self.wpm_s, &self.voice);
         lengths::calc_lengths(&mut c.list, &self.tr, &|i| speeds[i.min(speeds.len() - 1)]);
         self.dump(&c.list);
@@ -310,8 +311,9 @@ impl<'a> Renderer<'a> {
         }
         for (i, p) in list.iter().enumerate() {
             eprintln!(
-                "PH {} {} code={} type={} stress={} len={} env={} p1={} p2={} amp={} pre={} nw={} sf={:x}",
-                i, p.ph.mnemonic_str(), p.code(), p.typ, p.stresslevel, p.length, p.env, p.pitch1, p.pitch2, p.amp, p.prepause, p.newword, p.synthflags
+                "PH {} {} code={} type={} stress={} len={} env={} p1={} p2={} amp={} pre={} nw={} sf={:x} tone={}",
+                i, p.ph.mnemonic_str(), p.code(), p.typ, p.stresslevel, p.length, p.env, p.pitch1, p.pitch2, p.amp, p.prepause, p.newword, p.synthflags,
+                p.tone.as_ref().map_or("0".to_string(), |t| format!("{}:{}:{}-{}", t.code, t.mnemonic_str(), t.start_type, t.end_type))
             );
         }
     }

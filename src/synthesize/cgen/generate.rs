@@ -1138,25 +1138,25 @@ impl<'a> Generator<'a> {
         let mut fmt = Fmt { std_length: d.set_length * 2, ..Default::default() };
         let vowelstart_prev = self.vowel_start(list, ix, &d, &mut fmt);
         fmt.fmt_amp = d.sound_param[PD_FMT];
-        let env = Env::Builtin(p.env);
+        let (env, amp_env) = tone_envs(&p);
         self.start_syllable();
         let modulation = if stress <= 1 { 1 } else if stress >= 7 { 3 } else { 2 };
         if prev.typ == PH_VSTOP || prev.typ == PH_VFRICATIVE {
-            self.do_amplitude(p.amp, None);
+            self.do_amplitude(p.amp, amp_env);
             self.do_pitch(env, p.pitch1, p.pitch2);
             self.do_spect2(list, ix, 1, &mut fmt, modulation);
         } else if prev.typ == PH_LIQUID || prev.typ == PH_NASAL {
-            self.do_amplitude(p.amp, None);
+            self.do_amplitude(p.amp, amp_env);
             self.do_spect2(list, ix, 1, &mut fmt, modulation);
             self.do_pitch(env, p.pitch1, p.pitch2);
         } else if vowelstart_prev {
             self.do_pitch(Env::Builtin(PITCH_RISE), p.pitch2 - 15, p.pitch2);
-            self.do_amplitude(p.amp - 1, None);
+            self.do_amplitude(p.amp - 1, amp_env);
             self.do_spect2(list, ix, 1, &mut fmt, modulation);
             self.do_pitch(env, p.pitch1, p.pitch2);
         } else {
             if p.synthflags & SFLAG_SEQCONTINUE == 0 {
-                self.do_amplitude(p.amp, None);
+                self.do_amplitude(p.amp, amp_env);
                 self.do_pitch(env, p.pitch1, p.pitch2);
             }
             self.do_spect2(list, ix, 1, &mut fmt, modulation);
@@ -1182,6 +1182,20 @@ impl<'a> Generator<'a> {
         }
         self.do_spect2(list, ix, 2, &mut fmt2, modulation);
     }
+}
+
+/// The pitch and amplitude envelopes of a vowel: those of its tone phoneme in
+/// a tone language, else the intonation envelope.
+fn tone_envs(p: &Ph) -> (Env, Option<Env>) {
+    if p.tone.is_none() {
+        return (Env::Builtin(p.env), None);
+    }
+    let pitch = match p.tone_env.pitch {
+        0 => Env::Builtin(0),
+        off => Env::Data(off as usize),
+    };
+    let amp = (p.tone_env.amp > 0).then_some(Env::Data(p.tone_env.amp as usize));
+    (pitch, amp)
 }
 
 /// The word-scoped vowel context `InterpretCondition` reads (`nextVowel`,

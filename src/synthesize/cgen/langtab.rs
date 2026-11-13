@@ -17,6 +17,17 @@ pub struct Overrides {
     pub long_vowel_threshold: Option<i32>,
     pub word_merge: Option<i32>,
     pub intonation_group: Option<usize>,
+    pub tone: Option<ToneLang>,
+}
+
+/// A language with `langopts.tone_language`, and the sandhi rules its
+/// `CalcPitches_Tone` pass applies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToneLang {
+    Vietnamese,
+    Mandarin,
+    Hakka,
+    Other,
 }
 
 const EQUAL_L: Lengths = [230, 230, 230, 230, 0, 0, 230, 230];
@@ -129,13 +140,21 @@ fn asian_family(lang: &str) -> Option<Overrides> {
         "id" | "ms" => la([160, 200, 180, 180, 0, 0, 220, 240], [16, 18, 18, 18, 20, 22, 22, 21]),
         "vi" => Overrides {
             word_gap: Some(0x21),
+            tone: Some(ToneLang::Vietnamese),
             ..la0([150, 150, 180, 180, 210, 230, 230, 240], [16, 16, 16, 16, 22, 22, 22, 22])
         },
-        "zh" | "cmn" | "yue" => Overrides {
+        "zh" | "cmn" => Overrides {
             word_gap: Some(0x21),
+            tone: Some(ToneLang::Mandarin),
             ..la0([230, 150, 230, 230, 230, 0, 240, 250], [22, 16, 22, 22, 22, 22, 22, 22])
         },
-        "shn" => Overrides { mods0_is_mods: true, ..Overrides::default() },
+        "yue" => Overrides {
+            word_gap: Some(0x21),
+            tone: Some(ToneLang::Other),
+            ..la0([230, 150, 230, 230, 230, 0, 240, 250], [22, 16, 22, 22, 22, 22, 22, 22])
+        },
+        "shn" => Overrides { mods0_is_mods: true, tone: Some(ToneLang::Other), ..Overrides::default() },
+        "hak" => Overrides { tone: Some(ToneLang::Hakka), ..Overrides::default() },
         _ => return None,
     })
 }

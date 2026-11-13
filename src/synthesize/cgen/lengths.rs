@@ -254,6 +254,9 @@ fn vowel(list: &mut [Ph], ix: usize, tr: &LangSynth, sp: &Speed, st: &mut State)
     }
     let len = if tr.stress_lengths[stress] == 0 { tr.stress_lengths[6] } else { tr.stress_lengths[stress] };
     length_mod *= len;
+    if let Some(pct) = list[ix].tone.as_ref().map(|t| t.std_length as i32).filter(|&v| v > 0) {
+        length_mod = length_mod * pct / 100;
+    }
     if eoc && tr.stress_flags & S_NO_EOC_LENGTHEN == 0 {
         let len = if tr.stress_flags & S_EO_CLAUSE1 != 0 { 200 } else { list[ix].ph.std_length as i32 * 2 };
         length_mod = length_mod * (256 + (280 - len) / 3) / 256;
@@ -279,7 +282,8 @@ fn vowel(list: &mut [Ph], ix: usize, tr: &LangSynth, sp: &Speed, st: &mut State)
 fn pre_vocalic(list: &mut [Ph], ix: usize, st: &mut State, length_mod: i32) {
     let env2 = list[ix].env + 1;
     let p = &list[ix];
-    let pitch_start = p.pitch1 + ((p.pitch2 - p.pitch1) * ENVELOPE_DATA[env2.min(19)][0] as i32) / 256;
+    let first = if p.tone.is_some() { p.tone_env.first } else { ENVELOPE_DATA[env2.min(19)][0] as i32 };
+    let pitch_start = p.pitch1 + ((p.pitch2 - p.pitch1) * first) / 256;
     if !(st.pre_sonorant || st.pre_voiced) {
         return;
     }

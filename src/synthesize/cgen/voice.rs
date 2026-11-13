@@ -161,6 +161,7 @@ pub struct LangSynth {
     pub stress_flags: u32,
     pub intonation_group: usize,
     pub tunes: [usize; 6],
+    pub tone: Option<ToneLang>,
 }
 
 impl Default for LangSynth {
@@ -182,10 +183,12 @@ impl Default for LangSynth {
             stress_flags: 0,
             intonation_group: 0,
             tunes: [0, 1, 2, 3, 0, 0],
+            tone: None,
         }
     }
 }
 
+pub use super::langtab::ToneLang;
 use super::langtab::{overrides_for, Overrides};
 
 impl LangSynth {
@@ -215,5 +218,6 @@ impl LangSynth {
         self.long_vowel_threshold = o.long_vowel_threshold.unwrap_or(self.long_vowel_threshold);
         self.word_merge = o.word_merge.unwrap_or(self.word_merge);
         self.intonation_group = o.intonation_group.unwrap_or(self.intonation_group);
+        self.tone = o.tone.or(self.tone);
     }
 }

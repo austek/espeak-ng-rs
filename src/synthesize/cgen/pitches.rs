@@ -1,6 +1,8 @@
 //! `CalcPitches` from `intonation.c`, over the clause phoneme list.
 
 use super::phlist::{Ph, SFLAG_SYLLABLE};
+use super::tone::calc_pitches_tone;
+use crate::phoneme::PhonemeData;
 use super::voice::LangSynth;
 use crate::phoneme::PHON_PAUSE_CLAUSE;
 use crate::synthesize::intonation::{
@@ -91,10 +93,14 @@ fn emphasis_step(syls: &mut [Syllable], st_ix: usize, st_start: usize) {
 }
 
 /// Assign `env`, `pitch1` and `pitch2` to each syllable of the clause.
-pub fn calc_pitches(list: &mut [Ph], tr: &LangSynth, tunes: &[Tune], clause_type: usize) {
+pub fn calc_pitches(list: &mut [Ph], tr: &LangSynth, tunes: &[Tune], clause_type: usize, phdata: &PhonemeData) {
     let (mut syls, n_primary) = collect(list);
     let n_st = syls.len();
     if n_st == 0 {
+        return;
+    }
+    if let Some(kind) = tr.tone {
+        calc_pitches_tone(list, kind, phdata);
         return;
     }
     let ctx = Ctx { tr, tunes, no_tonic: clause_type == 4 };
