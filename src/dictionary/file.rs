@@ -696,6 +696,9 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
             // Latin/default: use the English letter bits
             let en = crate::translate::english_letter_bits();
             bits.copy_from_slice(en.as_slice());
+            if letter_bits_offset_for(lang) > 0 {
+                bits[usize::from(b'A')..=usize::from(b'Z')].fill(0);
+            }
             if lang == "en" {
                 for &c in b"aeiouy" {
                     bits[c as usize] |= 1 << 6;
