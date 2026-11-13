@@ -1196,6 +1196,9 @@ fn word_vowels(list: &[Ph], ix: usize) -> Neighbours {
     Neighbours {
         next_vowel: next.map_or(0, |i| list[i].code()),
         next_vowel_stress: next.map_or(bytecode::STRESS_UNKNOWN, |i| list[i].stresslevel & 7),
+        next_vowel_word_end: next.is_some_and(|i| {
+            list.get(i + 1).is_none_or(|p| p.newword != 0 || p.typ == PH_PAUSE)
+        }),
         prev_vowel: prev.map_or(0, |i| list[i].code()),
         prev_vowel_stress: prev.map_or(bytecode::STRESS_UNKNOWN, |i| list[i].stresslevel & 7),
         vowel_position: position.min(255) as u8,

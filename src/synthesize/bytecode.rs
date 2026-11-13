@@ -535,6 +535,9 @@ pub struct Neighbours {
     /// `двадцатьпять` the stressed vowel is three phonemes away.
     pub next_vowel: u8,
     pub next_vowel_stress: u8,
+    /// The phoneme after `next_vowel` starts a new word, is a pause, or is
+    /// missing: `nextVowel(isWordEnd)`.
+    pub next_vowel_word_end: bool,
     /// The previous vowel in this word (C's `worddata->prev_vowel`) and its
     /// stress level; `0` = none.
     pub prev_vowel: u8,
@@ -573,6 +576,7 @@ impl Default for Neighbours {
             translation_given: false,
             next_vowel: 0,
             next_vowel_stress: STRESS_UNKNOWN,
+            next_vowel_word_end: false,
             prev_vowel: 0,
             prev_vowel_stress: STRESS_UNKNOWN,
             vowels_tracked: false,
@@ -1117,6 +1121,7 @@ where
                     1 => nb.next == 0 || nb.next_wordstart || resolve(nb.next).typ == PH_PAUSE,
                     2 | 4 => nb.next2 == 0 || nb.next2_wordstart || resolve(nb.next2).typ == PH_PAUSE,
                     0 | 5 => nb.this_wordstart,
+                    7 => nb.next_vowel_word_end,
                     _ => false,
                 }
             }

@@ -11623,8 +11623,9 @@ fn resolve_virtual_phonemes_in_codes(
                 .any(|c| c.is_boundary || c.code == crate::phoneme::PHON_END_WORD)
         };
         let (mut next_vowel, mut next_vowel_stress) = (0u8, NO_STRESS_LEVEL);
+        let mut next_vowel_word_end = false;
         let mut from = i;
-        for &at in &real[(n + 1)..] {
+        for (k, &at) in real.iter().enumerate().skip(n + 1) {
             if crosses(from, at) {
                 break;
             }
@@ -11632,6 +11633,7 @@ fn resolve_virtual_phonemes_in_codes(
             if phdata.get(c).is_some_and(|p| p.typ == PH_VOWEL) {
                 next_vowel = c;
                 next_vowel_stress = level[at];
+                next_vowel_word_end = real.get(k + 1).is_none_or(|&after| crosses(at, after));
                 break;
             }
             from = at;
@@ -11674,6 +11676,7 @@ fn resolve_virtual_phonemes_in_codes(
                 || matches!((real.get(n + 1), real.get(n + 2)), (Some(&a), Some(&b)) if crosses(a, b)),
             next_vowel,
             next_vowel_stress,
+            next_vowel_word_end,
             prev_vowel,
             prev_vowel_stress,
             prev2: n.checked_sub(2).map(|k| {

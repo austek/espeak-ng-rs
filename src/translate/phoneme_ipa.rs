@@ -21,7 +21,7 @@ use crate::phoneme::{
     PhonemeData, PHON_END_WORD, PHON_STRESS_2, PHON_LENGTHEN, PHON_SYLLABIC, PHON_STRESS_3, PHON_STRESS_D, PHON_STRESS_P,
     PHON_STRESS_P2, PHON_STRESS_PREV, PHON_STRESS_TONIC, PHON_STRESS_U,
 };
-use crate::synthesize::bytecode::{interpret_phoneme, Neighbours};
+use crate::synthesize::bytecode::{self, interpret_phoneme, Neighbours};
 
 use super::ipa_table::{encode_utf8, ipa1_char};
 use super::{CodeMarker, PhonemeCode};
@@ -412,17 +412,7 @@ fn neighbours_at(
     });
     // Stress level of the syllable this phoneme belongs to, for programs that
     // condition on it.
-    let stress = codes[..i]
-        .iter()
-        .rev()
-        .take_while(|c| !c.is_boundary)
-        .find_map(|c| match c.code {
-            PHON_STRESS_P | PHON_STRESS_P2 | PHON_STRESS_TONIC => Some(4u8),
-            PHON_STRESS_2 | PHON_STRESS_3 => Some(3),
-            c2 if matches!(phdata.get(c2), Some(p) if p.typ == 2) => Some(0),
-            _ => None,
-        })
-        .unwrap_or(1);
+    let stress = syllable_stress(codes, i, phdata);
     // C keeps a lengthen mark as a flag on the vowel, so no phoneme sees one as
     // its neighbour (`;` after `i:` still follows the `i`).
     let skip_mark = codes[i].code != PHON_LENGTHEN;
@@ -435,12 +425,47 @@ fn neighbours_at(
         next: at(after.next()),
         next2: at(after.next()),
         stress,
+        prev_stress: prev_ix.map_or(bytecode::STRESS_UNKNOWN, |&k| syllable_stress(codes, k, phdata)),
         this_wordstart: starts[n],
         prev_wordstart: n.checked_sub(1).is_some_and(|k| starts[k]),
         next_wordstart,
         next2_wordstart: next_wordstart,
+        next_vowel_word_end: next_vowel_ends_word(codes, real, n, phdata),
         ..Default::default()
     }
+}
+
+fn syllable_stress(codes: &[PhonemeCode], i: usize, phdata: &PhonemeData) -> u8 {
+    codes[..i]
+        .iter()
+        .rev()
+        .take_while(|c| !c.is_boundary)
+        .find_map(|c| match c.code {
+            PHON_STRESS_P | PHON_STRESS_P2 | PHON_STRESS_TONIC => Some(4u8),
+            PHON_STRESS_2 | PHON_STRESS_3 => Some(3),
+            c2 if matches!(phdata.get(c2), Some(p) if p.typ == 2) => Some(0),
+            _ => None,
+        })
+        .unwrap_or(1)
+}
+
+/// Whether the next vowel of this word is its last sound: the phoneme after it
+/// starts a new word or is absent (`nextVowel(isWordEnd)`).
+fn next_vowel_ends_word(codes: &[PhonemeCode], real: &[usize], n: usize, phdata: &PhonemeData) -> bool {
+    let crosses = |a: usize, b: usize| {
+        codes[a + 1..b].iter().any(|c| c.is_boundary || c.code == PHON_END_WORD)
+    };
+    let mut from = real[n];
+    for (k, &at) in real.iter().enumerate().skip(n + 1) {
+        if crosses(from, at) {
+            return false;
+        }
+        if phdata.get(codes[at].code).is_some_and(|p| p.typ == 2) {
+            return real.get(k + 1).is_none_or(|&after| crosses(at, after));
+        }
+        from = at;
+    }
+    false
 }
 
 /// Insert `tie` before every character after the first that is a letter — C's
