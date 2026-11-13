@@ -7240,6 +7240,7 @@ fn spell_unpronounceable<'a>(
     stress_opts: &StressOpts,
     options: &LangOptions,
     next: &[u8],
+    alts: &letters::AltLangs,
 ) -> Option<(Vec<u8>, &'a str)> {
     if word.chars().count() < 2 {
         return None;
@@ -7265,7 +7266,7 @@ fn spell_unpronounceable<'a>(
             wr.phonemes = superscript_name(c, dict, phdata, stress_opts, options);
         }
         if wr.phonemes.iter().all(|&b| b == 0) {
-            return None;
+            wr.phonemes = unnamed_letter_phonemes(c, dict, phdata, stress_opts, options, alts)?;
         }
         let name = if out.is_empty() {
             &wr.phonemes[..]
@@ -7283,20 +7284,62 @@ fn spell_unpronounceable<'a>(
     if posn == 0 {
         return None;
     }
-    set_spelling_stress(&mut out, stress_opts, posn);
+    set_spelling_stress(&mut out, stress_opts, posn, true);
     Some((out, rest))
+}
+
+/// What `TranslateLetter` says for a letter with no name of its own ("letter",
+/// then its code point), NUL-terminated; `None` when it needs a language switch.
+fn unnamed_letter_phonemes(
+    c: char,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+    alts: &letters::AltLangs,
+) -> Option<Vec<u8>> {
+    let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
+    match letters::translate_letter(&letters::LetterEnv { voice, tr: voice, alts }, c) {
+        letters::LetterOut::Items(items) if !items.is_empty() => {
+            let mut bytes = letters::encode(&items);
+            bytes.push(0);
+            Some(bytes)
+        }
+        _ => None,
+    }
+}
+
+/// Offsets of the primary stresses in a phoneme string, skipping the table name
+/// that follows each language switch.
+fn stress_positions(out: &[u8]) -> Vec<usize> {
+    let (mut found, mut ix) = (Vec::new(), 0);
+    while ix < out.len() {
+        match out[ix] {
+            crate::phoneme::PHON_SWITCH => ix += 2 + usize::from(out.get(ix + 1).copied().unwrap_or(0)),
+            PHON_STRESS_P => {
+                found.push(ix);
+                ix += 1;
+            }
+            _ => ix += 1,
+        }
+    }
+    found
 }
 
 /// C's `SetSpellingStress`: reduce the primary stresses of spelled letter names.
 ///
 /// With `spelling_stress` only the first stays primary; otherwise the last does,
 /// plus every third one.  A stress right after a language switch is left alone.
-fn set_spelling_stress(out: &mut [u8], stress_opts: &StressOpts, n_chars: usize) {
-    let is_counted = |ix: usize, b: u8| {
-        b == PHON_STRESS_P && !(ix > 0 && out[ix - 1] == crate::phoneme::PHON_SWITCH)
+fn set_spelling_stress(out: &mut [u8], stress_opts: &StressOpts, n_chars: usize, encoded: bool) {
+    let counted: Vec<usize> = if encoded {
+        stress_positions(out)
+    } else {
+        (0..out.len())
+            .filter(|&ix| {
+                out[ix] == PHON_STRESS_P && !(ix > 0 && out[ix - 1] == crate::phoneme::PHON_SWITCH)
+            })
+            .collect()
     };
-    let counted: Vec<usize> =
-        (0..out.len()).filter(|&ix| is_counted(ix, out[ix])).collect();
     if n_chars <= 1 {
         return;
     }
@@ -7516,7 +7559,7 @@ fn spell_word_letters(
     if out.is_empty() {
         return None;
     }
-    set_spelling_stress(&mut out, stress_opts, chars.iter().filter(|c| c.is_alphanumeric()).count());
+    set_spelling_stress(&mut out, stress_opts, chars.iter().filter(|c| c.is_alphanumeric()).count(), false);
     Some(out)
 }
 
@@ -8670,6 +8713,7 @@ pub(crate) fn build_translate_entries(
                     ..pos_expect_after_in(prev_word.as_deref(), dict, options.dict_condition)
                 };
                 let mut wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
+                let mut spelled_with_switch = false;
                 // The indicator of an ordinal that was read as a number (`3.º`)
                 // is already spoken in the number.
                 let ordinal_indicator = token_ix > 0
@@ -8858,7 +8902,7 @@ pub(crate) fn build_translate_entries(
                     && is_unpronounceable(&lower, &next_word, dict, options)
                 {
                     if let Some((letters, rest)) =
-                        spell_unpronounceable(&lower, dict, phdata, stress_opts, options, &next_word)
+                        spell_unpronounceable(&lower, dict, phdata, stress_opts, options, &next_word, alts)
                     {
                         let mut ph = letters;
                         if !rest.is_empty() {
@@ -8892,6 +8936,7 @@ pub(crate) fn build_translate_entries(
                                 without_leading_break(&tail.phonemes, stress_opts).iter().copied().filter(|&b| b != 0),
                             );
                         }
+                        spelled_with_switch = letters::has_switch(&letters::decode(&ph));
                         wr.phonemes = ph;
                     }
                 }
@@ -8917,7 +8962,7 @@ pub(crate) fn build_translate_entries(
                     phonemes:   wr.phonemes,
                     dict_flags: wr.dict_flags,
                     found_in_list: wr.found_in_list,
-                    kind:       TranslateEntryKind::Word,
+                    kind:       if spelled_with_switch { TranslateEntryKind::Stream } else { TranslateEntryKind::Word },
                     word_lower: Some(lower),
                     word_group: spelled.get(token_ix).copied().flatten(),
                 });
