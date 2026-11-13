@@ -249,21 +249,8 @@ pub fn process_markup_opts(input: &str, break_mul: u32) -> (Vec<Segment>, Vec<Ma
 enum SayAsKind {
     /// Spells the content out (incremented `spell_depth`).
     Spell,
-    /// Sets a [`SayAs`] interpretation on emitted segments.
-    Interpret,
     /// No text/interpret effect (e.g. `cardinal`, unknown).
     Other,
-}
-
-/// Map an `interpret-as` value to a translate-layer [`SayAs`] mode (those that
-/// need the language), or `None` for text-level / unhandled modes.
-fn interpret_mode(ia: &str) -> Option<SayAs> {
-    match ia {
-        "ordinal" | "vxml:ordinal" => Some(SayAs::Ordinal),
-        "date" => Some(SayAs::Date),
-        "time" => Some(SayAs::Time),
-        _ => None,
-    }
 }
 
 /// Mutable state for one pass over an SSML fragment.
@@ -585,10 +572,6 @@ impl Walker {
                         Some(SayAsKind::Spell) => {
                             self.spell_depth = self.spell_depth.saturating_sub(1);
                         }
-                        Some(SayAsKind::Interpret) => {
-                            self.flush();
-                            self.interpret = SayAs::Normal;
-                        }
                         _ => {}
                     }
                 } else if !self_close {
@@ -598,20 +581,10 @@ impl Walker {
                     // out achieves that ("42" → "4 2" → "four two").
                     let kind = if matches!(
                         ia.as_str(),
-                        "characters" | "character" | "glyphs" | "spell" | "spell-out"
-                            | "digits" | "tts:digits"
-                            // Phone numbers: read each digit, `+`→"plus",
-                            // separators silent — the spell path already does this.
-                            | "telephone" | "tel" | "vxml:phone" | "phone-number"
+                        "characters" | "tts:char" | "tts:digits" | "telephone"
                     ) {
                         self.spell_depth += 1;
                         SayAsKind::Spell
-                    } else if let Some(mode) = interpret_mode(ia.as_str()) {
-                        // Date/time/ordinal need the language, so tag the segment
-                        // and let the translate layer render it.
-                        self.flush();
-                        self.interpret = mode;
-                        SayAsKind::Interpret
                     } else {
                         SayAsKind::Other
                     };
@@ -864,22 +837,14 @@ mod tests {
 
     #[test]
     fn say_as_digits_spells_each_digit() {
-        // `digits` spells the content out (each digit read separately).
         assert_eq!(
-            strip_markup(r#"<say-as interpret-as="digits">42</say-as>"#)
+            strip_markup(r#"<say-as interpret-as="tts:digits">42</say-as>"#)
                 .split_whitespace()
                 .collect::<Vec<_>>(),
             ["4", "2"]
         );
-        // Leading zeros are preserved as separate digits.
-        assert_eq!(
-            strip_markup(r#"<say-as interpret-as="digits">007</say-as>"#)
-                .split_whitespace()
-                .collect::<Vec<_>>(),
-            ["0", "0", "7"]
-        );
-        // `cardinal`/`number` are read as a whole number (content untouched).
-        assert_eq!(strip_markup(r#"<say-as interpret-as="cardinal">42</say-as>"#).trim(), "42");
+        // C does not know bare `digits`: the content is read as a number.
+        assert_eq!(strip_markup(r#"<say-as interpret-as="digits">42</say-as>"#).trim(), "42");
     }
 
     #[test]
@@ -893,7 +858,7 @@ mod tests {
             ["5", "5", "5"]
         );
         assert_eq!(
-            strip_markup(r#"<say-as interpret-as="tel">+1</say-as>"#)
+            strip_markup(r#"<say-as interpret-as="telephone">+1</say-as>"#)
                 .split_whitespace()
                 .collect::<Vec<_>>(),
             ["+", "1"]
@@ -901,15 +866,9 @@ mod tests {
     }
 
     #[test]
-    fn say_as_ordinal_tags_segment() {
+    fn say_as_ordinal_is_plain_text() {
         let segs = process_markup(r#"the <say-as interpret-as="ordinal">3</say-as> item"#);
-        // The number is its own segment, tagged Ordinal.
-        let ordinal: Vec<_> = segs.iter().filter(|s| s.interpret == SayAs::Ordinal).collect();
-        assert_eq!(ordinal.len(), 1, "{segs:?}");
-        assert_eq!(ordinal[0].text.trim(), "3");
-        // Surrounding text stays Normal.
-        assert!(segs.iter().any(|s| s.interpret == SayAs::Normal && s.text.contains("the")));
-        assert!(segs.iter().any(|s| s.interpret == SayAs::Normal && s.text.contains("item")));
+        assert!(segs.iter().all(|s| s.interpret == SayAs::Normal), "{segs:?}");
     }
 
     #[test]
@@ -941,11 +900,11 @@ mod tests {
     }
 
     #[test]
-    fn say_as_date_time_tag_segments() {
+    fn say_as_date_time_are_plain_text() {
         let segs = process_markup(r#"<say-as interpret-as="date">2024-01-15</say-as>"#);
-        assert!(segs.iter().any(|s| s.interpret == SayAs::Date && s.text.contains("2024")));
+        assert!(segs.iter().all(|s| s.interpret == SayAs::Normal));
         let segs = process_markup(r#"<say-as interpret-as="time">14:30</say-as>"#);
-        assert!(segs.iter().any(|s| s.interpret == SayAs::Time && s.text.contains("14:30")));
+        assert!(segs.iter().all(|s| s.interpret == SayAs::Normal));
     }
 
     #[test]

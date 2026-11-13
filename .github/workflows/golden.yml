@@ -88,6 +88,7 @@ jobs:
           --test synth_parity_voice_path
           --test synth_parity_ssml_break
           --test ssml_markup_parity
+          --test ssml_say_as_unrecognised_modes
           --test synth_parity_tone
           --test synth_parity_klatt
           --test synth_parity_next3
