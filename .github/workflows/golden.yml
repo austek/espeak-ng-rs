@@ -61,6 +61,7 @@ jobs:
           --test tone_later_replaces
           --test my_tone_only_word
           --test shn_my_script_words
+          --test vi_final_tone_and_vowels
           --test ru_voice_replace
           --test unspaced_ascii_punctuation
           --test dot_run_ellipsis

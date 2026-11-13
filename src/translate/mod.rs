@@ -7063,6 +7063,17 @@ fn rules_reject_word_start(rest: &str, next: &[u8], dict: &Dictionary, lang_opts
     r.end_type == 0 || r.end_type & crate::dictionary::SUFX_UNPRON != 0
 }
 
+/// The vowel letters `tr_languages.c` hands Vietnamese as `vowels_vi`.
+fn is_vietnamese_vowel(c: char) -> bool {
+    const SET: &[char] = &[
+        'a', 'à', 'á', 'ả', 'ã', 'ạ', 'ă', 'ằ', 'ắ', 'ẳ', 'ẵ', 'ặ', 'â', 'ầ', 'ấ', 'ẩ', 'ẫ', 'ậ',
+        'e', 'è', 'é', 'ẻ', 'ẽ', 'ẹ', 'ê', 'ề', 'ế', 'ể', 'ễ', 'ệ', 'i', 'ì', 'í', 'ỉ', 'ĩ', 'ị',
+        'o', 'ò', 'ó', 'ỏ', 'õ', 'ọ', 'ô', 'ồ', 'ố', 'ổ', 'ỗ', 'ộ', 'ơ', 'ờ', 'ớ', 'ở', 'ỡ', 'ợ',
+        'u', 'ù', 'ú', 'ủ', 'ũ', 'ụ', 'ư', 'ừ', 'ứ', 'ử', 'ữ', 'ự', 'y', 'ỳ', 'ý', 'ỷ', 'ỹ', 'ỵ',
+    ];
+    SET.contains(&c)
+}
+
 /// C's `Unpronouncable`: is the first vowel too far into the word?
 ///
 /// A word with more than `max_initial_consonants` consonants before its first
@@ -7088,6 +7099,7 @@ fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &La
     let is_vowel = |c: char| {
         let base = crate::dictionary::rules::fold_accent(c);
         matches!(base, 'a' | 'e' | 'i' | 'o' | 'u' | 'y')
+            || (primary_bcp47_subtag(&lang_opts.lang) == "vi" && is_vietnamese_vowel(c))
             || crate::dictionary::rules::is_letter_wc(
                 &dict.letter_bits,
                 c as u32,
@@ -9172,8 +9184,8 @@ fn assign_default_tones(entries: &mut [TranslateEntry], phdata: &PhonemeData, ba
     }
     let vi_final_tone = (base == "vi").then(|| phdata.lookup_phoneme("7")).filter(|&c| c != 0);
 
-    // Index of the last syllable that takes a tone, for Vietnamese's clause-final rule.
-    let mut last_toneless: Option<(usize, usize)> = None;
+    // Last primary-stressed vowel's tone slot and whether it was toneless.
+    let mut last_primary: Option<(usize, usize, bool)> = None;
     for (ei, entry) in entries.iter_mut().enumerate() {
         if entry.kind != TranslateEntryKind::Word {
             continue;
@@ -9192,24 +9204,27 @@ fn assign_default_tones(entries: &mut [TranslateEntry], phdata: &PhonemeData, ba
                 .phonemes
                 .get(i + 1)
                 .is_some_and(|&c| is_tone_phoneme(c, phdata));
+            let primary = i > 0
+                && matches!(
+                    entry.phonemes[i - 1],
+                    crate::phoneme::PHON_STRESS_P
+                        | crate::phoneme::PHON_STRESS_P2
+                        | crate::phoneme::PHON_STRESS_TONIC
+                );
             if !has_tone {
                 entry.phonemes.insert(i + 1, PHON_DEFAULT_TONE);
-                last_toneless = Some((ei, i + 1));
                 i += 1;
+            }
+            if primary {
+                last_primary = Some((ei, i, !has_tone));
             }
             i += 1;
         }
     }
-    // Vietnamese: the clause-final stressed syllable takes the falling tone.
-    if let (Some(tone7), Some((ei, pos))) = (vi_final_tone, last_toneless) {
-        if entries[ei].phonemes.get(pos) == Some(&PHON_DEFAULT_TONE) {
-            let is_last_word = entries[ei + 1..]
-                .iter()
-                .all(|e| e.kind != TranslateEntryKind::Word);
-            if is_last_word {
-                entries[ei].phonemes[pos] = tone7;
-            }
-        }
+    // Vietnamese: `CalcPitches_Tone` gives the clause's last primary-stressed
+    // syllable the falling tone when it has none.
+    if let (Some(tone7), Some((ei, pos, true))) = (vi_final_tone, last_primary) {
+        entries[ei].phonemes[pos] = tone7;
     }
 }
 
