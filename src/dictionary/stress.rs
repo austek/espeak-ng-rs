@@ -217,7 +217,7 @@ impl Default for StressOpts {
 /// dozen others do), which `for_lang_in` applies afterwards.
 fn stress_rule_for(lang: &str) -> u8 {
     match lang {
-        "af" | "am" | "as" | "be" | "bn" | "bpy" | "bs" | "cs" | "da" | "de" | "en" | "fo"
+        "af" | "am" | "as" | "be" | "bn" | "bpy" | "bs" | "cs" | "da" | "de" | "en"
         | "ga" | "gd" | "hr" | "hu" | "is" | "ka" | "kn" | "ltg" | "lv" | "mn" | "nb" | "nl"
         | "si" | "sk" | "smj" | "sr" | "sv" | "ta" | "te" | "vi" => STRESSPOSN_1L,
         "cmn" | "fr" | "ht" | "hy" | "pap" | "pt" | "ro" | "rup" | "sq" | "tt" | "yue"

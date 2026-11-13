@@ -40,6 +40,7 @@ jobs:
           --test dictionary_bounds
           --test english_letter_group_y
           --test italian_rule_stress
+          --test faroese_default_stress
           --test polish_final_l
           --test long_digit_strings
           --test spanish_group_stress
