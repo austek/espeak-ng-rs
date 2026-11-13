@@ -42,6 +42,7 @@ jobs:
           --test italian_rule_stress
           --test faroese_default_stress
           --test hbs_spelling_stress
+          --test spelling_stress_langs
           --test punctuation_only_clause
           --test letter_name_conditions
           --test ligurian_halflong_consonant

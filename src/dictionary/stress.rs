@@ -334,7 +334,7 @@ impl StressOpts {
         };
 
         opts.prefixes = matches!(primary, "af" | "da" | "de" | "nl");
-        opts.spelling_stress = matches!(primary, "bs" | "hr" | "sr" | "hu" | "ltg" | "cs" | "si" | "smj" | "te");
+        opts.spelling_stress = matches!(primary, "bs" | "hr" | "sr" | "hu" | "lv" | "ltg" | "sk" | "cs" | "si" | "smj" | "ta" | "kn" | "ml" | "te");
 
         // `langopts.word_gap` — the language's own inter-word pause.
         opts.word_gap = match primary {
