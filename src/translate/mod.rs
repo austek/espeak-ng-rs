@@ -2173,9 +2173,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             }
             if clause_has_word(&tokens) {
                 tokens.push(Token::ClauseBoundary(c));
-            } else if previous.is_some_and(char::is_whitespace)
-                && matches!(tokens.iter().rev().find(|t| !matches!(t, Token::Space)), Some(Token::ClauseBoundary(_)))
-            {
+            } else {
                 tokens.push(Token::Operator(c));
             }
         } else if matches!(c, '.' | ',' | '!' | '?' | ';' | ':') {
