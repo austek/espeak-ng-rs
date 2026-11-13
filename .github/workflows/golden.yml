@@ -191,6 +191,9 @@ jobs:
           --test bn_final_inherent_vowel
           --test number_swap_thousands
           --test mn_omit_one_hundred
+          --test overfit_r4_quote_pause_listed_words
+          --test overfit_r4_mixed_script_spelling
+          --test overfit_r4_lone_foreign_digit
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config
