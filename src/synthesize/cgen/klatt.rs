@@ -509,8 +509,8 @@ impl Klatt {
     }
 
     fn parallel_bank(&mut self, mut out: f64, sourc: f64) -> f64 {
-        for ix in R2P..=R6P {
-            out = self.rsn[ix].step(sourc) - out;
+        for r in &mut self.rsn[R2P..=R6P] {
+            out = r.step(sourc) - out;
         }
         out
     }
@@ -772,7 +772,7 @@ impl Default for Klatt {
 
 fn advance_pitch(w: &mut KlattWdata) {
     *w.pitch_ix += w.pitch_inc;
-    let ix = ((*w.pitch_ix >> 8).min(127)).max(0) as usize;
+    let ix = (*w.pitch_ix >> 8).clamp(0, 127) as usize;
     let x = i32::from(w.pitch_env[ix]) * w.pitch_range;
     *w.pitch = (x >> 8) + w.pitch_base;
 }
