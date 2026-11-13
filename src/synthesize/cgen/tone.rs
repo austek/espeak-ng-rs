@@ -12,6 +12,8 @@ const M_TONE_55: u32 = 0x3535;
 const M_TONE_35: u32 = 0x3533;
 const M_TONE_51: u32 = 0x3135;
 const M_TONE_214: u32 = 0x343132;
+/// Tone 5 and the levels the translator re-levels it to after another tone.
+const NEUTRAL_TONES: [u32; 4] = [M_TONE_11, 0x3232, 0x3333, 0x3434];
 
 struct Sandhi {
     pause: bool,
@@ -45,6 +47,7 @@ fn hakka_sandhi(list: &mut [Ph], ix: usize, st: &Sandhi, phdata: &PhonemeData) {
 
 fn mandarin_tone5(list: &mut [Ph], ix: usize, st: &Sandhi, phdata: &PhonemeData) {
     let level = match st.prevw {
+        _ if mnemonic(&list[ix]) != M_TONE_11 => "",
         M_TONE_55 => "22",
         M_TONE_35 => "33",
         M_TONE_214 => "44",
@@ -78,7 +81,7 @@ fn mandarin_sandhi(list: &mut [Ph], ix: usize, st: &mut Sandhi, phdata: &Phoneme
     if st.prev == M_TONE_51 && m == M_TONE_51 {
         list[st.prev_p].tone = tab(phdata, "53");
     }
-    if m == M_TONE_11 {
+    if NEUTRAL_TONES.contains(&m) {
         mandarin_tone5(list, ix, st, phdata);
     }
     m
@@ -160,7 +163,7 @@ fn carry_stress(list: &mut [Ph]) {
 /// last-stressed-syllable search would skip it.
 fn restore_neutral_stress(list: &mut [Ph]) {
     for p in list.iter_mut().filter(|p| p.typ == PH_VOWEL && p.stresslevel < 4) {
-        if mnemonic(p) == M_TONE_11 {
+        if NEUTRAL_TONES.contains(&mnemonic(p)) {
             p.stresslevel = 4;
         }
     }
