@@ -1415,6 +1415,20 @@ fn rules_read_char(dict: &Dictionary, c: char) -> bool {
     dict.apply_replacements(&c.to_string()).is_some()
 }
 
+/// A digit of another script that the number reader leaves alone and that has no
+/// digit or number mark beside it: C spells it as a word of its own, while a run
+/// of them is dropped.
+fn lone_foreign_digit(c: char, previous: Option<char>, next: Option<char>) -> bool {
+    let number_part = |x: char| {
+        x.is_ascii_digit()
+            || native_digit_to_ascii(x).is_some()
+            || matches!(x, '.' | ',' | '\u{066A}'..='\u{066C}')
+    };
+    native_digit_to_ascii(c).is_some()
+        && !previous.is_some_and(number_part)
+        && !next.is_some_and(number_part)
+}
+
 /// `grammar` extended with the glued suffixes of `text` that the dictionary
 /// defines as ordinal markers (`_#<suffix>`), which is how C decides, and with
 /// the number symbols (`²`, `½`) it lists as words of its own.
@@ -2022,8 +2036,10 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut chars = text.chars().peekable();
     let mut run_verdict: Option<bool> = None;
+    let mut before: Option<char> = None;
 
     while let Some(c) = chars.next() {
+        let previous = before.replace(c);
         if c == CTRL_EMBEDDED {
             // `\x01[±]<value><letter>` — keep it as a token so the change applies
             // from here on rather than to the whole utterance.
@@ -2508,6 +2524,8 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 }
             }
             tokens.push(Token::Word(emoji));
+        } else if lone_foreign_digit(c, previous, chars.peek().copied()) {
+            tokens.push(Token::Word(c.to_string()));
         } else {
             tokens.push(Token::Punctuation(c));
         }
@@ -8444,7 +8462,9 @@ pub(crate) fn build_translate_entries(
                     // `TranslateChar` has already broken a Hangul syllable into jamo.
                     let jamo = decompose_hangul(word_script);
                     let mut chars = jamo.as_deref().unwrap_or(word_script).chars();
-                    let lone = chars.next().filter(|c| c.is_alphabetic() && chars.next().is_none());
+                    let lone = chars.next().filter(|c| {
+                        (c.is_alphabetic() || native_digit_to_ascii(*c).is_some()) && chars.next().is_none()
+                    });
                     let target = String::from_utf8_lossy(&wr.phonemes[1..])
                         .trim_end_matches('\0')
                         .to_string();
