@@ -2036,7 +2036,6 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     let text = text.as_ref();
     let mut tokens = Vec::new();
     let mut chars = text.chars().peekable();
-    let mut run_verdict: Option<bool> = None;
     let mut before: Option<char> = None;
 
     while let Some(c) = chars.next() {
@@ -2173,14 +2172,17 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 tokens.push(Token::Punctuation(':'));
                 continue;
             }
-            let ends_clause = match run_verdict {
-                Some(verdict) if matches!(c, '?' | '!') => verdict,
-                _ => ascii_clause_end_follows(c, chars.clone()),
-            };
-            let next_in_run = matches!(chars.peek(), Some('?' | '!'));
-            run_verdict = (matches!(c, '?' | '!') && next_in_run).then_some(ends_clause);
-            if c != '.' && !ends_clause {
-                tokens.push(Token::Punctuation(c));
+            if c == '.' && chars.peek() == Some(&'.') {
+                tokens.push(Token::Space);
+                continue;
+            }
+            if matches!(c, '?' | '!') {
+                while chars.next_if(|n| matches!(n, '?' | '!')).is_some() {}
+            }
+            let ends_clause = ascii_clause_end_follows(c, chars.clone());
+            let stray = (c != '.' && !ends_clause) || !clause_has_word(&tokens);
+            if stray {
+                tokens.push(Token::Punctuation(if c == '.' { ' ' } else { c }));
                 continue;
             }
             if c != '.' && !clause_has_word(&tokens) {
@@ -6492,6 +6494,19 @@ fn is_spoken_symbol(c: char) -> bool {
                 | '‰' | '‱')
 }
 
+/// The reading the rules give a clause mark that stays inside a clause (`a!b`,
+/// a `!` before any word), when they give one.
+fn stray_mark_phonemes(
+    c: char,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+) -> Option<Vec<u8>> {
+    let wr = word_to_phonemes(&c.to_string(), dict, phdata, stress_opts, options);
+    wr.phonemes.iter().any(|&b| b != 0).then_some(wr.phonemes)
+}
+
 /// Whether a digit directly follows a leading `-`, so the hyphen is a unary
 /// minus (`-5`).  A currency symbol in between (`-$5`) is not: C drops the sign.
 /// Takes a clone of the tokenizer iterator positioned just past the `-`.
@@ -8726,6 +8741,20 @@ pub(crate) fn build_translate_entries(
                     phonemes: Vec::new(), dict_flags: 0,
                     kind: TranslateEntryKind::Other, word_lower: None,
                     word_group: None,
+                    found_in_list: false,
+                });
+            }
+            Token::Punctuation(c)
+                if *c != '.'
+                    && is_clause_punctuation(*c)
+                    && !punct_covers(options, *c)
+                    && stray_mark_phonemes(*c, dict, phdata, stress_opts, options).is_some() =>
+            {
+                let phonemes = stray_mark_phonemes(*c, dict, phdata, stress_opts, options).unwrap_or_default();
+                entries.push(TranslateEntry {
+                    phonemes, dict_flags: 0,
+                    kind: TranslateEntryKind::Word, word_lower: Some(c.to_string()),
+                    no_word_gap: false, word_group: None,
                     found_in_list: false,
                 });
             }
