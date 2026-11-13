@@ -395,9 +395,9 @@ impl StressOpts {
             // bit 0x04 clear the assimilation reaches across the word boundary
             // (Polish "minus b" is `m'inuz b'E`).
             //
-            // `af` and `sq` set nothing in C; they keep the port's own
-            // word-final devoicing, which predates this transcription.
-            "af" | "sq" => opts.word_final_devoicing = true,
+            // `af` sets nothing in C; it keeps the port's own word-final
+            // devoicing, which predates this transcription.
+            "af" => opts.word_final_devoicing = true,
             // The clause-wide pass devoices them, where a pause the next word
             // brings with it (`$pause` words like `en`) keeps the consonant voiced.
             "de" | "nl" | "mt" => opts.regressive_voicing = 0x100,
