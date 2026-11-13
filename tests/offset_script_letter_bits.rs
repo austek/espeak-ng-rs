@@ -11,6 +11,14 @@ fn cli(lang: &str, flag: &str, text: &str) -> String {
 }
 
 #[test]
+fn lone_arabic_letter_before_a_clause_break_is_spelled() {
+    let want = "_:(en)'ar@bIk(ku)d'a:l|_:(en)'ar@bIk(ku)b'a:?";
+    assert_eq!(cli("ku", "-x", "د, ب"), want);
+    assert_eq!(cli("ku", "-x", "د. ب"), want);
+    assert_eq!(cli("ku", "-x", "د! ب"), want);
+}
+
+#[test]
 fn arabic_waw_after_waw_is_not_a_voiceless_context() {
     assert_eq!(cli("ar", "-x", "ووب"), "wwb");
     assert_eq!(cli("ar", "--ipa", "ووب"), "wwb");

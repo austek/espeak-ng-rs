@@ -8352,10 +8352,13 @@ pub(crate) fn build_translate_entries(
                     .find_map(char_script)
                     .filter(|sc| !native_scripts(&options.lang).contains(sc));
                 let next_in_script = |from: usize| {
-                    tokens[from..].iter().find_map(|t| match t {
-                        Token::Word(w) => Some(w.chars().next().and_then(char_script) == foreign),
-                        _ => None,
-                    })
+                    tokens[from..]
+                        .iter()
+                        .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
+                        .find_map(|t| match t {
+                            Token::Word(w) => Some(w.chars().next().and_then(char_script) == foreign),
+                            _ => None,
+                        })
                 };
                 let lower = lowercase_for_lang(word, &options.lang);
                 let letters = word.chars().filter(|c| c.is_alphabetic());
