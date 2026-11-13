@@ -5437,15 +5437,26 @@ fn reorder_tone_phonemes(phonemes: &mut Vec<u8>, phdata: &PhonemeData, keep_orph
             }
             continue;
         }
+        if code == crate::phoneme::PHON_LENGTHEN
+            && last_vowel.is_some_and(|v| last_vowel_toned && out.len() == v + 2)
+        {
+            let v = last_vowel.unwrap_or(0);
+            out.insert(v + 1, code);
+            continue;
+        }
         if is_tone_phoneme(code, phdata) {
             match last_vowel {
                 // Pull the tone back onto this syllable's vowel, over any coda.
                 Some(v) if !last_vowel_toned => {
-                    out.insert(v + 1, code);
+                    let at = v + 1 + usize::from(out.get(v + 1) == Some(&crate::phoneme::PHON_LENGTHEN));
+                    out.insert(at, code);
                     last_vowel_toned = true;
                 }
                 // C stores the tone on the vowel, so a later one replaces it.
-                Some(v) => out[v + 1] = code,
+                Some(v) => {
+                    let at = v + 1 + usize::from(out.get(v + 1) == Some(&crate::phoneme::PHON_LENGTHEN));
+                    out[at] = code;
+                }
                 // Written ahead of the syllable (Thai): hold it for the vowel.
                 None => pending_tone = Some(code),
             }
@@ -6994,7 +7005,8 @@ fn split_abandoned_words(
     options: &LangOptions,
 ) -> Vec<Option<usize>> {
     let latin_unread = dict.letter_bits_offset == 0
-        && native_scripts(&options.lang).contains(&Script::Myanmar);
+        && (native_scripts(&options.lang).contains(&Script::Myanmar)
+            || primary_bcp47_subtag(&options.lang) == "hak");
     let abandoned = |word: &str| {
         (!word.is_ascii() || latin_unread)
             && word.chars().count() > 1

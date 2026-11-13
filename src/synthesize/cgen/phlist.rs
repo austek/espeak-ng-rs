@@ -182,6 +182,9 @@ pub fn build_list(
             continue;
         }
         let Some(t) = table.get(c.code) else { continue };
+        if c.code == PHON_DEFAULTTONE && t.typ != PH_STRESS {
+            continue; // the voice's default tone written into a switched table
+        }
         if t.typ == PH_STRESS && t.program != 0 {
             // The translator writes the default tone for toneless syllables;
             // C leaves those to CalcPitches_Tone.
