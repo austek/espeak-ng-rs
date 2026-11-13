@@ -2173,7 +2173,11 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 tokens.push(Token::Operator(c));
                 continue;
             }
-            // Clause/sentence boundary punctuation
+            // Clause/sentence boundary punctuation; a run of `?` and `!` is
+            // decided by its first character (C `ReadClause`).
+            if matches!(c, '?' | '!') {
+                while chars.next_if(|n| matches!(n, '?' | '!')).is_some() {}
+            }
             // Absorb trailing whitespace after punctuation
             while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
                 chars.next();
@@ -7216,12 +7220,13 @@ fn letter_word_phonemes(
         dict_condition: options.dict_condition,
         ..LookupCtx::default()
     };
-    let listed = lookup_with_follow(dict, lower, &symbol_ctx, &[]).filter(|r| {
+    let usable = |r: &crate::dictionary::LookupResult| {
         r.flags1.found()
             && !r.flags1.textmode()
             && !r.flags2.contains(crate::dictionary::FLAG_ACCENT)
             && r.phonemes.first().is_some_and(|&b| b != 0 && b != crate::phoneme::PHON_SWITCH)
-    });
+    };
+    let listed = lookup_with_follow(dict, lower, &symbol_ctx, &[]).filter(&usable);
     let Some(r) = listed else {
         return word_to_phonemes_pos(lower, dict, phdata, stress_opts, options, expect);
     };

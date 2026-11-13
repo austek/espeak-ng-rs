@@ -46,6 +46,7 @@ jobs:
           --test letter_name_conditions
           --test ligurian_halflong_consonant
           --test ligurian_halflong_next_word
+          --test question_exclamation_run
           --test polish_final_l
           --test long_digit_strings
           --test spanish_group_stress
