@@ -6696,6 +6696,13 @@ fn rules_abort_word(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> b
     word_rules(word, dict, lang_opts, true).is_some_and(|r| r.aborted)
 }
 
+/// Whether the rules hand `word` on to yet another voice; C then returns
+/// `FLAG_SPELLWORD` instead of switching twice.
+fn rules_switch_again(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
+    word_rules(word, dict, lang_opts, false)
+        .is_some_and(|r| r.phonemes.first() == Some(&crate::phoneme::PHON_SWITCH))
+}
+
 /// Whether the rules leave a quote character of `word` uncovered, which makes
 /// C pause before the next word.
 fn rules_bracket_pause(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
@@ -6751,7 +6758,7 @@ fn spell_aborted_switch(
     }
     let target = String::from_utf8_lossy(&phonemes[1..]).trim_end_matches('\0').to_string();
     let tr = alts.get(&target)?;
-    if !rules_abort_word(word, &tr.dict, &tr.options) {
+    if !rules_abort_word(word, &tr.dict, &tr.options) && !rules_switch_again(word, &tr.dict, &tr.options) {
         return None;
     }
     let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
