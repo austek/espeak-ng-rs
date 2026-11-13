@@ -2181,7 +2181,13 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             }
             let ends_clause = ascii_clause_end_follows(c, chars.clone());
             if !clause_has_word(&tokens) {
-                tokens.push(if c == '.' { Token::Punctuation(' ') } else { Token::Operator(c) });
+                let text_ends = chars.clone().all(|ch| !ch.is_alphanumeric());
+                tokens.push(match c {
+                    '.' if text_ends && !empty_clause_pending(&tokens) => Token::ClauseBoundary(c),
+                    '.' if text_ends => Token::Space,
+                    '.' => Token::Punctuation(' '),
+                    _ => Token::Operator(c),
+                });
                 continue;
             }
             if c != '.' && !ends_clause {
@@ -6313,6 +6319,16 @@ fn clause_has_word(tokens: &[Token]) -> bool {
         .rev()
         .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
         .any(|t| matches!(t, Token::Word(_) | Token::Number(_)))
+}
+
+/// Whether the text so far ends with a clause that holds no word, which C
+/// reports once however many marks follow.
+fn empty_clause_pending(tokens: &[Token]) -> bool {
+    let mut rest = tokens.iter().rev().skip_while(|t| matches!(t, Token::Space));
+    matches!(rest.next(), Some(Token::ClauseBoundary(_)))
+        && !rest
+            .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
+            .any(|t| matches!(t, Token::Word(_) | Token::Number(_)))
 }
 
 fn is_dotted_letters(word: &str) -> bool {
