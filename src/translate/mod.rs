@@ -5430,14 +5430,10 @@ fn reorder_tone_phonemes(phonemes: &mut Vec<u8>, phdata: &PhonemeData) {
                     out.insert(v + 1, code);
                     last_vowel_toned = true;
                 }
-                // The syllable already has its tone: drop the extra.
-                Some(_) => {}
+                // C stores the tone on the vowel, so a later one replaces it.
+                Some(v) => out[v + 1] = code,
                 // Written ahead of the syllable (Thai): hold it for the vowel.
-                None => {
-                    if pending_tone.is_none() {
-                        pending_tone = Some(code);
-                    }
-                }
+                None => pending_tone = Some(code),
             }
             continue;
         }

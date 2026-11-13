@@ -57,6 +57,8 @@ jobs:
           --test geminates_and_alt_vowels
           --test ku_hundred_link
           --test ku_tr_ru_golden
+          --test my_asat_marks
+          --test tone_later_replaces
           --test ru_voice_replace
           --test unspaced_ascii_punctuation
           --test dot_run_ellipsis
