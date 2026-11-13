@@ -178,10 +178,11 @@ fn script_switch(dict: &Dictionary, wc: u32) -> Option<&'static str> {
 ///
 /// C tests the byte after the letter as a signed `char`, so only an ASCII
 /// character counts as "another letter follows" for a word's first letter.
-fn abandons_word(wc: u32, next: Option<&u8>, any_alpha: u32) -> bool {
+fn abandons_word(wc: u32, next: Option<&u8>, any_alpha: u32, wide_at_zero_offset: bool) -> bool {
+    let followed = |limit: u8| next.is_some_and(|b| *b > b' ' && *b < limit);
     is_alpha_c(wc)
         && !(0x300..=0x36f).contains(&wc)
-        && (any_alpha > 1 || next.is_some_and(|b| *b > b' ' && *b < 0x80))
+        && (any_alpha > 1 || followed(0x80) || (wide_at_zero_offset && followed(0xff)))
 }
 
 pub fn is_digit(c: u32) -> bool {
@@ -1189,6 +1190,7 @@ pub fn translate_rules_ext(
         // letter.  Such a letter that matches no rule is passed over silently
         // (Russian `ь` before a consonant); only the others abandon the word.
         let mut group_exists = false;
+        let mut script_group_exists = false;
         let mut match1 = MatchRecord::empty_best();
         let mut next_pos1 = pos + 1;
 
@@ -1223,6 +1225,7 @@ pub fn translate_rules_ext(
                     next_pos1 = np;
                     found = match1.points > 0 || np > pos;
                     group_exists = true;
+                    script_group_exists = true;
                 }
             }
         }
@@ -1334,7 +1337,8 @@ pub fn translate_rules_ext(
                     // word).  Unless the word is abandoned here, scanning goes
                     // on after the letter.
                     spellword = true;
-                    if !abandons_word(wc, buf.get(pos + wc_bytes + 1), any_alpha) {
+                    let wide = dict.letter_bits_offset == 0 && wc >= 0x800;
+                    if !abandons_word(wc, buf.get(pos + wc_bytes + 1), any_alpha, wide) {
                         pos += wc_bytes + 1;
                         continue;
                     }
@@ -1348,8 +1352,14 @@ pub fn translate_rules_ext(
         // letter from being skipped: Russian reads the Serbian `његов` as
         // `'egVf`, passing over the `њ` its rules don't cover.
         if match1.points == 0
-            && !group_exists
-            && abandons_word(wc, buf.get(pos + wc_bytes + 1), any_alpha)
+            && !script_group_exists
+            && !(group_exists && buf.get(pos + wc_bytes + 1).is_none_or(|&b| b == b' '))
+            && abandons_word(
+                wc,
+                buf.get(pos + wc_bytes + 1),
+                any_alpha,
+                dict.letter_bits_offset == 0 && wc >= 0x800,
+            )
         {
             out_phonemes.clear();
             out_end_phonemes.clear();
