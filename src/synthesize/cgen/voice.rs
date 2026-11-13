@@ -165,6 +165,8 @@ pub struct LangSynth {
     pub intonation_group: usize,
     pub tunes: [usize; 6],
     pub tone: Option<ToneLang>,
+    /// C's `option_tone_flags`: the value of the last `intonation` keyword.
+    pub option_tone_flags: i32,
 }
 
 impl Default for LangSynth {
@@ -187,6 +189,7 @@ impl Default for LangSynth {
             intonation_group: 0,
             tunes: [0, 1, 2, 3, 0, 0],
             tone: None,
+            option_tone_flags: 0,
         }
     }
 }

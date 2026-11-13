@@ -55,8 +55,11 @@ fn apply_langopt(tr: &mut LangSynth, key: &str, rest: &str, tunes: &[Tune]) {
         "stressAmp" => set_from(&mut tr.stress_amps, &n),
         "stressLength" => set_from(&mut tr.stress_lengths, &n),
         "intonation" => {
-            if let Some(&g) = n.first().filter(|&&g| g & 0xff != 0) {
-                tr.intonation_group = (g & 0xff) as usize;
+            if let Some(&g) = n.first() {
+                tr.option_tone_flags = g;
+                if g & 0xff != 0 {
+                    tr.intonation_group = (g & 0xff) as usize;
+                }
             }
         }
         "words" => tr.word_gap = n.first().copied().unwrap_or(tr.word_gap),

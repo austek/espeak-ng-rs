@@ -227,14 +227,21 @@ fn set_pitch(syl: &mut Syllable, base: i32, drop: i32) {
 }
 
 /// Where the tonic syllable falls, and how many syllables precede/follow it.
+#[derive(Clone, Copy)]
 pub(crate) struct Layout {
     number_pre: usize,
     number_tail: usize,
     tone_posn: usize,
     /// Penultimate stressed syllable — where the tonic moves under
-    /// `OPTION_EMPHASIZE_PENULTIMATE`, which this port doesn't expose yet.
-    #[allow(dead_code)]
+    /// `OPTION_EMPHASIZE_PENULTIMATE`.
     tone_posn2: usize,
+}
+
+impl Layout {
+    /// The layout with the tonic on the penultimate stressed syllable.
+    pub(crate) fn on_penultimate(&self) -> Layout {
+        Layout { tone_posn: self.tone_posn2, ..*self }
+    }
 }
 
 /// `count_pitch_vowels()`.

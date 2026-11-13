@@ -84,6 +84,7 @@ jobs:
           --test synth_parity_next3
           --test synth_parity_clause_pause
           --test synth_parity_punct_pause
+          --test synth_parity_penultimate
           --test tr_phoneme_program_context
           --test tr_next_phoneme_word_end
           --test max_digits

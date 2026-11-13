@@ -10,6 +10,7 @@ use crate::synthesize::intonation::{
     SYL_EMPHASIS, SYL_END_CLAUSE, SYL_RISE,
 };
 
+const OPTION_EMPHASIZE_PENULTIMATE: i32 = 0x200;
 const PITCH_FALL: usize = 0;
 const PITCH_RISE: usize = 2;
 
@@ -32,6 +33,8 @@ impl Ctx<'_> {
     }
 
     fn apply(&self, syls: &mut [Syllable], start: usize, end: usize, tone: usize, layout: &crate::synthesize::intonation::Layout) {
+        let moved = layout.on_penultimate();
+        let layout = if self.tr.option_tone_flags & OPTION_EMPHASIZE_PENULTIMATE != 0 { &moved } else { layout };
         if self.tr.intonation_group == 0 {
             if let Some(t) = self.tunes.get(tone) {
                 calc_pitches_tune(syls, start, end, t, layout, self.no_tonic);
