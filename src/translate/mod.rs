@@ -6273,7 +6273,7 @@ fn only_pauses_since_clause_start(codes: &[PhonemeCode]) -> bool {
         match spoken.next() {
             Some(c) if c.code == crate::phoneme::PHON_PAUSE && !c.is_boundary => pauses += 1,
             Some(c) => return pauses > 0 && c.is_boundary && c.code == 0,
-            None => return false,
+            None => return pauses > 0,
         }
     }
 }
@@ -9930,7 +9930,8 @@ impl Translator {
                         let word_open = codes
                             .iter()
                             .rposition(|k| k.marker.is_none())
-                            .is_some_and(|i| !codes[i].is_boundary);
+                            .is_some_and(|i| !codes[i].is_boundary)
+                            && !only_pauses_since_clause_start(&codes);
                         let follows_stream = previous_entry_kind(&tokens, &entries, token_ix)
                             == Some(&TranslateEntryKind::Stream);
                         if word_open && open_switch.is_none() && !hyphen_joined && !follows_stream {
