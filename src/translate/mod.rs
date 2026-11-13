@@ -9024,7 +9024,6 @@ fn apply_tone_sandhi(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang:
             if tone == "11" {
                 if i > 0 && matches!(entries[ei].phonemes[i - 1], 3..=7) {
                     entries[ei].phonemes.remove(i - 1);
-                    i -= 1;
                     tone_pos -= 1;
                 }
                 let replacement = match prevw_tone.as_str() {
