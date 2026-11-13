@@ -7176,7 +7176,7 @@ fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &La
     let replaced = dict.apply_replacements(rest);
     let rest = replaced.as_deref().unwrap_or(rest);
     // `SetIndicLetters` turns the test off for every Indic script.
-    if (0x900..0xe00).contains(&dict.letter_bits_offset) || dict.letter_bits_offset == 0x10a0 {
+    if (0x900..0xe00).contains(&dict.letter_bits_offset) {
         return false;
     }
     // A Cyrillic voice without a translator case of its own has the Latin

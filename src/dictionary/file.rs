@@ -662,6 +662,21 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
             set(&mut bits, EL_FVOWELS, 6);    // LETTERGP_Y
             set(&mut bits, EL_VOWELS, 7);     // LETTERGP_VOWEL2
         }
+        "ka" => {
+            // C's `ka_vowels` and `ka_consonants`, offset from OFFSET_GEORGIAN (0x10A0).
+            const KA_VOWELS: &[usize] = &[0x30, 0x34, 0x38, 0x3d, 0x43, 0x55, 0x57];
+            const KA_CONSONANTS: &[usize] = &[
+                0x31, 0x32, 0x33, 0x35, 0x36, 0x37, 0x39, 0x3a, 0x3b, 0x3c, 0x3e, 0x3f, 0x40, 0x41, 0x42,
+                0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f, 0x50, 0x51, 0x52,
+                0x53, 0x54, 0x56,
+            ];
+            for &ix in KA_VOWELS {
+                bits[ix] |= 0x81;
+            }
+            for &ix in KA_CONSONANTS {
+                bits[ix] |= 1 << 2;
+            }
+        }
         "hy" | "hyw" => {
             // C's `hy_vowels`, `hy_consonants` and `hy_consonants2`, as offsets
             // from U+0530; the table starts empty rather than from the Latin one.

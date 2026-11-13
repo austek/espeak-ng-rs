@@ -23,6 +23,8 @@ fn vowelless_non_latin_words_are_spelled() {
         ("bg", "ΒΓΔ", "(el)vˌitaɣˌamaðˈelta(bg)"),
         ("mk", "БВГД", "bˌəvˌəɡˌədˈə"),
         ("ka", "ააა", "ˈaaa"),
+        ("ka", "სსს", "sˌəsˌəsˈə"),
+        ("ka", "გგგ", "ɡˌəɡˌəɡˈə"),
     ];
     for (lang, text, want) in cases {
         assert_eq!(ipa(lang, text).as_deref(), Some(want), "{lang} {text}");
