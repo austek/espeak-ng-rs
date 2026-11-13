@@ -89,6 +89,7 @@ jobs:
           --test synth_parity_ssml_break
           --test ssml_markup_parity
           --test ssml_say_as_unrecognised_modes
+          --test ssml_full_stop_before_tag
           --test synth_parity_tone
           --test synth_parity_klatt
           --test synth_parity_next3

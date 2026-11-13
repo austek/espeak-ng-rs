@@ -1923,6 +1923,24 @@ const CLAUSE_HARD_BYTES: usize = CLAUSE_SOURCE_BYTES - 4;
 /// Past this size, the next non-alphanumeric byte ends the clause.
 const CLAUSE_SOFT_BYTES: usize = CLAUSE_SOURCE_BYTES - 75;
 
+/// C's `end_clause_after_tag`: a full stop that is followed, past blanks, by an
+/// SSML tag does not end its clause; the tag's own terminator does.
+fn merge_full_stop_into_tag_boundary(tokens: Vec<Token>) -> Vec<Token> {
+    let tag_follows = |rest: &[Token]| {
+        rest.iter()
+            .find(|t| !matches!(t, Token::Space | Token::Embedded(_)))
+            .is_some_and(|t| matches!(t, Token::ClauseBoundary(c) if *c == ssml::SSML_BREAK))
+    };
+    let drop: Vec<bool> = (0..tokens.len())
+        .map(|i| matches!(tokens[i], Token::ClauseBoundary('.')) && tag_follows(&tokens[i + 1..]))
+        .collect();
+    tokens
+        .into_iter()
+        .zip(drop)
+        .filter_map(|(t, d)| (!d).then_some(t))
+        .collect()
+}
+
 /// Splits `text` at the hard clause limit, flagging each piece after which a clause ends. Updates `used`.
 fn clause_pieces(text: &str, used: &mut usize) -> Vec<(String, bool)> {
     let mut pieces: Vec<(String, bool)> = Vec::new();
@@ -10199,6 +10217,7 @@ impl Translator {
         let text = schwa_for_article_apostrophe(&text, lang);
         let number_grammar = with_dict_ordinal_suffixes(&self.options.number_grammar, &text, dict);
         let mut tokens = split_overlong_clauses(tokenize_opts(&text, &number_grammar));
+        tokens = merge_full_stop_into_tag_boundary(tokens);
         split_unrecognised_ordinals(&mut tokens, dict, &number_grammar);
         merge_digit_follow(&mut tokens, dict);
         expand_dotted_phrases(&mut tokens, dict, lang);
