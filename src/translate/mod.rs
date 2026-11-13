@@ -5572,7 +5572,7 @@ fn word_to_phonemes_inner(
                 if !phonemes.is_empty() || dropped_switch {
                     let dot_flags = result.flags1.0
                         & (crate::dictionary::FLAG_ALLOW_DOT | crate::dictionary::FLAG_NEEDS_DOT);
-                    return WordResult { phonemes, dict_flags: dot_flags, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() };
+                    return WordResult { phonemes, dict_flags: dot_flags, found_in_list: false, prefix: None, skip_words: result.skipwords, late_suffix: Vec::new() };
                 }
             }
             let dict_flags = result.flags1.0;
@@ -8370,16 +8370,7 @@ pub(crate) fn build_translate_entries(
                     all_upper: letters.clone().next().is_some()
                         && letters.clone().all(char::is_uppercase),
                     next_word,
-                    // The tone-sandhi pass indexes one syllable run per word and
-                    // cannot take a merged phrase entry.
-                    follow: if matches!(
-                        primary_bcp47_subtag(&options.lang),
-                        "cmn" | "zh" | "yue" | "hak" | "vi" | "shn"
-                    ) {
-                        [0; 32]
-                    } else {
-                        follow_text(tokens, token_ix + 1, &options.lang)
-                    },
+                    follow: follow_text(tokens, token_ix + 1, &options.lang),
                     hyphen_after: matches!(tokens.get(token_ix + 1), Some(Token::WordJoin)),
                     hyphen_flags: hyphen_flags_at(tokens, token_ix),
                     prev_tail: word_tail(prev_word.as_deref()),
@@ -9009,16 +9000,6 @@ fn apply_tone_sandhi(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang:
                     let new = if joins { code_of("35") } else { code_of("21") };
                     if new != 0 {
                         entries[pe].phonemes[pp] = new;
-                    }
-                    if joins && pe != ei {
-                        // 214 + 214 → 35 + 214 across two entries binds them into
-                        // one word: upstream drops both the inter-word gap and the
-                        // first syllable's stress (`ni35X'Au214_|`). Inside one
-                        // entry it keeps both (`tS;'iou35_|tS;'iou21`).
-                        entries[pe].no_word_gap = true;
-                        entries[pe]
-                            .phonemes
-                            .retain(|&c| !matches!(c, PHON_STRESS_P | PHON_STRESS_P2));
                     }
                 }
             }
