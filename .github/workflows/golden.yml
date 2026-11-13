@@ -180,6 +180,7 @@ jobs:
           --test script_double_switch
           --test indic_schwa_context
           --test ne_pa_final_vowel
+          --test number_lakh_groups
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

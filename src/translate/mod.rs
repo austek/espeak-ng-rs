@@ -3629,6 +3629,8 @@ fn num_key(raw: impl std::fmt::Display) -> String {
 struct ScaleGroup {
     value: u32,
     scale: Option<u8>,
+    /// Digits to the right of this group.
+    below: usize,
 }
 
 /// Longest digit run spoken as a number; espeak-ng breaks anything longer than
@@ -3640,22 +3642,27 @@ const MAX_GROUPED_DIGITS: usize = 32;
 const MAX_UNSPLIT_DIGITS: usize = 4;
 
 /// Three-digit groups, most significant first; scale `k` is 10^(3k). `digits` must be ASCII digits.
-fn split_scale_groups(digits: &str) -> Vec<ScaleGroup> {
-    let count = digits.len().div_ceil(3);
-    let groups: Vec<ScaleGroup> = digits
-        .as_bytes()
-        .rchunks(3)
-        .rev()
+fn split_scale_groups(digits: &str, grammar: &NumberGrammar) -> Vec<ScaleGroup> {
+    let chunks: Vec<&str> = if digits.len() > MAX_UNSPLIT_DIGITS {
+        digit_groups(digits, grammar)
+    } else {
+        digits.as_bytes().rchunks(3).rev().map(|c| std::str::from_utf8(c).unwrap_or("")).collect()
+    };
+    let count = chunks.len();
+    let mut below = digits.len();
+    chunks
+        .iter()
         .enumerate()
         .map(|(index, chunk)| {
+            below -= chunk.len();
             let scale = count - 1 - index;
             ScaleGroup {
-                value: chunk.iter().fold(0, |acc, &b| acc * 10 + u32::from(b.wrapping_sub(b'0'))),
+                value: chunk.bytes().fold(0, |acc, b| acc * 10 + u32::from(b.wrapping_sub(b'0'))),
                 scale: if scale == 0 { None } else { u8::try_from(scale).ok() },
+                below,
             }
         })
-        .collect();
-    groups
+        .collect()
 }
 
 fn append_scale_word(
@@ -4433,8 +4440,8 @@ fn push_groups(
     split: bool,
 ) -> bool {
     let mut spoken = false;
-    for group in split_scale_groups(digits).into_iter().take(count) {
-        let exact = scale_group_is_exact(digits, group.scale);
+    for group in split_scale_groups(digits, grammar).into_iter().take(count) {
+        let exact = scale_group_is_exact(digits, group);
         let before = result.bytes.len();
         append_cardinal_group(result, group, dict, grammar, exact, spoken);
         // C ends each group word that is not exact with PHON_PAUSE_NOLINK, which stops regressive voicing across groups.
@@ -4578,14 +4585,9 @@ fn spelled_digit_groups(
 /// below this scale (so `1000` is exact at the thousands scale, `1234` is not).
 /// A scale-less (units) group is always "exact".  Used to select the `_0M{n}x`
 /// variant scale word.
-fn scale_group_is_exact(digits: &str, scale: Option<u8>) -> bool {
-    match scale {
-        Some(s) => {
-            let trailing_zeros = digits.len() - digits.trim_end_matches('0').len();
-            trailing_zeros >= 3 * usize::from(s)
-        }
-        None => true,
-    }
+fn scale_group_is_exact(digits: &str, group: ScaleGroup) -> bool {
+    let trailing_zeros = digits.len() - digits.trim_end_matches('0').len();
+    group.scale.is_none() || trailing_zeros >= group.below
 }
 
 /// The pronunciation of the last one or two digits of `digits` that a
@@ -4688,7 +4690,7 @@ fn try_ordinal_number(
         set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, STRESS_UNBOUNDED);
         return Some(WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() });
     }
-    let groups = split_scale_groups(digits);
+    let groups = split_scale_groups(digits, grammar);
     // C makes every group of a long number a word of its own: the higher ones are
     // cardinals with their scale word, and only the last group takes the ordinal.
     if digits.len() > MAX_UNSPLIT_DIGITS {
