@@ -9064,7 +9064,7 @@ pub(crate) fn promote_translate_entries(
                 continue;
             }
             let dict_flags = entries[i].dict_flags;
-            if dict_flags & (FLAG_STREND | FLAG_STREND2) == 0 {
+            if dict_flags & (FLAG_STREND | FLAG_STREND2 | FLAG_UNSTRESS_END) == 0 {
                 continue;
             }
 
@@ -9090,7 +9090,16 @@ pub(crate) fn promote_translate_entries(
             // Promoting over the whole buffer found "cento"'s existing stress and
             // did nothing, so pt "101" read `sˈẽŋtʊ i ũŋ` while "cento e um" gave
             // `… ˈũŋ`.
+            let unstress_end = dict_flags & (FLAG_STREND | FLAG_STREND2) == 0 && is_last_word;
             let phonemes = &mut entries[i].phonemes;
+            if unstress_end {
+                let from = phonemes.iter().rposition(|&c| c == crate::phoneme::PHON_END_WORD).map_or(0, |s| s + 1);
+                let mut tail = phonemes[from..].to_vec();
+                crate::dictionary::stress::change_word_stress(&mut tail, phdata, 3);
+                phonemes.truncate(from);
+                phonemes.extend(tail);
+                continue;
+            }
             match phonemes.iter().rposition(|&c| c == crate::phoneme::PHON_END_WORD) {
                 Some(sep) => {
                     let mut tail = phonemes[sep + 1..].to_vec();
