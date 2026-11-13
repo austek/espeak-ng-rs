@@ -6080,11 +6080,6 @@ pub(crate) struct TranslateEntry {
     pub(crate) found_in_list: bool,
     pub(crate) kind:       TranslateEntryKind,
     pub(crate) word_lower: Option<String>,
-    /// Suppress the language's inter-word gap after this word.
-    ///
-    /// Mandarin's third-tone sandhi *joins* the pair it applies to: 你好 reads
-    /// as `ni35X'Au214_|` — one gap, at the end — not as two separate words.
-    pub(crate) no_word_gap: bool,
     /// The letters of one abandoned word share this id (the index of the first),
     /// so that clause-final stress sees them as the word they came from.
     pub(crate) word_group: Option<usize>,
@@ -8303,7 +8298,6 @@ pub(crate) fn build_translate_entries(
                     dict_flags: 0,
                     kind: TranslateEntryKind::Other,
                     word_lower: None,
-                    no_word_gap: false,
                     word_group: None,
                     found_in_list: false,
                 });
@@ -8318,7 +8312,6 @@ pub(crate) fn build_translate_entries(
                     found_in_list: false,
                     kind: TranslateEntryKind::Word,
                     word_lower: None,
-                    no_word_gap: false,
                     word_group: spelled.get(token_ix).copied().flatten(),
                 });
             }
@@ -8423,7 +8416,6 @@ pub(crate) fn build_translate_entries(
                             dict_flags: 0,
                             kind,
                             word_lower: Some(c.to_string()),
-                            no_word_gap: false,
                             word_group: spelled.get(token_ix).copied().flatten(),
                             found_in_list: false,
                         });
@@ -8444,7 +8436,6 @@ pub(crate) fn build_translate_entries(
                         dict_flags: 0,
                         kind: TranslateEntryKind::Stream,
                         word_lower: Some(word.clone()),
-                        no_word_gap: false,
                         word_group: None,
                         found_in_list: false,
                     });
@@ -8493,7 +8484,6 @@ pub(crate) fn build_translate_entries(
                             dict_flags: 0,
                             kind: if silent { TranslateEntryKind::Word } else { TranslateEntryKind::Stream },
                             word_lower: Some(word.clone()),
-                            no_word_gap: false,
                             word_group: None,
                             found_in_list: false,
                         });
@@ -8628,7 +8618,6 @@ pub(crate) fn build_translate_entries(
                     found_in_list: wr.found_in_list,
                     kind:       TranslateEntryKind::Word,
                     word_lower: Some(lower),
-                    no_word_gap: false,
                     word_group: spelled.get(token_ix).copied().flatten(),
                 });
             }
@@ -8665,7 +8654,7 @@ pub(crate) fn build_translate_entries(
                             dict_flags: last_flags,
                             kind:       TranslateEntryKind::Word,
                             word_lower: Some(word),
-                        no_word_gap: false, word_group: None,
+                        word_group: None,
                             found_in_list: false,
                         });
                         continue;
@@ -8690,7 +8679,7 @@ pub(crate) fn build_translate_entries(
                     found_in_list: wr.found_in_list,
                     kind:       TranslateEntryKind::Word,
                     word_lower: Some(token.surface().to_string().to_lowercase()),
-                        no_word_gap: false, word_group: None
+                        word_group: None
                 });
             }
             Token::InlinePhonemes(content) => {
@@ -8699,7 +8688,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: 0,
                     kind:       TranslateEntryKind::Word,
                     word_lower: None,
-                        no_word_gap: false, word_group: None,
+                        word_group: None,
                     found_in_list: false,
                 });
             }
@@ -8713,7 +8702,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: 0,
                     kind:       TranslateEntryKind::ClauseBoundary,
                     word_lower: None,
-                    no_word_gap: false, word_group: None,
+                    word_group: None,
                     found_in_list: false,
                 });
             }
@@ -8725,7 +8714,7 @@ pub(crate) fn build_translate_entries(
                 entries.push(TranslateEntry {
                     phonemes: Vec::new(), dict_flags: 0,
                     kind: TranslateEntryKind::Other, word_lower: None,
-                    no_word_gap: false, word_group: None,
+                    word_group: None,
                     found_in_list: false,
                 });
             }
@@ -8778,7 +8767,7 @@ pub(crate) fn build_translate_entries(
                     entries.push(TranslateEntry {
                         phonemes, dict_flags: 0,
                         kind: TranslateEntryKind::Other, word_lower: None,
-                        no_word_gap: false, word_group: None,
+                        word_group: None,
                         found_in_list: false,
                     });
                 } else {
@@ -8798,7 +8787,7 @@ pub(crate) fn build_translate_entries(
                             _ if dict_names_symbol(dict, *c, options.dict_condition) => c.to_string(),
                             _ => format!("_{c}"),
                         }),
-                        no_word_gap: false, word_group: None,
+                        word_group: None,
                         // Phonemes from the dictionary are a *translation
                         // given*, so the stress-conditioned changes don't apply
                         // (`pl @` is `m'awpa` where the typed word "małpa",
@@ -8814,7 +8803,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: 0,
                     kind:       TranslateEntryKind::Other,
                     word_lower: None,
-                        no_word_gap: false, word_group: None,
+                        word_group: None,
                     found_in_list: false,
                 });
             }
@@ -10098,11 +10087,7 @@ impl Translator {
                     let joined = matches!(
                         token_ix.checked_sub(1).map(|k| &tokens[k]),
                         Some(Token::WordJoin)
-                    ) || (0..token_ix)
-                        .rev()
-                        .find(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
-                        .and_then(|k| entries.get(k))
-                        .is_some_and(|e| e.no_word_gap);
+                    );
                     // Does the open run end in phonemes this word should be
                     // separated from?  A run of nothing but pauses doesn't count:
                     // that is a bracket's pre-pause, which belongs to the word
@@ -10325,12 +10310,6 @@ impl Translator {
                 // space in the output.
                 Token::WordJoin => {}
                 Token::Space => {
-                    // A sandhi-joined pair is one word, so the separator between
-                    // its halves emits no boundary either.
-                    let joined = token_ix
-                        .checked_sub(1)
-                        .and_then(|k| entries.get(k))
-                        .is_some_and(|e| e.no_word_gap);
                     let before_entry = previous_entry(&tokens, &entries, token_ix);
                     let before = before_entry.map(|e| &e.kind);
                     let after = (token_ix + 1..tokens.len())
@@ -10352,7 +10331,7 @@ impl Translator {
                         }
                         _ => false,
                     };
-                    if !joined && !stream_runs && !only_pauses_since_clause_start(&codes) {
+                    if !stream_runs && !only_pauses_since_clause_start(&codes) {
                         codes.push(PhonemeCode {
                             code:         15,
                             is_boundary:  true,
