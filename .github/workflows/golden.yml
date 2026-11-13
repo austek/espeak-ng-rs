@@ -124,6 +124,7 @@ jobs:
           --test degree_celsius_sign
           --test switched_word_digit_context
           --test albanian_final_z
+          --test slovenian_r_vowel
           --test number_missing_scale_words
           --test hungarian_dot_ordinals
           --test leading_zero_numbers

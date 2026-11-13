@@ -7186,9 +7186,7 @@ fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &La
         letters::alphabet_from_char(c as u32).is_some_and(|a| a.offset != dict.letter_bits_offset)
     };
     let is_vowel = |c: char| {
-        let base = crate::dictionary::rules::fold_accent(c);
-        matches!(base, 'a' | 'e' | 'i' | 'o' | 'u' | 'y')
-            || (primary_bcp47_subtag(&lang_opts.lang) == "vi" && is_vietnamese_vowel(c))
+        (primary_bcp47_subtag(&lang_opts.lang) == "vi" && is_vietnamese_vowel(c))
             || crate::dictionary::rules::is_letter_wc(
                 &dict.letter_bits,
                 c as u32,

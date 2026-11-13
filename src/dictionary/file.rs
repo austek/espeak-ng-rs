@@ -725,6 +725,9 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
             latin_vowel_letters(lang)
                 .iter()
                 .for_each(|&c| set_letter_vowel(&mut bits, c));
+            if lang.split(['-', '_']).next() == Some("sl") {
+                bits[usize::from(b'r')] |= 0x80;
+            }
         }
     }
 
