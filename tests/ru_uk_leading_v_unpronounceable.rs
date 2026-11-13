@@ -33,6 +33,25 @@ fn leading_v_with_three_consonants_is_a_word() {
 }
 
 #[test]
+fn up_to_four_initial_consonants_is_a_word() {
+    if ipa("en", "1").is_none() {
+        return;
+    }
+    let cases = [
+        ("ru", "спрго", "sprɡˈo"),
+        ("ru", "крпло", "krpɭˈo"),
+        ("ru", "сплья", "spɭjˈja"),
+        ("ru", "кпрьо", "kprɪ^jˈɵ"),
+        ("ru", "вспльо", "fspɭjˈɵ"),
+        ("uk", "вспльотувати", "fspʎot̪ˈuβat̪ɪ"),
+        ("uk", "спльо", "spʎˈo"),
+    ];
+    for (lang, text, want) in cases {
+        assert_eq!(ipa(lang, text).as_deref(), Some(want), "{lang} {text}");
+    }
+}
+
+#[test]
 fn ordinary_words_unchanged() {
     if ipa("en", "1").is_none() {
         return;

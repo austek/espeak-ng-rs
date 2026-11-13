@@ -1137,7 +1137,7 @@ impl LangOptions {
         let max_initial_consonants = match primary_bcp47_subtag(&lang) {
             "az" | "kk" | "ku" | "tr" => 2,
             "sw" | "tn" => 4,
-            "bs" | "cmn" | "cs" | "hr" | "sk" | "sr" | "yue" | "zh" => 5,
+            "bs" | "cmn" | "cs" | "hr" | "ru" | "sk" | "sr" | "uk" | "yue" | "zh" => 5,
             "hy" => 6,
             "ka" | "pl" => 7,
             _ => 3,
