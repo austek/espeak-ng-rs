@@ -7578,7 +7578,6 @@ fn suppress_abbreviation_periods(tokens: &mut [Token]) {
 /// leading zero (`10:05` → "…zero five"), matching espeak-ng.
 fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
     let connector = match primary_bcp47_subtag(lang) {
-        "de" => Some("uhr"),
         "fr" => Some("heures"),
         _ => None,
     };
@@ -7619,6 +7618,9 @@ fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
                             out.push(Token::Word(word.to_string()));
                             out.push(Token::Space);
                         }
+                    } else if primary_bcp47_subtag(lang) == "de" && h_val <= 23 {
+                        out.push(Token::InlinePhonemes("_|%u:r".to_string()));
+                        out.push(Token::Space);
                     } else if primary_bcp47_subtag(lang) == "it" && h_val <= 23 {
                         // The Italian rule `_L16_) : (_L17D_` gives the colon a
                         // paused, diminished "e" of its own rather than the word.
