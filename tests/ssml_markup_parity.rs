@@ -32,6 +32,20 @@ fn check(cases: &[Case]) {
     assert!(bad.is_empty(), "differs from C:\n{}", bad.join("\n"));
 }
 
+/// `ignore_text` is one flag: any closing `sub`/`metadata`/`script`/`style` clears it.
+#[test]
+fn ignored_text_elements_and_sub_flag() {
+    check(&[
+        ("<metadata>foo</metadata> bar", "bˈɑː", "b'A@"),
+        ("a <script> c </script> d", "ɐ dˈiː", "a# d'i:"),
+        (
+            "<sub alias=\"A B\">xx <metadata>q</metadata> zz</sub> y",
+            "ɐ bˈiː zˌɛdzˈɛd wˈaɪ",
+            "a# b'i: z,Edz'Ed w'aI",
+        ),
+    ]);
+}
+
 /// C starts a tag only when `<` is followed by `/`, a letter, `!` or `?`.
 #[test]
 fn lt_before_a_non_tag_character_is_literal() {

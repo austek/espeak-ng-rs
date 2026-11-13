@@ -286,8 +286,9 @@ struct Walker {
     sayas_stack: Vec<SayAsKind>,
     /// Current interpretation applied to emitted segments.
     interpret: SayAs,
-    /// One bool per open `<sub>` — true when its content is suppressed.
-    sub_stack: Vec<bool>,
+    /// C's `ignore_text`: a flag, not a depth, so any closing `<sub>`,
+    /// `<metadata>`, `<script>` or `<style>` re-enables text.
+    ignore_text: bool,
     /// One bool per open `<phoneme>` — true when its content is suppressed
     /// (i.e. a `ph` attribute was present and emitted as `[[…]]`).
     phoneme_stack: Vec<bool>,
@@ -320,7 +321,7 @@ impl Default for Walker {
             voice_stack: Vec::new(),
             sayas_stack: Vec::new(),
             interpret: SayAs::default(),
-            sub_stack: Vec::new(),
+            ignore_text: false,
             phoneme_stack: Vec::new(),
             spell_depth: 0,
             suppress_depth: 0,
@@ -360,7 +361,7 @@ impl Walker {
     }
 
     fn emit_char(&mut self, c: char) {
-        if self.suppress_depth > 0 {
+        if self.suppress_depth > 0 || self.ignore_text {
             return;
         }
         if self.spell_depth > 0 && !c.is_whitespace() {
@@ -587,20 +588,21 @@ impl Walker {
 
             "sub" => {
                 if is_close {
-                    if let Some(true) = self.sub_stack.pop() {
-                        self.suppress_depth = self.suppress_depth.saturating_sub(1);
-                    }
+                    self.ignore_text = false;
                 } else if !self_close {
-                    match get_attr(attrs, "alias") {
-                        Some(alias) => {
-                            self.cur.push(' ');
-                            self.cur.push_str(&alias);
-                            self.cur.push(' ');
-                            self.sub_stack.push(true);
-                            self.suppress_depth += 1;
-                        }
-                        None => self.sub_stack.push(false),
+                    if let Some(alias) = get_attr(attrs, "alias") {
+                        self.cur.push(' ');
+                        self.cur.push_str(&alias);
+                        self.cur.push(' ');
+                        self.ignore_text = true;
                     }
+                }
+            }
+            "metadata" | "script" | "style" => {
+                if is_close {
+                    self.ignore_text = false;
+                } else if !self_close {
+                    self.ignore_text = true;
                 }
             }
 
