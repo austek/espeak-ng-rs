@@ -5022,6 +5022,9 @@ pub struct PosExpect {
     pub at_clause_end: bool,
     /// This word starts the clause, for `$atstart` entries.
     pub at_clause_start: bool,
+    /// Keep a tone phoneme that has no vowel to carry it, so a caller can tell
+    /// a word that is only a tone from one that rules did not translate.
+    pub keep_orphan_tones: bool,
     /// The word as written begins with a capital, for `$capital` entries.
     pub first_upper: bool,
     /// The word as written is all capitals, for `$allcaps` entries.
@@ -5397,7 +5400,7 @@ fn is_tone_phoneme(code: u8, phdata: &PhonemeData) -> bool {
 ///   one tone per syllable falls out.
 ///
 /// No-op for languages whose tables have no tone phonemes.
-fn reorder_tone_phonemes(phonemes: &mut Vec<u8>, phdata: &PhonemeData) {
+fn reorder_tone_phonemes(phonemes: &mut Vec<u8>, phdata: &PhonemeData, keep_orphans: bool) {
     if !phonemes.iter().take_while(|&&c| c != 0).any(|&c| is_tone_phoneme(c, phdata)) {
         return;
     }
@@ -5414,7 +5417,9 @@ fn reorder_tone_phonemes(phonemes: &mut Vec<u8>, phdata: &PhonemeData) {
     for &code in phonemes.iter() {
         if is_break(code) {
             // A tone with no vowel to attach to in this word is dropped.
-            pending_tone = None;
+            if let Some(tone) = pending_tone.take().filter(|_| keep_orphans) {
+                out.push(tone);
+            }
             last_vowel = None;
             last_vowel_toned = false;
             out.push(code);
@@ -5679,7 +5684,7 @@ fn word_to_phonemes_inner(
             }
             // Apply stress placement
             set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags), -1, 0);
-            reorder_tone_phonemes(&mut phonemes, phdata);
+            reorder_tone_phonemes(&mut phonemes, phdata, expect.keep_orphan_tones);
             // (No stressed-vowel upgrading here: the pronunciation came from the
             // list, and C's `isTranslationGiven` gate keeps the vowel changes off
             // a word whose phonemes were given — `tr b` is `b'e`, not `b'E`.)
@@ -6116,7 +6121,7 @@ fn word_to_phonemes_inner(
         }
         // Tone phonemes belong to their syllable's vowel, not to the end of the
         // syllable where the tone digit was written (no-op for atonal languages).
-        reorder_tone_phonemes(&mut phonemes, phdata);
+        reorder_tone_phonemes(&mut phonemes, phdata, expect.keep_orphan_tones);
         // Pronounced by the rules: only the *flags* came from the list, so
         // this is not `FLAG_FOUND` and the stress-conditioned changes still apply.
         return WordResult { phonemes, dict_flags: stress_dict_flags, found_in_list: stem_in_list, prefix: None, skip_words: 0, late_suffix: Vec::new() };
@@ -8534,7 +8539,16 @@ pub(crate) fn build_translate_entries(
                 // is already spoken in the number.
                 let ordinal_indicator = token_ix > 0
                     && matches!(tokens[token_ix - 1], Token::Number(NumberToken::Ordinal(_)));
-                if !wr.found_in_list && wr.phonemes.iter().all(|&b| b == 0) && !ordinal_indicator {
+                let tone_only = || {
+                    let kept = PosExpect { keep_orphan_tones: true, ..expect };
+                    word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, kept)
+                        .phonemes
+                        .iter()
+                        .any(|&b| b != 0)
+                };
+                if !wr.found_in_list && wr.phonemes.iter().all(|&b| b == 0) && !ordinal_indicator
+                    && !tone_only()
+                {
                     let mut chars = lower.chars();
                     let lone = chars.next().filter(|c| c.is_alphabetic() && chars.next().is_none());
                     let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
