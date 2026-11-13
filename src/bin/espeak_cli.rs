@@ -872,7 +872,7 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
         let ipa = if cli.markup {
             translator.text_to_ipa_ssml(text)
         } else {
-            translator.text_to_ipa(text)
+            translator.text_to_ipa_clauses(text)
         }
         .map_err(|e| {
             std::io::Error::other(format!("{e}"))
@@ -891,9 +891,12 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
         } else {
             text.to_string()
         };
-        let codes = translator.translate_to_codes(&src).map_err(|e| {
-            std::io::Error::other(format!("{e}"))
-        })?;
+        let codes = if cli.markup {
+            translator.translate_to_codes(&src)
+        } else {
+            translator.translate_to_clause_codes(&src)
+        }
+        .map_err(|e| std::io::Error::other(format!("{e}")))?;
         let mut phdata = PhonemeData::load(&data_dir).map_err(|e| {
             std::io::Error::other(format!("{e}"))
         })?;
@@ -909,8 +912,7 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
         format_x(&codes, &phdata, cli.sep, cli.tie, &data_dir, translator.options.lang.as_str())
     };
 
-    let extra = if cli.markup { ends_with_clause_tag(text) } else { closes_after_mark(text) };
-    let closing = if extra { "\n" } else { "" };
+    let closing = if cli.markup && ends_with_clause_tag(text) { "\n" } else { "" };
     emit(cli, &format!("{line}\n{closing}"))
 }
 
@@ -952,15 +954,6 @@ fn break_returns_terminator(attrs: &str) -> bool {
     let has_strength = attrs.contains("strength=");
     !has_strength || strong || attrs.contains("time=")
 }
-
-/// C ends a clause at a mark that a quote or bracket follows, and reads that
-/// closer as a clause of its own: one more, empty, output line.
-fn closes_after_mark(text: &str) -> bool {
-    const CLOSERS: &str = "\"'`)]}>\u{ab}\u{bb}\u{2019}\u{201d}";
-    const MARKS: &str = ".,!?;:";
-    let trimmed = text.trim_end();
-    let before = trimmed.trim_end_matches(|c: char| CLOSERS.contains(c) || c.is_whitespace());
-    before.len() < trimmed.len() && before.chars().next_back().is_some_and(|c| MARKS.contains(c))
 }
 
 

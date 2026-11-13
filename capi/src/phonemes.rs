@@ -62,9 +62,9 @@ fn translator_for(settings: &Settings, mode: i32) -> espeak_ng::Result<Translato
 fn translate(settings: &Settings, text: &str, mode: i32) -> espeak_ng::Result<String> {
     let t = translator_for(settings, mode)?;
     if mode & PHONEMES_IPA != 0 {
-        return t.text_to_ipa(text);
+        return t.text_to_ipa_clauses(text);
     }
-    let codes = t.translate_to_codes(text)?;
+    let codes = t.translate_to_clause_codes(text)?;
     let mut phdata = PhonemeData::load(&settings.data_dir)?;
     select_phoneme_table(&mut phdata, &settings.data_dir, t.options.lang.as_str())?;
     let glyph = char::from_u32(((mode >> 8) & 0xffff) as u32).filter(|&c| c != '\0');
@@ -95,7 +95,7 @@ pub fn clauses(settings: &Settings, text: &str, mode: i32) -> espeak_ng::Result<
             },
         })
         .collect();
-    Ok(with_closing_clause(clauses, text, &marks))
+    Ok(clauses)
 }
 
 /// Where clause `i` of `n` ends when the source has no mark for it: evenly
@@ -118,17 +118,4 @@ fn last_terminator(text: &str, n: usize, marks: &[(char, usize)]) -> i32 {
         Some(&(c, end)) if closes_text(text, end) => terminator_value(c),
         _ => EOF_TERMINATOR,
     }
-}
-
-/// C reports a closing quote after the last mark as a clause of its own.
-fn with_closing_clause(mut clauses: Vec<Clause>, text: &str, marks: &[(char, usize)]) -> Vec<Clause> {
-    let n = clauses.len();
-    let trailing = marks
-        .get(n.saturating_sub(1))
-        .is_some_and(|&(_, end)| end < text.trim_end().len() && closes_text(text, end));
-    if trailing {
-        clauses.push(Clause { phonemes: String::new(), terminator: EOF_TERMINATOR, end_byte: text.len() });
-        clauses[n - 1].end_byte = marks[n - 1].1;
-    }
-    clauses
 }

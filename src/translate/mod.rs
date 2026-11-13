@@ -6507,6 +6507,16 @@ fn stray_mark_phonemes(
     wr.phonemes.iter().any(|&b| b != 0).then_some(wr.phonemes)
 }
 
+/// C ends a clause at a mark that a quote or bracket follows, and reads that
+/// closer as a clause of its own: one more, empty, output line.
+pub(crate) fn closes_after_mark(text: &str) -> bool {
+    const CLOSERS: &str = "\"'`)]}>\u{ab}\u{bb}\u{2019}\u{201d}";
+    const MARKS: &str = ".,!?;:";
+    let trimmed = text.trim_end();
+    let before = trimmed.trim_end_matches(|c: char| CLOSERS.contains(c) || c.is_whitespace());
+    before.len() < trimmed.len() && before.chars().next_back().is_some_and(|c| MARKS.contains(c))
+}
+
 /// Whether a digit directly follows a leading `-`, so the hyphen is a unary
 /// minus (`-5`).  A currency symbol in between (`-$5`) is not: C drops the sign.
 /// Takes a clone of the tokenizer iterator positioned just past the `-`.
@@ -9743,6 +9753,33 @@ impl Translator {
     /// | 35+  | actual phoneme                |
     pub fn translate_to_codes(&self, text: &str) -> Result<Vec<PhonemeCode>> {
         self.translate_to_codes_inner(text, true)
+    }
+
+    /// [`translate_to_codes`](Self::translate_to_codes) for phoneme output: a
+    /// closer after the last mark is a clause of its own, so the codes end with
+    /// one more clause boundary, as C reports it.
+    pub fn translate_to_clause_codes(&self, text: &str) -> Result<Vec<PhonemeCode>> {
+        let mut codes = self.translate_to_codes(text)?;
+        if closes_after_mark(text) {
+            let boundary = || PhonemeCode { is_boundary: true, clause_char: Some('.'), ..Default::default() };
+            let ends_clause = codes
+                .iter()
+                .rev()
+                .find(|c| c.marker.is_none())
+                .is_some_and(|c| c.is_boundary && c.clause_char.is_some());
+            if !ends_clause {
+                codes.push(boundary());
+            }
+            codes.push(boundary());
+        }
+        Ok(codes)
+    }
+
+    /// [`text_to_ipa`](Self::text_to_ipa) for phoneme output: the empty clause of
+    /// a closer after the last mark is one more, empty, line.
+    pub fn text_to_ipa_clauses(&self, text: &str) -> Result<String> {
+        let ipa = self.text_to_ipa(text)?;
+        Ok(if closes_after_mark(text) { format!("{ipa}\n") } else { ipa })
     }
 
     /// [`translate_to_codes`](Self::translate_to_codes) with `phonSWITCH`

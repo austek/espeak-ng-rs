@@ -186,5 +186,12 @@ pub fn format_mnemonics(
     // Word boundaries either side of a clause break leave stray spaces at the
     // ends of lines (`'eI \n b'i:` where upstream writes `'eI\nb'i:`).
     let out: String = out.split('\n').map(str::trim).collect::<Vec<_>>().join("\n");
-    out.trim_end().to_string()
+    let empty_clauses = codes
+        .iter()
+        .rev()
+        .filter(|c| c.marker.is_none())
+        .take_while(|c| c.is_boundary && c.clause_char.is_some())
+        .count()
+        .saturating_sub(1);
+    format!("{}{}", out.trim_end(), "\n".repeat(empty_clauses))
 }
