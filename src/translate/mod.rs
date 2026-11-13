@@ -1709,7 +1709,8 @@ fn normalize_number_symbols_except<'a>(text: &'a str, keep: &[char]) -> std::bor
         })
     }
 
-    let changed = |c: char| !keep.contains(&c)
+    let keeps = |c: char| keep.contains(&c) || is_fullwidth_clause_mark(c);
+    let changed = |c: char| !keeps(c)
         && (mapping(c).is_some()
             || native_digit_to_ascii(c).is_some()
             || fullwidth_to_ascii(c).is_some()
@@ -1721,7 +1722,7 @@ fn normalize_number_symbols_except<'a>(text: &'a str, keep: &[char]) -> std::bor
     }
     let mut out = String::with_capacity(text.len() + 8);
     for c in text.chars() {
-        if keep.contains(&c) {
+        if keeps(c) {
             out.push(c);
         } else if let Some(s) = mapping(c) {
             out.push_str(s);
@@ -7947,6 +7948,12 @@ fn clause_punctuation_class(c: char) -> Option<(ClauseTerminator, bool)> {
         _ => return None,
     };
     Some(class)
+}
+
+/// A full-width form that C classifies as clause punctuation (`，` `！` `？`
+/// `；` `：`); it ends the clause as it is, never as its ASCII counterpart.
+fn is_fullwidth_clause_mark(c: char) -> bool {
+    (0xFF00..=0xFFEF).contains(&(c as u32)) && is_clause_punctuation(c)
 }
 
 /// Whether the character is clause punctuation at all — it breaks the clause

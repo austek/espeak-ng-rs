@@ -175,6 +175,7 @@ jobs:
           --test clause_tonic_unstressed_words
           --test clause_leading_punctuation
           --test cmn_phrase_entries
+          --test fullwidth_clause_punctuation
           --test voice_names
           --test voice_keywords
           --test regressive_voicing_hr
