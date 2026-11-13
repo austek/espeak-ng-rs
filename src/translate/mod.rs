@@ -1126,7 +1126,7 @@ impl LangOptions {
             matches!(primary_bcp47_subtag(&lang), "cmn" | "yue" | "zh");
         // `LOPT_UNPRONOUNCABLE`, transcribed from `tr_languages.c`.
         let unpronouncable = match primary_bcp47_subtag(&lang) {
-            "am" | "ar" | "be" | "chr" | "el" | "grc" | "fa" | "ko" | "si" | "ur" | "sd"
+            "am" | "ar" | "be" | "chr" | "grc" | "fa" | "ko" | "si" | "ur" | "sd"
             | "cmn" | "yue" | "zh" => 1,
             "de" | "en" | "es" | "an" | "ca" | "ia" | "pap" => 2,
             "ga" | "gd" => 3,
@@ -7175,27 +7175,27 @@ fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &La
     }
     let replaced = dict.apply_replacements(rest);
     let rest = replaced.as_deref().unwrap_or(rest);
-    // C refuses the test for a character outside the language's own alphabet
-    // ("so we can re-translate the word as English"), which keeps every
-    // non-Latin script out of it.  The port applies the rule only to Latin text
-    // in a Latin-script language, where a generic vowel test is reliable.
-    if dict.letter_bits_offset > 0 {
+    // `SetIndicLetters` turns the test off for every Indic script.
+    if (0x900..0xe00).contains(&dict.letter_bits_offset) || dict.letter_bits_offset == 0x10a0 {
         return false;
     }
+    // A Cyrillic voice without a translator case of its own has the Latin
+    // letter table in C.
+    let bare_cyrillic = dict.letter_bits_offset == 0x420
+        && !matches!(primary_bcp47_subtag(&lang_opts.lang), "ru" | "uk" | "bg" | "mk" | "kk" | "mn" | "tt");
+    let offset = if bare_cyrillic { 0 } else { dict.letter_bits_offset };
     let in_other_alphabet = |c: char| {
-        letters::alphabet_from_char(c as u32).is_some_and(|a| a.offset != dict.letter_bits_offset)
+        letters::alphabet_from_char(c as u32).is_some_and(|a| a.offset != offset)
     };
     let is_vowel = |c: char| {
+        if bare_cyrillic {
+            return matches!(crate::dictionary::rules::fold_accent(c), 'a' | 'e' | 'i' | 'o' | 'u' | 'y');
+        }
         (primary_bcp47_subtag(&lang_opts.lang) == "vi" && is_vietnamese_vowel(c))
-            || crate::dictionary::rules::is_letter_wc(
-                &dict.letter_bits,
-                c as u32,
-                dict.letter_bits_offset,
-                7, // LETTERGP_VOWEL2
-            )
+            || crate::dictionary::rules::is_letter_wc(&dict.letter_bits, c as u32, offset, 7)
     };
     let Some(first) = rest.chars().next() else { return false };
-    if in_other_alphabet(first) {
+    if in_other_alphabet(first) || (offset > 0 && (first as u32) < 0x241) {
         return false;
     }
     let mut count = 0usize;

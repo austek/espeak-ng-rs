@@ -119,7 +119,7 @@ pub fn is_letter_wc(letter_bits: &[u8; 256], wc: u32, letter_bits_offset: u32, g
     let idx = if letter_bits_offset > 0 {
         if wc < letter_bits_offset { return false; }
         let ix = wc - letter_bits_offset;
-        if ix >= 128 { return false; }
+        if ix == 0 || ix >= 256 { return false; }
         ix as usize
     } else if (0xc0..0xc0 + REMOVE_ACCENT.len() as u32).contains(&wc) {
         // An accented letter is tested through its unaccented base (C's

@@ -568,14 +568,19 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
             // Indices are (codepoint - 0x420); stored at that index in bits[].
 
             // LETTERGP_A (0) = vowels: а е ё и о у ы э ю я (0x10,0x15,0x31,0x18,0x1e,0x23,0x2b,0x2d,0x2e,0x2f)
-            const RU_VOWELS: &[usize] = &[0x10, 0x15, 0x31, 0x18, 0x1e, 0x23, 0x2b, 0x2d, 0x2e, 0x2f];
+            const RU_VOWELS_BASE: &[usize] = &[0x10, 0x15, 0x31, 0x18, 0x1e, 0x23, 0x2b, 0x2d, 0x2e, 0x2f];
+            // C's `ru_vowels` also lists the Kazakh vowels ә ө ұ ү і.
+            const RU_VOWELS_KAZAKH: &[usize] = &[
+                0x10, 0x15, 0x31, 0x18, 0x1e, 0x23, 0x2b, 0x2d, 0x2e, 0x2f, 0xb9, 0xc9, 0x91, 0x8f, 0x36,
+            ];
+            let ru_vowels = if matches!(lang, "ru" | "uk" | "bg" | "tt" | "kk" | "mn") { RU_VOWELS_KAZAKH } else { RU_VOWELS_BASE };
             // LETTERGP_B (1) = soft consonants: ь й ч щ (0x2c,0x19,0x27,0x29)
             const CYRL_SOFT: &[usize] = &[0x2c, 0x19, 0x27, 0x29];
             // LETTERGP_C (2) = consonants
             const RU_CONSONANTS: &[usize] = &[
                 0x11,0x12,0x13,0x14,0x16,0x17,0x19,0x1a,0x1b,0x1c,
                 0x1d,0x1f,0x20,0x21,0x22,0x24,0x25,0x26,0x27,0x28,
-                0x29,0x2a,0x2c,
+                0x29,0x2a,0x2c,0x73,0x7b,0x83,0x9b,
             ];
             // LETTERGP_H (3) = hard consonants: ъ ж ц ш (0x2a,0x16,0x26,0x28)
             const CYRL_HARD: &[usize] = &[0x2a, 0x16, 0x26, 0x28];
@@ -602,7 +607,7 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
                 }
             }
 
-            set_bits(&mut bits, RU_VOWELS,     0); // LETTERGP_A
+            set_bits(&mut bits, ru_vowels,     0); // LETTERGP_A
             set_bits(&mut bits, CYRL_SOFT,     1); // LETTERGP_B
             set_bits(&mut bits, RU_CONSONANTS, 2); // LETTERGP_C
             set_bits(&mut bits, CYRL_HARD,     3); // LETTERGP_H
@@ -612,7 +617,10 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
             if matches!(lang, "ru" | "uk") {
                 set_bits(&mut bits, RU_EXTRA_IVOWELS, 6);
             }
-            set_bits(&mut bits, RU_VOWELS,     7); // LETTERGP_VOWEL2
+            set_bits(&mut bits, ru_vowels,     7); // LETTERGP_VOWEL2
+            if lang == "bg" {
+                set_letter_vowel(&mut bits, 0x2a); // ъ
+            }
         }
         "el" | "grc" => {
             // Greek letter groups — `letter_bits_offset = OFFSET_GREEK = 0x380`,

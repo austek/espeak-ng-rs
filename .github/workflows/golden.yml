@@ -126,6 +126,7 @@ jobs:
           --test albanian_final_z
           --test slovenian_r_vowel
           --test dictionary_named_stress
+          --test non_latin_unpronounceable
           --test number_missing_scale_words
           --test hungarian_dot_ordinals
           --test leading_zero_numbers
