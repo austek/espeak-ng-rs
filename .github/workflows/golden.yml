@@ -182,6 +182,7 @@ jobs:
           --test ne_pa_final_vowel
           --test number_lakh_groups
           --test bn_final_inherent_vowel
+          --test number_swap_thousands
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

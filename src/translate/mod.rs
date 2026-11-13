@@ -683,12 +683,15 @@ pub struct HundredsGrammar {
 pub struct ThousandsGrammar {
     /// Whether to omit the explicit `one` before `thousand`.
     pub omit_one_prefix: bool,
+    /// Say the scale word before its count — upstream `NUM2_SWAP_THOUSANDS`.
+    pub swap: bool,
 }
 
 impl NumberGrammar {
     fn for_lang(lang: &str) -> Self {
         let mut grammar = Self::default();
         let lang = primary_bcp47_subtag(lang);
+        grammar.thousands.swap = matches!(lang, "bpy" | "om");
         match lang {
             "en" => {
                 grammar.hundreds.use_conjunction_with_remainder = true;
@@ -3728,6 +3731,11 @@ fn append_scale_word(
         if !and.is_empty() {
             dst.push_lookup_word(&and);
         }
+    }
+    if grammar.thousands.swap {
+        dst.push_lookup_word(&scale_word);
+        dst.push_pronunciation(&num3_phonemes_before_scale(dict, group_value, grammar));
+        return;
     }
     dst.push_pronunciation(&num3_phonemes_before_scale(dict, group_value, grammar));
     dst.push_lookup_word(&scale_word);
