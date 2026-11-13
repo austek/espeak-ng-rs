@@ -8124,6 +8124,39 @@ fn dict_symbol_flags(dict: &Dictionary, c: char, dict_condition: u32) -> Option<
         .map(|r| r.flags1.0)
 }
 
+/// What the letter-to-sound rules make of a non-ASCII character that is not a
+/// letter or clause punctuation.  C gives such a character its own word, so a
+/// rule group for it speaks (Burmese asat `်` is the very short pause `_|`).
+fn is_mark_char(token: &Token) -> Option<char> {
+    match token {
+        Token::Punctuation(c) if !c.is_ascii() && !is_clause_punctuation(*c) && !c.is_whitespace() => Some(*c),
+        _ => None,
+    }
+}
+
+/// Start of the run of consecutive mark characters that contains `ix`.
+fn mark_run_start(tokens: &[Token], ix: usize) -> usize {
+    (0..ix).rev().take_while(|&k| is_mark_char(&tokens[k]).is_some()).last().unwrap_or(ix)
+}
+
+/// The rules' reading of the whole run of marks that starts at `ix`.
+fn mark_reading(
+    tokens: &[Token],
+    ix: usize,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+) -> Option<Vec<u8>> {
+    let run: String = tokens[ix..].iter().map_while(is_mark_char).collect();
+    if run.is_empty() {
+        return None;
+    }
+    let wr = word_to_phonemes(&run, dict, phdata, stress_opts, options);
+    let speaks = wr.phonemes.iter().any(|&b| b != 0);
+    (speaks && wr.phonemes.first() != Some(&crate::phoneme::PHON_SWITCH)).then_some(wr.phonemes)
+}
+
 /// A symbol's reading, and whether it came from the dictionary **as phonemes**
 /// (C's `SFLAG_DICTIONARY`, set when `FLAG_FOUND && !FLAG_TEXTMODE`).  The
 /// difference is visible: `pl @` has phonemes in `pl_list`, so the
@@ -8939,6 +8972,33 @@ pub(crate) fn build_translate_entries(
                         found_in_list: symbol_from_dict,
                     });
                 }
+            }
+            Token::Punctuation(_)
+                if is_mark_char(token).is_some()
+                    && mark_run_start(tokens, token_ix) != token_ix
+                    && mark_reading(tokens, mark_run_start(tokens, token_ix), dict, phdata, stress_opts, options)
+                        .is_some() =>
+            {
+                entries.push(TranslateEntry {
+                    phonemes: Vec::new(), dict_flags: 0,
+                    kind: TranslateEntryKind::Other, word_lower: None,
+                    word_group: None,
+                    found_in_list: false,
+                });
+            }
+            Token::Punctuation(c)
+                if mark_reading(tokens, token_ix, dict, phdata, stress_opts, options).is_some()
+                    && is_mark_char(token).is_some() =>
+            {
+                entries.push(TranslateEntry {
+                    phonemes: mark_reading(tokens, token_ix, dict, phdata, stress_opts, options)
+                        .unwrap_or_default(),
+                    dict_flags: 0,
+                    kind: TranslateEntryKind::Word,
+                    word_lower: Some(c.to_string()),
+                    word_group: None,
+                    found_in_list: false,
+                });
             }
             _ => {
                 let silent_name = matches!(token, Token::Punctuation(c)
