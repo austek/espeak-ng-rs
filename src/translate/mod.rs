@@ -2166,6 +2166,13 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 tokens.push(Token::Punctuation(c));
                 continue;
             }
+            if c != '.' && !clause_has_word(&tokens) {
+                if matches!(c, '?' | '!') {
+                    while chars.next_if(|n| matches!(n, '?' | '!')).is_some() {}
+                }
+                tokens.push(Token::Operator(c));
+                continue;
+            }
             // Clause/sentence boundary punctuation
             // Absorb trailing whitespace after punctuation
             while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {

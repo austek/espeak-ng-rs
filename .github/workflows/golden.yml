@@ -42,6 +42,7 @@ jobs:
           --test italian_rule_stress
           --test faroese_default_stress
           --test hbs_spelling_stress
+          --test punctuation_only_clause
           --test polish_final_l
           --test long_digit_strings
           --test spanish_group_stress
