@@ -43,30 +43,22 @@ fn entities_are_decoded() {
 #[test]
 fn say_as_digits_reads_each_digit() {
     let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
-    // `digits` spells each digit: "42" == "4 2" == "four two", not "forty two".
-    assert_markup_eq_plain(&t, r#"<say-as interpret-as="digits">42</say-as>"#, "4 2");
-    // Distinct from `cardinal`, which reads the whole number.
-    let digits = t.text_to_ipa_ssml(r#"<say-as interpret-as="digits">42</say-as>"#).unwrap();
-    let cardinal = t.text_to_ipa_ssml(r#"<say-as interpret-as="cardinal">42</say-as>"#).unwrap();
-    assert_ne!(digits, cardinal, "digits and cardinal must differ");
+    // C knows `tts:digits`, not bare `digits` (which reads the whole number).
+    assert_markup_eq_plain(&t, r#"<say-as interpret-as="tts:digits">42</say-as>"#, "4 2");
+    assert_markup_eq_plain(&t, r#"<say-as interpret-as="digits">42</say-as>"#, "42");
 }
 
 #[test]
 fn say_as_ordinal_reads_ordinals() {
     let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
-    // Ordinal reading: "3" → "3rd" → "third", not "three".
-    assert_markup_eq_plain(&t, r#"<say-as interpret-as="ordinal">3</say-as>"#, "3rd");
-    assert_markup_eq_plain(&t, r#"<say-as interpret-as="ordinal">21</say-as>"#, "21st");
-    assert_markup_eq_plain(&t, r#"<say-as interpret-as="ordinal">12</say-as>"#, "12th");
-    // Inline in a clause stays a single clause ("the third item").
+    // C has no `ordinal` mode: the number reads as a cardinal.
+    assert_markup_eq_plain(&t, r#"<say-as interpret-as="ordinal">3</say-as>"#, "3");
+    assert_markup_eq_plain(&t, r#"<say-as interpret-as="ordinal">21</say-as>"#, "21");
     assert_markup_eq_plain(
         &t,
         r#"the <say-as interpret-as="ordinal">3</say-as> item"#,
-        "the 3rd item",
+        "the 3 item",
     );
-    // Distinct from a plain cardinal reading.
-    let ord = t.text_to_ipa_ssml(r#"<say-as interpret-as="ordinal">3</say-as>"#).unwrap();
-    assert_ne!(ord, t.text_to_ipa("3").unwrap(), "ordinal must differ from cardinal");
 }
 
 #[test]
@@ -84,16 +76,13 @@ fn voice_name_resolves_in_ssml() {
 #[test]
 fn say_as_date_and_time() {
     let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
-    // Date: ISO YYYY-MM-DD → "Month Dayth Year".
+    // C has no `date`/`time` modes: the content reads as ordinary text.
     assert_markup_eq_plain(
         &t,
         r#"<say-as interpret-as="date">2024-01-15</say-as>"#,
-        "January 15th 2024",
+        "2024-01-15",
     );
-    // Time: HH:MM read as two numbers, with "oh"/"o'clock" refinements.
-    assert_markup_eq_plain(&t, r#"<say-as interpret-as="time">14:30</say-as>"#, "14 30");
-    assert_markup_eq_plain(&t, r#"<say-as interpret-as="time">9:05</say-as>"#, "9 oh 5");
-    assert_markup_eq_plain(&t, r#"<say-as interpret-as="time">14:00</say-as>"#, "14 o'clock");
+    assert_markup_eq_plain(&t, r#"<say-as interpret-as="time">14:30</say-as>"#, "14:30");
 }
 
 #[test]

@@ -54,16 +54,12 @@ fn set_voice_by_query_resolves_name_and_language() {
 
 #[test]
 fn say_as_interpret_applies_in_audio() {
-    // The interpret modes (ordinal/date/time) were only applied on `-x`/`--ipa`;
-    // the audio path now applies them too — so `<say-as ordinal>3</say-as>` reads
-    // "third" (== "3rd"), not "three".
+    // C has no ordinal/date mode, so the audio path reads the content as plain text.
     let Some(mut e) = engine() else { return };
     e.set_markup(true);
     let ordinal = e.synth(r#"<say-as interpret-as="ordinal">3</say-as>"#).unwrap().0;
-    let date = e.synth(r#"<say-as interpret-as="date">2024-01-15</say-as>"#).unwrap().0;
     e.set_markup(false);
-    assert_eq!(ordinal, e.synth("3rd").unwrap().0, "audio ordinal must read '3rd'");
-    assert_eq!(date, e.synth("January 15th 2024").unwrap().0, "audio date must read worded form");
+    assert_eq!(ordinal, e.synth("3").unwrap().0, "audio ordinal must read '3'");
 }
 
 #[test]

@@ -21,10 +21,8 @@ fn x_markup_mode_processes_ssml() {
     }
     // Tags stripped; C puts a pause phoneme before an emphasised word (`_!h@l'oU`).
     assert_eq!(run(&["-x", "-m", "<emphasis>hello</emphasis>"]), "_!h@l'oU");
-    assert_eq!(
-        run(&["-x", "-m", r#"<say-as interpret-as="ordinal">3</say-as>"#]),
-        run(&["-x", "3rd"])
-    );
+    // C does not know `ordinal`; "3" is read as a cardinal (`Tr'i:`).
+    assert_eq!(run(&["-x", "-m", r#"<say-as interpret-as="ordinal">3</say-as>"#]), "Tr'i:");
     // The entity decodes to the *symbol*, which the dictionary reads as "and"
     // preceded by a short pause (`en_list`: `& _and $u+`), so compare against
     // the literal `&` rather than the bare word.
