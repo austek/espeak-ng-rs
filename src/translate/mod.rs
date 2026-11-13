@@ -5605,6 +5605,7 @@ fn word_to_phonemes_inner(
             }
             // Apply stress placement
             set_word_stress(&mut phonemes, phdata, stress_opts, Some(dict_flags), -1, 0);
+            reorder_tone_phonemes(&mut phonemes, phdata);
             // (No stressed-vowel upgrading here: the pronunciation came from the
             // list, and C's `isTranslationGiven` gate keeps the vowel changes off
             // a word whose phonemes were given — `tr b` is `b'e`, not `b'E`.)
