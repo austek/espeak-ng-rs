@@ -3,6 +3,7 @@
 //! phoneme codes.
 
 pub mod breath;
+pub mod clause_type;
 pub mod generate;
 pub mod klatt;
 pub mod langtab;
@@ -21,6 +22,7 @@ use crate::phoneme::PhonemeData;
 use crate::synthesize::intonation::{parse_tunes, Tune};
 use crate::synthesize::VoiceParams;
 use crate::translate::PhonemeCode;
+use clause_type::{clause_type, ClauseType};
 use phlist::{Ph, SFLAG_EMBEDDED};
 use speed::Speed;
 use voice::{LangSynth, WVoice};
@@ -79,14 +81,8 @@ pub fn apply_embedded(cur: i32, sign: i32, value: i32, max: i32) -> i32 {
 /// Clause pause (ms), intonation type and whether a new sentence follows,
 /// from the punctuation that ended the clause (`TranslateClause`).
 fn clause_info(c: Option<char>, last: bool, no_final_pause: bool) -> (i32, usize, bool) {
-    let (pause, tone, sentence) = match c {
-        Some(',' | '،' | '、') => (200, 1, false),
-        Some(';' | '؛' | '…' | '—' | '–' | '¿' | '¡') => (300, 1, false),
-        Some(':') => (300, 0, false),
-        Some('?' | '؟') => (400, 2, true),
-        Some('!') => (450, 3, true),
-        _ => (400, 0, true),
-    };
+    let ClauseType { pause, tone, sentence } =
+        c.and_then(clause_type).unwrap_or(ClauseType { pause: 400, tone: 0, sentence: true });
     if last && no_final_pause {
         return (10, tone, sentence);
     }
