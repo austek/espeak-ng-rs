@@ -554,6 +554,8 @@ pub struct Neighbours {
     pub this_next_pause: bool,
     /// `InterpretPhoneme` control bit 0: the voiced lead-in of a stop.
     pub pre_voicing: bool,
+    /// The voice is a Klatt voice (C's `KlattSynth` condition).
+    pub klatt_synth: bool,
 }
 
 /// `next_stress`/`wordstress` value meaning "the caller doesn't track this".
@@ -583,6 +585,7 @@ impl Default for Neighbours {
             after_stress: false,
             this_next_pause: false,
             pre_voicing: false,
+            klatt_synth: false,
             this_wordstart: false,
             prev_wordstart: false,
             next_wordstart: false,
@@ -967,9 +970,7 @@ where
     let instn2 = (instn >> 8) as usize; // 0..15
 
     if instn2 >= 14 {
-        // Other conditions: only PreVoicing can hold (Klatt and MBROLA voices
-        // do not reach this interpreter).
-        return instn2 == 0xf && data == 1 && nb.pre_voicing;
+        return instn2 == 0xf && ((data == 1 && nb.pre_voicing) || (data == 2 && nb.klatt_synth));
     }
 
     let mut which = instn2 % 7;

@@ -11686,6 +11686,7 @@ fn resolve_virtual_phonemes_in_codes(
             after_stress: after_stress(i, n, &real, &level, &crosses),
             this_next_pause: false,
             pre_voicing: false,
+            klatt_synth: false,
         };
         let extract = crate::synthesize::bytecode::interpret_phoneme_ctl(
             ph.program,

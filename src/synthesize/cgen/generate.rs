@@ -350,6 +350,12 @@ impl<'a> Generator<'a> {
 
     fn set_frame_rms(&mut self, fr: usize, new_rms: i32) {
         let f = &mut self.frames[fr];
+        if self.voice.klatt != 0 {
+            if new_rms == -1 {
+                f.klattp[0] = 50;
+            }
+            return;
+        }
         if f.rms == 0 {
             return;
         }
@@ -384,6 +390,9 @@ impl<'a> Generator<'a> {
                 lower(f, if x > -300 { -400 } else { x }, true)
             }
             _ => {}
+        }
+        if self.voice.klatt != 0 {
+            return;
         }
         for h in f.fheight.iter_mut().skip(2) {
             *h = ((*h as i32 * hf_reduce) / 100) as u8;
@@ -441,6 +450,9 @@ impl<'a> Generator<'a> {
         seq[0].frflags |= FRFLAG_LEN_MOD2;
         self.frames[fr].frflags |= FRFLAG_LEN_MOD2;
         let next_rms = self.frames[seq[1].frame].rms as i32;
+        if self.voice.klatt != 0 {
+            self.frames[fr].klattp[0] = self.frames[seq[1].frame].klattp[0].wrapping_sub(4);
+        }
         if t.f2 != 0 {
             if rms & 0x20 != 0 {
                 self.set_frame_rms(fr, (next_rms * (rms & 0x1f)) / 30);
@@ -854,6 +866,7 @@ impl<'a> Generator<'a> {
             next2_wordstart: get(ix + 2).is_some_and(|q| q.newword != 0),
             this_next_pause: p.synthflags & SFLAG_NEXT_PAUSE != 0,
             pre_voicing,
+            klatt_synth: self.voice.klatt != 0,
             ..word_vowels(list, ix)
         };
         let window: Vec<&Ph> = (ix.saturating_sub(1)..(ix + 3).min(list.len())).map(|i| &list[i]).collect();

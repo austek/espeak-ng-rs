@@ -31,6 +31,8 @@ pub struct WVoice {
     pub speedf1: i32,
     pub speedf2: i32,
     pub speedf3: i32,
+    /// `voice->klattv[0]`: the Klatt voicing source, 0 for the formant synthesizer.
+    pub klatt: i32,
 }
 
 impl Default for WVoice {
@@ -67,6 +69,7 @@ impl Default for WVoice {
             speedf1: 256,
             speedf2: 238,
             speedf3: 232,
+            klatt: 0,
         }
     }
 }

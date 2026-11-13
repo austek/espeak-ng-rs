@@ -697,7 +697,7 @@ impl Synthesizer {
         if codes.is_empty() {
             return Ok(Vec::new());
         }
-        if let Some(dir) = self.voice.data_dir.clone().filter(|_| !self.voice.klatt) {
+        if let Some(dir) = self.voice.data_dir.clone() {
             return Ok(self.render_c(codes, phdata, &dir, word_marks, sentence_marks, sink));
         }
 

@@ -4,6 +4,7 @@
 
 pub mod breath;
 pub mod generate;
+pub mod klatt;
 pub mod langtab;
 pub mod lengths;
 pub mod phlist;

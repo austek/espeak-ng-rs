@@ -60,7 +60,7 @@ impl Rand {
 /// The breath resonators and the noise source that drives them.
 pub struct Breath {
     res: [Resonator; N_PEAKS],
-    rand: Rand,
+    pub(super) rand: Rand,
 }
 
 impl Breath {

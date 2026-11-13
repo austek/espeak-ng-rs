@@ -128,6 +128,7 @@ fn apply_quality(v: &mut WVoice, key: &str, rest: &str) {
         ("breath", _) => apply_breath(v, rest),
         ("breathw", _) => read8_after_count(&mut v.breathw, rest),
         ("speed", Some(x)) => v.speed_percent = x,
+        ("klatt", _) => v.klatt = first.unwrap_or(1),
         ("consonants", Some(x)) => {
             v.consonant_amp = x;
             v.consonant_ampv = n.get(1).copied().unwrap_or(v.consonant_ampv);

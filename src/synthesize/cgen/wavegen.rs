@@ -1,6 +1,10 @@
 //! Port of `wavegen.c`: plays the command queue `generate` builds.
 
 use super::breath::Breath;
+use super::klatt::{Klatt, KlattCmd, KlattWdata};
+
+/// The samples in C's output buffer, which `parwave` stops at: 60 ms at 22.05 kHz.
+const KLATT_BUFFER_SAMPLES: usize = 1324;
 use super::voice::WVoice;
 use super::{Env, Wcmd};
 use crate::synthesize::envelopes::ENVELOPE_DATA;
@@ -188,6 +192,7 @@ pub struct Wavegen {
     echo_complete: i32,
     voicing: i32,
     breath: Breath,
+    klatt: Klatt,
     pub out: Vec<i16>,
 }
 
@@ -259,6 +264,7 @@ impl Wavegen {
             echo_complete: 0,
             voicing: 64,
             breath: Breath::new(rand_seed),
+            klatt: Klatt::new(),
             out: Vec::new(),
         };
         w.general_amplitude = w.get_amplitude();
@@ -803,11 +809,13 @@ impl Wavegen {
                 self.echo_complete -= len;
                 self.wdata.mix.n = 0;
                 self.wdata.amplitude_fmt = 100;
+                self.klatt.reset(1);
                 self.play_silence(len);
             }
             Wcmd::Wave { len, addr, scale, amp } => {
                 self.echo_complete = self.echo_length;
                 self.wdata.mix.n = 0;
+                self.klatt.reset(1);
                 self.play_wave(len, phondata, addr, scale, amp);
             }
             Wcmd::Wave2 { len, max, addr, scale, amp } => {
@@ -819,6 +827,11 @@ impl Wavegen {
                     self.wdata.mix.n = 0;
                 }
                 self.echo_complete = self.echo_length;
+                if self.voice.klatt != 0 {
+                    let next = next_klatt(&queue[qi + 1..], frames);
+                    self.run_klatt(len, &frames[fr1], &frames[fr2], next, phondata);
+                    return;
+                }
                 let next_is_spect = next_is_spect(&queue[qi + 1..]);
                 self.set_synth(len, modn, &frames[fr1], &frames[fr2], next_is_spect);
                 self.wavegen(phondata);
@@ -830,6 +843,43 @@ impl Wavegen {
         }
     }
 
+    /// `Wavegen_Klatt` for one command, then the echo and clipping of `parwave`.
+    fn run_klatt(&mut self, len: i32, fr1: &SpectFrame, fr2: &SpectFrame, next: Option<&SpectFrame>, phondata: &[u8]) {
+        let cmd = KlattCmd { length: len, fr1, fr2, next };
+        let mut resume = false;
+        loop {
+            let room = KLATT_BUFFER_SAMPLES - self.out.len() % KLATT_BUFFER_SAMPLES;
+            let (samples, full) = self.klatt_pass(&cmd, resume, room, phondata);
+            for s in samples {
+                let value = (s + (self.echo() >> 8)).clamp(-32768, 32767);
+                self.emit(value);
+            }
+            if !full {
+                return;
+            }
+            resume = true;
+        }
+    }
+
+    fn klatt_pass(&mut self, cmd: &KlattCmd, resume: bool, room: usize, phondata: &[u8]) -> (Vec<i32>, bool) {
+        let mut mix = self.wdata.mix;
+        let amplitude_v = self.wdata.amplitude_v;
+        let env = env_table(self.wdata.pitch_env, phondata);
+        let mut wdata = KlattWdata {
+            pitch: &mut self.wdata.pitch,
+            pitch_ix: &mut self.wdata.pitch_ix,
+            pitch_inc: self.wdata.pitch_inc,
+            pitch_base: self.wdata.pitch_base,
+            pitch_range: self.wdata.pitch_range,
+            pitch_env: env,
+            amplitude: self.wdata.amplitude,
+        };
+        let mut next_mix = || klatt_mix(&mut mix, phondata, amplitude_v);
+        let result = self.klatt.wavegen(cmd, resume, &mut wdata, &self.voice, &mut self.breath.rand, &mut next_mix, room);
+        self.wdata.mix = mix;
+        result
+    }
+
     /// The silence C plays after the queue empties, to let an echo die away.
     pub fn finish(&mut self) {
         if self.echo_complete > 0 {
@@ -838,6 +888,42 @@ impl Wavegen {
             self.echo_complete = 0;
         }
     }
+}
+
+/// `parwave`'s WAV mix-in: the next scaled sample of a concurrent wave file.
+fn klatt_mix(m: &mut Mix, phondata: &[u8], amplitude_v: i32) -> Option<i32> {
+    if m.ix >= m.n {
+        return None;
+    }
+    let at = |i: i32| phondata.get(m.addr + i.max(0) as usize).copied().unwrap_or(0);
+    let sample = if m.scale == 0 {
+        let s = at(m.ix + m.offset) as i32 + (at(m.ix + m.offset + 1) as i8 as i32) * 256;
+        m.ix += 2;
+        s
+    } else {
+        let s = (at(m.offset + m.ix) as i8 as i32) * m.scale;
+        m.ix += 1;
+        s
+    };
+    let z2 = sample * amplitude_v / 1024;
+    let z2 = (z2 * m.amp) / 40;
+    if m.ix + m.offset >= m.max {
+        m.offset -= (m.max * 3) / 4;
+    }
+    Some(z2)
+}
+
+/// The first frame of the next Klatt command, as `SetSynth_Klatt` looks ahead
+/// for it; a wave or pause first means none.
+fn next_klatt<'a>(rest: &[Wcmd], frames: &'a [SpectFrame]) -> Option<&'a SpectFrame> {
+    for c in rest {
+        match c {
+            Wcmd::Spect { spect2: false, fr1, .. } => return Some(&frames[*fr1]),
+            Wcmd::Wave { .. } | Wcmd::Pause(_) => return None,
+            _ => {}
+        }
+    }
+    None
 }
 
 fn next_is_spect(rest: &[Wcmd]) -> bool {
