@@ -463,6 +463,9 @@ pub struct LangOptions {
     /// For a switched translator: the word it re-reads ends the first language's
     /// clause, so end-of-clause stress applies.
     pub switched_last: bool,
+    /// For a switched translator: the digits glued to the front of the word, which
+    /// rule pre-contexts such as `1_) st` read.
+    pub switched_after: Option<String>,
 }
 
 const BREAK_THOUSANDS: u32 = 0x4924_9248;
@@ -1095,6 +1098,7 @@ impl Default for LangOptions {
             unpronouncable: 0,
             switched: false,
             switched_last: false,
+            switched_after: None,
         }
     }
 }
@@ -6441,6 +6445,10 @@ fn spaced_dash(tokens: &[Token], ix: usize) -> bool {
     ((before && after) || doubled) && !second_of_pair && !pause_pending
 }
 
+fn switched_after_digits(tokens: &[Token], token_ix: usize) -> bool {
+    token_ix.checked_sub(1).is_some_and(|k| matches!(tokens[k], Token::Number(_)))
+}
+
 fn word_tail(word: Option<&str>) -> [u8; 8] {
     let mut out = [0u8; 8];
     let Some(w) = word else { return out };
@@ -8489,7 +8497,7 @@ pub(crate) fn build_translate_entries(
     // ("have rˈɛd" not "rˈiːd").  The dictionary's default is already the
     // noun/adjective form, so only verb/past need triggering.  `prev_word` is the
     // previous *word* (carried across spaces, reset at a clause boundary).
-    let mut prev_word: Option<String> = None;
+    let mut prev_word: Option<String> = options.switched_after.clone();
 
     // Clause position per token, for the `$atend` / `$atstart` dictionary
     // entries: a word is "at the clause end" when no further word follows before
@@ -10211,8 +10219,13 @@ impl Translator {
                         .iter()
                         .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
                         .any(|t| matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_)));
+                    let digits_before = token_ix.checked_sub(1).and_then(|k| match &tokens[k] {
+                        Token::Number(n) => Some(n.surface().to_string()),
+                        _ => None,
+                    });
                     if let Some(tr) = switch_cache.get_mut(&target) {
                         tr.options.switched_last = last_in_clause;
+                        tr.options.switched_after = digits_before;
                     }
                     // A `_<char>` key is a character *name* to look up, not
                     // text to translate (`_@` tokenises as two symbols).
@@ -10253,9 +10266,16 @@ impl Translator {
                     };
                     // A switch whose target says nothing leaves no markers:
                     // they would print as an empty `(en)(ru)` pair.
+                    let said_nothing = char_name.is_none()
+                        && sw.as_ref().is_some_and(|codes| {
+                            !codes.iter().any(|c| !c.is_boundary && c.marker.is_none())
+                        });
                     let sw = sw.filter(|codes| {
                         codes.iter().any(|c| !c.is_boundary && c.marker.is_none())
                     });
+                    if said_nothing && sw.is_none() && switched_after_digits(&tokens, token_ix) {
+                        continue;
+                    }
                     if let Some(sw) = sw {
                         let hyphen_joined = token_ix > 0 && matches!(tokens[token_ix - 1], Token::WordJoin);
                         if hyphen_joined

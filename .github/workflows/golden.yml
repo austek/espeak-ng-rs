@@ -122,6 +122,7 @@ jobs:
           --test number_empty_group_word
           --test number_separators_and_fractions
           --test degree_celsius_sign
+          --test switched_word_digit_context
           --test number_missing_scale_words
           --test hungarian_dot_ordinals
           --test leading_zero_numbers
