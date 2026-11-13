@@ -6803,15 +6803,11 @@ fn previous_entry_kind<'a>(
     previous_entry(tokens, entries, token_ix).map(|e| &e.kind)
 }
 
-/// A spelled word of Arabic script.  C gives the word start of one that
-/// follows another to the switch after its opening pause; spelled CJK or
-/// Cyrillic letters keep it on the pause.
-fn arabic_stream(e: &TranslateEntry) -> bool {
+/// A spelled word whose own phonemes put a word break (`||`) right after the
+/// opening pause.  C starts the word there, so no break goes before the pause.
+fn own_break_stream(e: &TranslateEntry) -> bool {
     e.kind == TranslateEntryKind::Stream
-        && e.word_lower
-            .as_deref()
-            .and_then(|w| w.chars().next())
-            .is_some_and(|c| ('\u{600}'..='\u{6ff}').contains(&c))
+        && e.phonemes.get(..2) == Some(&[crate::phoneme::PHON_PAUSE, crate::phoneme::PHON_END_WORD])
 }
 
 /// The word before `token_ix` in its clause holds a quote the rules do not cover.
@@ -10111,7 +10107,7 @@ impl Translator {
                     let stream_run = paused_stream(entry)
                         && previous_entry(&tokens, &entries, token_ix).is_some_and(|p| {
                             match p.kind {
-                                TranslateEntryKind::Stream => arabic_stream(p) && arabic_stream(entry),
+                                TranslateEntryKind::Stream => own_break_stream(entry),
                                 TranslateEntryKind::LangSwitch => true,
                                 _ => false,
                             }
@@ -10324,7 +10320,6 @@ impl Translator {
                         .is_some_and(|e| e.no_word_gap);
                     let before_entry = previous_entry(&tokens, &entries, token_ix);
                     let before = before_entry.map(|e| &e.kind);
-                    let before_arabic = before_entry.is_some_and(arabic_stream);
                     let after = (token_ix + 1..tokens.len())
                         .filter(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
                         .filter_map(|k| entries.get(k))
@@ -10336,9 +10331,7 @@ impl Translator {
                     let next_spelled = after.is_some_and(paused_stream);
                     let stream_runs = match (before, after.map(|e| &e.kind)) {
                         (Some(Stream), Some(LangSwitch)) => true,
-                        (Some(Stream), Some(Stream)) => {
-                            next_spelled && before_arabic && after.is_some_and(arabic_stream)
-                        }
+                        (Some(Stream), Some(Stream)) => after.is_some_and(own_break_stream),
                         (Some(LangSwitch), Some(Stream)) => {
                             let prev_target = before_entry.map(|e| switch_target(&e.phonemes));
                             next_spelled
