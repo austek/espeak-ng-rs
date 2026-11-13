@@ -191,6 +191,7 @@ pub struct Renderer<'a> {
     wpm_s: i32,
     wpm_s2: i32,
     no_final_pause: bool,
+    max_clause_pause: i32,
     switched: std::collections::HashMap<String, PhonemeData>,
     emitted: usize,
     pub word_marks: Vec<usize>,
@@ -223,6 +224,7 @@ impl<'a> Renderer<'a> {
             wpm_s: rate,
             wpm_s2: rate,
             no_final_pause: params.no_final_pause,
+            max_clause_pause: 0,
             switched: std::collections::HashMap::new(),
             emitted: 0,
             word_marks: Vec::new(),
@@ -245,8 +247,27 @@ impl<'a> Renderer<'a> {
         value * 10
     }
 
+    /// `TranslateClause`'s pause: a clause with no words only makes up the
+    /// previous pause, and the last clause of the text without words, or with
+    /// no end pause wanted, keeps just 10 ms.
+    fn clause_pause(&mut self, pause: i32, empty: bool, last: bool) -> i32 {
+        let pause = if empty {
+            let made_up = (pause - self.max_clause_pause).max(0);
+            self.max_clause_pause += made_up;
+            made_up
+        } else {
+            self.max_clause_pause = pause;
+            pause
+        };
+        if last && (empty || self.no_final_pause) { 10 } else { pause }
+    }
+
     pub fn clause(&mut self, codes: &[PhonemeCode], clause_char: Option<char>, brk: Option<(i32, bool)>, start_sentence: bool, last: bool) -> Vec<i16> {
-        let (mut post_pause, mut clause_type, _) = clause_info(clause_char, last, self.no_final_pause);
+        let (base_pause, mut clause_type, _) = clause_info(clause_char, false, false);
+        let empty = codes
+            .iter()
+            .all(|c| c.marker.is_none() && (c.code == 0 || c.code == crate::phoneme::PHON_END_WORD));
+        let mut post_pause = self.clause_pause(base_pause, empty, last);
         if let Some((ms, exact)) = brk {
             post_pause = self.break_pause(ms, exact);
             clause_type = 4;
