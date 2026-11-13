@@ -220,7 +220,7 @@ fn stress_rule_for(lang: &str) -> u8 {
         "af" | "am" | "as" | "be" | "bn" | "bpy" | "bs" | "cs" | "da" | "de" | "en"
         | "ga" | "gd" | "hr" | "hu" | "is" | "ka" | "kn" | "ltg" | "lv" | "mn" | "nb" | "nl"
         | "si" | "sk" | "smj" | "sr" | "sv" | "ta" | "te" | "vi" => STRESSPOSN_1L,
-        "cmn" | "fr" | "ht" | "hy" | "pap" | "pt" | "ro" | "rup" | "sq" | "tt" | "yue"
+        "cmn" | "fr" | "ht" | "hy" | "hyw" | "pap" | "pt" | "ro" | "rup" | "sq" | "tt" | "yue"
         | "zh" => STRESSPOSN_1R,
         "an" | "bg" | "ca" | "cy" | "el" | "eo" | "es" | "grc" | "gu" | "ia" | "id" | "io"
         | "it" | "jbo" | "la" | "lt" | "ms" | "mt" | "om" | "pl" | "sl" | "sw" | "tn" => {
