@@ -128,6 +128,7 @@ jobs:
           --test slovenian_r_vowel
           --test dictionary_named_stress
           --test non_latin_unpronounceable
+          --test ru_uk_leading_v_unpronounceable
           --test leading_arabic_punctuation
           --test number_missing_scale_words
           --test hungarian_dot_ordinals

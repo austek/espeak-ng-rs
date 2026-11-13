@@ -1130,7 +1130,7 @@ impl LangOptions {
             | "cmn" | "yue" | "zh" => 1,
             "de" | "en" | "es" | "an" | "ca" | "ia" | "pap" => 2,
             "ga" | "gd" => 3,
-            "bg" => 0x432,
+            "bg" | "ru" | "uk" => 0x432,
             "sl" => 0x76,
             _ => 's' as u32,
         };
