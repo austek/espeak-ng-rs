@@ -2533,49 +2533,6 @@ where
         && after2.map(|c| c.is_alphabetic()).unwrap_or(false)
 }
 
-/// Hindi word-final schwa deletion (simplified).  The inherent vowel `V` at the
-/// end of a Devanagari word — after a consonant, and only when the word has
-/// another vowel — is dropped (`भारत` "bharatə" → "bharat", `स्कूल` "skulə" →
-/// "skul").  espeak does the full positional deletion in the `V` phoneme program
-/// (`ChangePhoneme(NULL)`); this covers the dominant, most audible case.
-fn delete_final_schwa(phonemes: &mut Vec<u8>, phdata: &PhonemeData) {
-    use crate::phoneme::{PH_PAUSE, PH_VOWEL, PHON_END_WORD};
-    let v = phdata.lookup_phoneme("V");
-    if v == 0 {
-        return;
-    }
-    let had_null = phonemes.last() == Some(&0);
-    if had_null {
-        phonemes.pop();
-    }
-    let is_marker = |c: u8| (1..=8).contains(&c) || c == 26 || c == PHON_END_WORD;
-    if phonemes.last() == Some(&v) {
-        let body = &phonemes[..phonemes.len() - 1];
-        let prev_is_consonant = body
-            .iter()
-            .rev()
-            .find(|&&c| !is_marker(c))
-            .and_then(|&c| phdata.get(c))
-            .map(|p| p.typ != PH_VOWEL && p.typ != PH_PAUSE)
-            .unwrap_or(false);
-        // Keep the schwa only when it's the word's sole vowel (a lone consonant
-        // `क`); if any earlier vowel remains — including another inherent V — the
-        // final one is deletable (`घर` "ghɔrə" → "ghɔr").
-        let has_other_vowel = body
-            .iter()
-            .any(|&c| phdata.get(c).map(|p| p.typ == PH_VOWEL).unwrap_or(false));
-        if prev_is_consonant && has_other_vowel {
-            phonemes.pop(); // drop the final inherent-vowel V
-            if matches!(phonemes.last(), Some(&c) if is_marker(c)) {
-                phonemes.pop(); // and the stress marker attached to it
-            }
-        }
-    }
-    if had_null {
-        phonemes.push(0);
-    }
-}
-
 /// An Indic combining mark (virama / nukta) that continues a word but isn't
 /// classified as alphabetic, so the plain word scanner would split on it.
 fn is_indic_combining(c: char) -> bool {
@@ -8627,17 +8584,6 @@ pub(crate) fn build_translate_entries(
                     }
                 }
                 prev_word = Some(lower.clone());
-                // Word-final inherent-vowel (schwa) deletion for the Indo-Aryan
-                // scripts (Devanagari, Bengali, Gujarati, Gurmukhi).  Dravidian
-                // (ta/te/kn/ml) and Oriya keep the inherent vowel, so they're
-                // excluded; `delete_final_schwa` is also a no-op where the
-                // inherent-vowel phoneme isn't `V`.
-                if matches!(
-                    primary_bcp47_subtag(&options.lang),
-                    "hi" | "mr" | "sa" | "kok" | "bn" | "as" | "gu"
-                ) {
-                    delete_final_schwa(&mut wr.phonemes, phdata);
-                }
                 entries.push(TranslateEntry {
                     phonemes:   wr.phonemes,
                     dict_flags: wr.dict_flags,
