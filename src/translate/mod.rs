@@ -8975,7 +8975,7 @@ fn apply_tone_sandhi(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang:
             }
 
             // The syllable's tone sits directly after its vowel.
-            let tone_pos = i + 1;
+            let mut tone_pos = i + 1;
             let existing = entries[ei]
                 .phonemes
                 .get(tone_pos)
@@ -9021,6 +9021,11 @@ fn apply_tone_sandhi(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang:
             }
             // The neutral tone takes its level from the preceding tone.
             if tone == "11" {
+                if i > 0 && matches!(entries[ei].phonemes[i - 1], 3..=7) {
+                    entries[ei].phonemes.remove(i - 1);
+                    i -= 1;
+                    tone_pos -= 1;
+                }
                 let replacement = match prevw_tone.as_str() {
                     "55" => "22",
                     "53" => "33",
@@ -10496,7 +10501,11 @@ impl Translator {
             insert_word_gaps(&mut out, phdata, stress_opts.vowel_pause, stress_opts.word_gap);
         }
         let outer_continues = self.options.switched && !self.options.switched_last;
-        if !outer_continues {
+        let tone_language = matches!(
+            primary_bcp47_subtag(&self.options.lang),
+            "cmn" | "zh" | "yue" | "hak" | "vi" | "shn"
+        );
+        if !outer_continues && !tone_language {
             promote_clause_tonics(&mut out, phdata, &self.options.lang, stress_opts.stress_flags);
         }
 
