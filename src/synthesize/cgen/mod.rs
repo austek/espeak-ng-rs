@@ -80,10 +80,10 @@ pub fn apply_embedded(cur: i32, sign: i32, value: i32, max: i32) -> i32 {
 /// from the punctuation that ended the clause (`TranslateClause`).
 fn clause_info(c: Option<char>, last: bool, no_final_pause: bool) -> (i32, usize, bool) {
     let (pause, tone, sentence) = match c {
-        Some(',') => (200, 1, false),
-        Some(';') => (300, 1, false),
+        Some(',' | '،' | '、') => (200, 1, false),
+        Some(';' | '؛' | '…' | '—' | '–' | '¿' | '¡') => (300, 1, false),
         Some(':') => (300, 0, false),
-        Some('?') => (400, 2, true),
+        Some('?' | '؟') => (400, 2, true),
         Some('!') => (450, 3, true),
         _ => (400, 0, true),
     };
