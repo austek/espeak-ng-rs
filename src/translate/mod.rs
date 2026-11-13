@@ -7204,9 +7204,9 @@ fn letter_word_phonemes(
     options: &LangOptions,
     expect: PosExpect,
 ) -> WordResult {
-    let listed = lookup_with_follow(dict, lower, &LookupCtx::default(), &[]).filter(|r| {
+    let symbol_ctx = LookupCtx { lookup_symbol: true, ..LookupCtx::default() };
+    let listed = lookup_with_follow(dict, lower, &symbol_ctx, &[]).filter(|r| {
         r.flags1.found()
-            && r.flags1.stress_bits() != 0
             && !r.flags1.textmode()
             && !r.flags2.contains(crate::dictionary::FLAG_ACCENT)
             && r.phonemes.first().is_some_and(|&b| b != 0 && b != crate::phoneme::PHON_SWITCH)
