@@ -7241,13 +7241,14 @@ fn spell_unpronounceable<'a>(
     options: &LangOptions,
     next: &[u8],
     alts: &letters::AltLangs,
-) -> Option<(Vec<u8>, &'a str)> {
+) -> Option<(Vec<u8>, &'a str, bool)> {
     if word.chars().count() < 2 {
         return None;
     }
     let mut out: Vec<u8> = Vec::new();
     let mut rest = word;
     let mut posn = 0usize;
+    let mut encoded = false;
     let mut length = 999usize;
     while (length < 3 && length > 0)
         || (word.chars().count() > 1 && is_unpronounceable(rest, next, dict, lang_opts_ref(options)))
@@ -7267,6 +7268,7 @@ fn spell_unpronounceable<'a>(
         }
         if wr.phonemes.iter().all(|&b| b == 0) {
             wr.phonemes = unnamed_letter_phonemes(c, dict, phdata, stress_opts, options, alts)?;
+            encoded = true;
         }
         let name = if out.is_empty() {
             &wr.phonemes[..]
@@ -7284,8 +7286,8 @@ fn spell_unpronounceable<'a>(
     if posn == 0 {
         return None;
     }
-    set_spelling_stress(&mut out, stress_opts, posn, true);
-    Some((out, rest))
+    set_spelling_stress(&mut out, stress_opts, posn, encoded);
+    Some((out, rest, encoded))
 }
 
 /// What `TranslateLetter` says for a letter with no name of its own ("letter",
@@ -7298,6 +7300,10 @@ fn unnamed_letter_phonemes(
     options: &LangOptions,
     alts: &letters::AltLangs,
 ) -> Option<Vec<u8>> {
+    let in_cyrillic_voice = dict.letter_bits_offset == 0x420 && (c as u32) >= 0x400;
+    if !in_cyrillic_voice {
+        return None;
+    }
     let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
     match letters::translate_letter(&letters::LetterEnv { voice, tr: voice, alts }, c) {
         letters::LetterOut::Items(items) if !items.is_empty() => {
@@ -8901,7 +8907,7 @@ pub(crate) fn build_translate_entries(
                     && !dict_lists_word(word, dict, options)
                     && is_unpronounceable(&lower, &next_word, dict, options)
                 {
-                    if let Some((letters, rest)) =
+                    if let Some((letters, rest, encoded)) =
                         spell_unpronounceable(&lower, dict, phdata, stress_opts, options, &next_word, alts)
                     {
                         let mut ph = letters;
@@ -8936,7 +8942,7 @@ pub(crate) fn build_translate_entries(
                                 without_leading_break(&tail.phonemes, stress_opts).iter().copied().filter(|&b| b != 0),
                             );
                         }
-                        spelled_with_switch = letters::has_switch(&letters::decode(&ph));
+                        spelled_with_switch = encoded && letters::has_switch(&letters::decode(&ph));
                         wr.phonemes = ph;
                     }
                 }
