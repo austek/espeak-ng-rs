@@ -380,7 +380,7 @@ fn run_programs(items: Vec<Item>, first: Ctx, alts: &AltLangs) -> Vec<Item> {
     let mut out = Vec::with_capacity(items.len());
     let mut run: Vec<PhonemeCode> = Vec::new();
     let mut ctx = Some(first);
-    let mut held: Option<Rc<LangCtx>> = None;
+    let mut held: Option<Rc<LangCtx>>;
     for item in items {
         match item {
             Item::Ph(b) => run.push(code(b)),
