@@ -9859,6 +9859,8 @@ impl Translator {
         // C's `prepause_timeout`: after a `$pause` word, the next two words
         // may not pause again.  Reset at each clause.
         let mut prepause_timeout = 0u8;
+        // C's `option_emphasis`, set by the `F` embedded command.
+        let mut option_emphasis = 0i32;
 
         let (spoken_before_clause, spoken_after) = clause_spoken_flags(&tokens, &entries);
 
@@ -10008,6 +10010,9 @@ impl Translator {
                 // the synthesizer can change rate/pitch/amplitude *from here*
                 // instead of for the whole utterance.
                 Token::Embedded(cmd) => {
+                    if cmd.letter == 'F' {
+                        option_emphasis = cmd.value.max(0);
+                    }
                     codes.push(PhonemeCode {
                         marker: Some(CodeMarker::Embedded(*cmd)),
                         ..Default::default()
@@ -10228,6 +10233,9 @@ impl Translator {
                                 pre_pause = 4;
                                 prepause_timeout = 3;
                             }
+                        }
+                        if option_emphasis >= 3 && pre_pause < 1 && is_word(token) {
+                            pre_pause = 1;
                         }
                         if is_word(token) && previous_word_has_open_quote(&tokens, token_ix, dict, &self.options) {
                             pre_pause = pre_pause.max(i32::from(self.options.bracket_pause.0));

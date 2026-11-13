@@ -282,15 +282,15 @@ struct Walker {
     /// `<metadata>`, `<script>` or `<style>` re-enables text.
     ignore_text: bool,
     spell_depth: usize,
-    /// One entry per open `<prosody>`: the rate / volume / pitch in force when
-    /// it opened, so `</prosody>` can restore them.
-    ///
-    /// Upstream keeps the same stack (`PARAM_STACK`) and writes the resulting
-    /// values into the text as embedded commands, which is how a prosody span
-    /// affects only the words inside it.
-    prosody_stack: Vec<(i32, i32, i32)>,
+    /// Upstream's `PARAM_STACK`: one frame per open `<prosody>` or `<emphasis>`.
+    /// The values in force are the last one set across the frames, and each
+    /// change is written into the text as an embedded command, which is how a
+    /// span affects only the words inside it.
+    param_stack: Vec<ParamFrame>,
     /// Current rate (wpm), volume (0-200) and pitch (0-100).
     prosody: (i32, i32, i32),
+    /// Current emphasis level (`F` command), 0 when none.
+    emphasis: i32,
     /// `espeakSSML_BREAK_MUL` as a percentage (`--ssml-break`): every
     /// `<break time=…>` is scaled by it.  100 = unchanged.
     break_mul: u32,
@@ -299,6 +299,29 @@ struct Walker {
 /// The engine's own rate / volume / pitch, which a `<prosody>` percentage is
 /// taken against (upstream's `param_stack[0]`).
 const PROSODY_BASE: (i32, i32, i32) = (175, 100, 50);
+
+/// One `PARAM_STACK` entry; `None` leaves the value from the frame below.
+#[derive(Clone, Copy, Default)]
+struct ParamFrame {
+    is_emphasis: bool,
+    rate: Option<i32>,
+    volume: Option<i32>,
+    pitch: Option<i32>,
+    emphasis: Option<i32>,
+}
+
+/// C's `emphasis_to_volume2`, indexed by the `level` value (none=1 ... x-strong=5).
+const EMPHASIS_VOLUME: [i32; 6] = [100, 100, 75, 100, 120, 150];
+
+fn emphasis_level(attrs: &str) -> usize {
+    match get_attr(attrs, "level").as_deref() {
+        Some("none") => 1,
+        Some("reduced") => 2,
+        Some("strong") => 4,
+        Some("x-strong") => 5,
+        _ => 3,
+    }
+}
 
 impl Default for Walker {
     fn default() -> Self {
@@ -311,10 +334,11 @@ impl Default for Walker {
             interpret: SayAs::default(),
             ignore_text: false,
             spell_depth: 0,
-            prosody_stack: Vec::new(),
+            param_stack: Vec::new(),
             // Start at the engine's own parameters, so a span that changes
             // nothing emits nothing.
             prosody: PROSODY_BASE,
+            emphasis: 0,
             break_mul: 100,
         }
     }
@@ -362,11 +386,23 @@ impl Walker {
     /// Emit `\x01<value><letter>` for each parameter a `<prosody>` element
     /// changed — the same embedded commands upstream writes, so the change
     /// applies from here to the closing tag rather than to the whole utterance.
-    fn emit_prosody(&mut self, next: (i32, i32, i32)) {
+    fn sync_params(&mut self) {
+        let next = self.param_stack.iter().fold(
+            (PROSODY_BASE.0, PROSODY_BASE.1, PROSODY_BASE.2, 0),
+            |acc, f| {
+                (
+                    f.rate.unwrap_or(acc.0),
+                    f.volume.unwrap_or(acc.1),
+                    f.pitch.unwrap_or(acc.2),
+                    f.emphasis.unwrap_or(acc.3),
+                )
+            },
+        );
         for (cur, new, letter) in [
             (self.prosody.0, next.0, 'S'),
             (self.prosody.1, next.1, 'A'),
             (self.prosody.2, next.2, 'P'),
+            (self.emphasis, next.3, 'F'),
         ] {
             if cur != new {
                 self.cur.push(crate::translate::CTRL_EMBEDDED);
@@ -374,7 +410,16 @@ impl Walker {
                 self.cur.push(letter);
             }
         }
-        self.prosody = next;
+        self.prosody = (next.0, next.1, next.2);
+        self.emphasis = next.3;
+    }
+
+    /// C's `PopParamStack`: unwind to the last frame of the closing tag's kind.
+    fn pop_params(&mut self, is_emphasis: bool) {
+        if let Some(top) = self.param_stack.iter().rposition(|f| f.is_emphasis == is_emphasis) {
+            self.param_stack.truncate(top);
+        }
+        self.sync_params();
     }
 
     /// A clause boundary whose silence lasts `ms` — the pause value C packs
@@ -472,23 +517,35 @@ impl Walker {
                 // taken against the engine's own parameters, as upstream's
                 // `SetProsodyParameter` does with `param_stack[0]`.
                 if is_close {
-                    if let Some(prev) = self.prosody_stack.pop() {
-                        self.emit_prosody(prev);
-                    }
+                    self.pop_params(false);
                 } else if !self_close {
-                    self.prosody_stack.push(self.prosody);
-                    let scale = |attr: &str, base: i32, cur: i32| -> i32 {
-                        match get_attr(attrs, attr).as_deref().and_then(parse_prosody_value) {
-                            Some(m) => (base as f32 * m).round() as i32,
-                            None => cur,
-                        }
+                    let scale = |attr: &str, base: i32| -> Option<i32> {
+                        get_attr(attrs, attr)
+                            .as_deref()
+                            .and_then(parse_prosody_value)
+                            .map(|m| (base as f32 * m).round() as i32)
                     };
-                    let next = (
-                        scale("rate", PROSODY_BASE.0, self.prosody.0),
-                        scale("volume", PROSODY_BASE.1, self.prosody.1),
-                        scale("pitch", PROSODY_BASE.2, self.prosody.2),
-                    );
-                    self.emit_prosody(next);
+                    self.param_stack.push(ParamFrame {
+                        rate: scale("rate", PROSODY_BASE.0),
+                        volume: scale("volume", PROSODY_BASE.1),
+                        pitch: scale("pitch", PROSODY_BASE.2),
+                        ..ParamFrame::default()
+                    });
+                    self.sync_params();
+                }
+            }
+            "emphasis" => {
+                if is_close {
+                    self.pop_params(true);
+                } else if !self_close {
+                    let level = emphasis_level(attrs);
+                    self.param_stack.push(ParamFrame {
+                        is_emphasis: true,
+                        volume: Some(EMPHASIS_VOLUME[level]),
+                        emphasis: Some(level as i32),
+                        ..ParamFrame::default()
+                    });
+                    self.sync_params();
                 }
             }
             "break" => self.emit_break(attrs),
@@ -779,7 +836,11 @@ mod tests {
         assert_eq!(show(&strip_markup("<s>hello</s>")), " {700}|hello {400}|");
         // HTML `<br>` is C's HTML_BREAK — a colon, 300 ms.
         assert_eq!(show(&strip_markup("a<br/>b")), "a {300}|b");
-        assert_eq!(strip_markup("a <emphasis>b</emphasis> c"), "a  b  c");
+        assert_eq!(show(&strip_markup("a <emphasis>b</emphasis> c")), "a  {3}b {0} c");
+        assert_eq!(
+            show(&strip_markup("a <emphasis level=\"strong\">b</emphasis>")),
+            "a  {120}{4}b {100}{0}"
+        );
         assert_eq!(strip_markup("<speak>hi</speak>"), " hi ");
         assert_eq!(strip_markup("x <foo bar='1'>y</foo> z"), "x  y  z");
         assert_eq!(strip_markup("a<b>x</b>c"), "axc");

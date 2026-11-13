@@ -56,6 +56,16 @@ fn tags_separate_words_except_inline_html() {
     ]);
 }
 
+/// `<emphasis>` at level moderate or stronger puts a pause before each word inside it.
+#[test]
+fn emphasis_pauses_before_its_words() {
+    check(&[
+        ("a <emphasis>b", "ɐ bˈiː", "a#_! b'i:"),
+        ("a <emphasis level=\"strong\">b c</emphasis> d", "ɐ bˈiː sˈiː dˈiː", "a#_! b'i:_! s'i: d'i:"),
+        ("a <emphasis level=\"reduced\">b</emphasis> c", "ɐ bˈiː sˈiː", "a# b'i: s'i:"),
+    ]);
+}
+
 fn run_raw(flag: &str, text: &str) -> String {
     let out = Command::new(env!("CARGO_BIN_EXE_espeak_cli"))
         .args(["-q", flag, "-m", text])
