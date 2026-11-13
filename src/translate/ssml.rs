@@ -761,21 +761,8 @@ fn is_name_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_' || c == ':' || c == '-' || c == '.'
 }
 
-fn starts_with(chars: &[char], at: usize, pat: &str) -> bool {
-    pat.chars().enumerate().all(|(k, pc)| chars.get(at + k) == Some(&pc))
-}
-
 fn find_char(chars: &[char], from: usize, target: char) -> Option<usize> {
     (from..chars.len()).find(|&k| chars[k] == target)
-}
-
-fn find_seq(chars: &[char], from: usize, pat: &str) -> Option<usize> {
-    let pc: Vec<char> = pat.chars().collect();
-    if pc.is_empty() || from >= chars.len() {
-        return None;
-    }
-    (from..=chars.len().saturating_sub(pc.len()))
-        .find(|&k| pc.iter().enumerate().all(|(j, &p)| chars[k + j] == p))
 }
 
 // ===========================================================================
