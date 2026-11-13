@@ -429,7 +429,9 @@ fn neighbours_at(
         this_wordstart: starts[n],
         prev_wordstart: n.checked_sub(1).is_some_and(|k| starts[k]),
         next_wordstart,
-        next2_wordstart: next_wordstart,
+        next2_wordstart: next_wordstart
+            || matches!((real.get(n + 1), real.get(n + 2)), (Some(&a), Some(&b)) if
+                codes[a + 1..b].iter().any(|c| c.is_boundary || c.code == PHON_END_WORD)),
         next_vowel_word_end: next_vowel_ends_word(codes, real, n, phdata),
         ..Default::default()
     }
