@@ -215,7 +215,7 @@ pub fn process_markup_opts(input: &str, break_mul: u32) -> (Vec<Segment>, Vec<Ma
         let c = chars[i];
 
         // ---- markup tag ------------------------------------------------
-        if c == '<' {
+        if c == '<' && opens_tag(chars.get(i + 1).copied()) {
             if starts_with(&chars, i, "<!--") {
                 i = find_seq(&chars, i + 4, "-->").map(|p| p + 3).unwrap_or(n);
                 continue;
@@ -738,6 +738,11 @@ fn decode_entity(s: &[char]) -> Option<(String, usize)> {
 // ---------------------------------------------------------------------------
 // Small char-slice helpers
 // ---------------------------------------------------------------------------
+
+/// C `ReadClause` only starts a tag when `<` is followed by `/`, a letter, `!` or `?`.
+fn opens_tag(next: Option<char>) -> bool {
+    next.is_some_and(|c| c == '/' || c == '!' || c == '?' || c.is_alphabetic())
+}
 
 fn is_name_start(c: char) -> bool {
     c.is_ascii_alphabetic() || c == '_' || c == ':'
