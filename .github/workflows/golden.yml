@@ -205,6 +205,9 @@ jobs:
           --test bn_final_inherent_vowel
           --test number_swap_thousands
           --test mn_omit_one_hundred
+          --test numbers_disabled_langs
+          --test numbers_ht_bs_sr
+          --test numbers_indic_scales
           --test overfit_r4_quote_pause_listed_words
           --test overfit_r4_mixed_script_spelling
           --test overfit_r4_lone_foreign_digit

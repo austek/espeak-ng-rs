@@ -1239,9 +1239,10 @@ pub enum NumberToken {
 
 impl NumberToken {
     /// The number for `digits` written with a thousands separator.
-    fn separated(digits: String) -> Self {
+    fn separated(digits: String, grammar: &NumberGrammar) -> Self {
         let exact = digits.get(1..).is_some_and(|tail| tail.bytes().all(|b| b == b'0'));
-        if digits.len() == MAX_UNSPLIT_DIGITS && !exact {
+        let splits_at_thousands = grammar.break_numbers == BREAK_THOUSANDS;
+        if digits.len() == MAX_UNSPLIT_DIGITS && !exact && splits_at_thousands {
             NumberToken::Grouped(digits)
         } else {
             NumberToken::Cardinal(digits)
@@ -2341,7 +2342,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             }
 
             tokens.push(Token::Number(if separated {
-                NumberToken::separated(digits)
+                NumberToken::separated(digits, grammar)
             } else {
                 NumberToken::Cardinal(digits)
             }));
@@ -3875,7 +3876,10 @@ fn append_group_body(
                 dst.push_lookup_word(&and);
             }
         }
-        dst.push_pronunciation(&num3_phonemes(dict, group.value, false, grammar));
+        // NUM2_OMIT_1_HUNDRED_ONLY: the bare hundred needs no higher digits before it.
+        let mut local = grammar.clone();
+        local.hundreds.omit_one_hundred_word &= !preceded;
+        dst.push_pronunciation(&num3_phonemes(dict, group.value, false, &local));
     }
 }
 
@@ -3939,7 +3943,7 @@ fn variant_tens_units(dict: &Dictionary, value: u32) -> Pronunciation {
         keys.iter().map(|k| lookup_num_phonemes(dict, k)).find(|p| !p.is_empty()).unwrap_or_default()
     };
     let mut out = Pronunciation::default();
-    let whole = first_of(&[format!("_{value}fx"), format!("_{value}f")]);
+    let whole = first_of(&[format!("_{value}fx"), format!("_{value}f"), format!("_{value}a"), format!("_{value}")]);
     if !whole.is_empty() {
         out.push_lookup_word(&whole);
         return out;
@@ -6657,10 +6661,11 @@ fn apply_space_grouping(tokens: &mut Vec<Token>, grammar: &NumberGrammar) {
                 if groups >= 1 {
                     let token = match fraction {
                         Some(fractional) => {
-                            let grouped = merged.len() == MAX_UNSPLIT_DIGITS;
+                            let grouped = merged.len() == MAX_UNSPLIT_DIGITS
+                                && grammar.break_numbers == BREAK_THOUSANDS;
                             NumberToken::Decimal { integer: merged, fractional, grouped }
                         }
-                        None => NumberToken::separated(merged),
+                        None => NumberToken::separated(merged, grammar),
                     };
                     out.push(Token::Number(token));
                     i = j;

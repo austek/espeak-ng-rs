@@ -34,6 +34,8 @@ fn malayalam_feminine_forms_before_thousand() {
         ("2024", "ɾˈəɳd ˈaːjirˌɐtti ˌiɾuvˌɐttinˌaːlɨ"),
         ("3000", "mˈuːv ˈaːjirəm"),
         ("25000", "ˈiɾuvɐttˈɐiːj ˈaːjirəm"),
+        ("1100", "ˈaːjirˌɐtti ˌoɾɨnˌuːɾɨ"),
+        ("11100", "pˌɐtinˌonnɨ ˈaːjirˌɐtti ˈoɾɨnˌuːɾɨ"),
     ]);
 }
 
@@ -43,6 +45,14 @@ fn telugu_exact_hundred_before_scale() {
         ("5000000000", "ˈaɪduʋˌandalˌu kotlu"),
         ("7000000000", "ʲˈeːɖuʋˌandalˌu kotlu"),
     ]);
+}
+
+#[test]
+fn comma_group_reads_as_plain_number_in_lakh_languages() {
+    let Ok(t) = Translator::new_default("ta") else { return };
+    assert_eq!(t.text_to_ipa("1,234").unwrap(), t.text_to_ipa("1234").unwrap());
+    let Ok(h) = Translator::new_default("hi") else { return };
+    assert_eq!(h.text_to_ipa("1,234").unwrap(), h.text_to_ipa("1234").unwrap());
 }
 
 #[test]
