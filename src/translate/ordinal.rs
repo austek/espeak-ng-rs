@@ -30,7 +30,7 @@ const NUM2_ORDINAL_NO_AND: u32 = 0x800;
 const NUM2_MULTIPLE_ORDINAL: u32 = 0x1000;
 const NUM2_NO_TEEN_ORDINALS: u32 = 0x2000;
 const NUM2_OMIT_1_HUNDRED_ONLY: u32 = 0x2_0000;
-const NUM2_ORDINAL_AND_THOUSANDS: u32 = 0x4_0000;
+pub(super) const NUM2_ORDINAL_AND_THOUSANDS: u32 = 0x4_0000;
 const NUM2_ORDINAL_DROP_VOWEL: u32 = 0x8_0000;
 const NUM2_ZERO_TENS: u32 = 0x10_0000;
 
@@ -52,7 +52,7 @@ const C_NUMBER_FLAGS: &[(&str, u32, u32)] = &[
     ("bpy", 0x1, 0x200),
     ("bs", 0x200454c, 0x14a),
     ("ca", 0x5208528, 0x1800),
-    ("cmn", 0xa408, 0x0),
+    ("cmn", NUM_DEFAULT, 0x0),
     ("cs", 0x1004400, 0x88),
     ("cy", 0x400, 0x0),
     ("da", 0xb010c58, 0x0),
@@ -138,8 +138,8 @@ const C_NUMBER_FLAGS: &[(&str, u32, u32)] = &[
     ("ur", 0x10, 0x0),
     ("uz", 0x0, 0x0),
     ("vi", 0xc08008, 0x0),
-    ("yue", 0xa408, 0x100000),
-    ("zh", 0xa408, 0x0),
+    ("yue", NUM_DEFAULT, 0x100000),
+    ("zh", NUM_DEFAULT, 0x0),
 ];
 
 /// C's `(langopts.numbers, langopts.numbers2)` for the primary language subtag.

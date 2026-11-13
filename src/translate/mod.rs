@@ -518,7 +518,10 @@ pub struct NumberGrammar {
     pub decimal_separator: char,
     /// Vigesimal 70s/90s (France French): 70–79 = "soixante" + 10–19,
     /// 90–99 = "quatre-vingt" + 10–19 (there is no simple word for 70 or 90).
-    pub vigesimal_70_90: bool,
+    pub vigesimal: bool,
+    /// C's `translator_name == ml` special case: the count before "thousand"
+    /// takes the `_<n>f` forms for tens and units.
+    pub thousand_variant_forms: bool,
     /// Whether a space between digit groups marks thousands (`1 234 567`) — the
     /// SI/ISO standard used across continental Europe.  Enabled for the
     /// comma-decimal languages (where a space is unambiguous); English keeps a
@@ -708,7 +711,6 @@ impl NumberGrammar {
                 grammar.hundreds.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
-                grammar.vigesimal_70_90 = true; // soixante-dix, quatre-vingt-dix
             }
             "it" => {
                 // "cento", not "uno cento" (1000 is already "mille").
@@ -763,13 +765,10 @@ impl NumberGrammar {
             }
             // Slovak/Croatian/Serbian: "sto" not "jedensto" (1000 already "tisíc"/
             // "tisuću"/"hiljadu").
-            "sr" => {
-                grammar.hundreds.omit_one_prefix = true;
-                grammar.decimal_separator = ',';
-            }
-            // Croatian: the scale word declines — "tisuću" (…1), "tisuće" (…2–4),
-            // "tisuća" (5+) — and "thousand" is feminine ("dvije tisuće").
-            "hr" => {
+            // Croatian/Bosnian/Serbian: the scale word declines — "tisuću" (…1),
+            // "tisuće" (…2–4), "tisuća" (5+) — and "thousand" is feminine
+            // ("dvije tisuće"); C `NUM2_THOUSANDPLEX_VAR_*` for all three.
+            "hr" | "bs" | "sr" => {
                 grammar.hundreds.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
                 grammar.thousands_variant = SlavicThousands::Hr;
@@ -922,7 +921,7 @@ impl NumberGrammar {
             // (Georgian is *not* here: it reads "3,14" as two numbers and uses the
             // period as its decimal separator, as upstream does.)
             "sv" | "el" | "lv" | "ca" | "eu"
-            | "bs" | "id" | "vi" => {
+            | "id" | "vi" => {
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
             }
@@ -1030,6 +1029,9 @@ impl NumberGrammar {
             grammar.max_digits = 0;
             grammar.group_separator = None;
         }
+        grammar.hundreds.omit_one_prefix |= grammar.c_numbers & ordinal::NUM_OMIT_1_HUNDRED != 0;
+        grammar.vigesimal = grammar.c_numbers & ordinal::NUM_VIGESIMAL != 0;
+        grammar.thousand_variant_forms = lang == "ml";
         grammar.ordinals.dot_marks_ordinal |= grammar.c_numbers & ordinal::NUM_ORDINAL_DOT != 0;
         grammar.ordinals.declines_alt_words = lang == "hu";
         grammar
@@ -1050,7 +1052,8 @@ impl Default for NumberGrammar {
             fraction_feminine: false,
             group_separator: None,
             decimal_separator: '.',
-            vigesimal_70_90: false,
+            vigesimal: false,
+            thousand_variant_forms: false,
             space_group: false,
             portuguese_cardinals: false,
             year_1900: false,
@@ -3716,7 +3719,7 @@ fn append_scale_word(
             }
             scale_word = word;
         }
-        dst.push_pronunciation(&num3_phonemes_g(dict, count, false, grammar, feminine, false));
+        dst.push_pronunciation(&num3_phonemes_g(dict, count, false, grammar, feminine, None));
         dst.push_lookup_word(&scale_word);
         return;
     }
@@ -3739,7 +3742,16 @@ fn append_scale_word(
         }
     };
 
-    let dedicated = lookup_num_phonemes(dict, &format!("_{group_value}M{scale}"));
+    let exact_dedicated = if exact {
+        lookup_num_phonemes(dict, &format!("_{group_value}M{scale}x"))
+    } else {
+        Vec::new()
+    };
+    let dedicated = if exact_dedicated.is_empty() {
+        lookup_num_phonemes(dict, &format!("_{group_value}M{scale}"))
+    } else {
+        exact_dedicated
+    };
     if !dedicated.is_empty() {
         dst.push_lookup_word(&dedicated);
         return;
@@ -3768,10 +3780,10 @@ fn append_scale_word(
     }
     if grammar.thousands.swap {
         dst.push_lookup_word(&scale_word);
-        dst.push_pronunciation(&num3_phonemes_before_scale(dict, group_value, grammar));
+        dst.push_pronunciation(&num3_phonemes_before_scale(dict, group_value, grammar, scale));
         return;
     }
-    dst.push_pronunciation(&num3_phonemes_before_scale(dict, group_value, grammar));
+    dst.push_pronunciation(&num3_phonemes_before_scale(dict, group_value, grammar, scale));
     dst.push_lookup_word(&scale_word);
 }
 
@@ -3883,7 +3895,7 @@ fn append_ordinal_scale(
     let ord_scale = lookup_num_phonemes(dict, &format!("_0M{scale}o"));
     if !ord_scale.is_empty() {
         if !(scale == 1 && group_value == 1 && grammar.thousands.omit_one_prefix) {
-            dst.push_pronunciation(&num3_phonemes_before_scale(dict, group_value, grammar));
+            dst.push_pronunciation(&num3_phonemes_before_scale(dict, group_value, grammar, scale));
         }
         dst.push_lookup_word(&ord_scale);
         return;
@@ -3911,9 +3923,33 @@ fn unit_ph(dict: &Dictionary, n: u32, feminine: bool) -> Vec<u8> {
 /// A digit's *combining* form — C's `_<n>a`, used when a scale word follows
 /// ("hundred", "thousand", …).  German's `_1a  _'aIn` is what makes 1000
 /// "ein tausend" rather than "eins tausend"; falls back to the plain `_<n>`.
-fn unit_before_scale(dict: &Dictionary, n: u32) -> Vec<u8> {
-    let a = lookup_num_phonemes(dict, &format!("_{n}a"));
+/// With `NUM2_ORDINAL_AND_THOUSANDS` (Tamil) the variant is `_<n>o` for
+/// thousandplex 0 and 1.
+fn unit_before_scale(dict: &Dictionary, n: u32, grammar: &NumberGrammar, thousandplex: u8) -> Vec<u8> {
+    let o_variant = grammar.c_numbers2 & ordinal::NUM2_ORDINAL_AND_THOUSANDS != 0 && thousandplex <= 1;
+    let variant = if o_variant { 'o' } else { 'a' };
+    let a = lookup_num_phonemes(dict, &format!("_{n}{variant}"));
     if a.is_empty() { lookup_num_phonemes(dict, &num_key(n)) } else { a }
+}
+
+/// C `LookupNum2` with control bits 8 and 0x200 (Malayalam before "thousand"):
+/// the `_<n>fx`/`_<n>f` word, else `_<t>Xf` and `_<u>f` for tens and units.
+fn variant_tens_units(dict: &Dictionary, value: u32) -> Pronunciation {
+    let first_of = |keys: &[String]| {
+        keys.iter().map(|k| lookup_num_phonemes(dict, k)).find(|p| !p.is_empty()).unwrap_or_default()
+    };
+    let mut out = Pronunciation::default();
+    let whole = first_of(&[format!("_{value}fx"), format!("_{value}f")]);
+    if !whole.is_empty() {
+        out.push_lookup_word(&whole);
+        return out;
+    }
+    out.push_lookup_word(&lookup_num_phonemes(dict, &format!("_{}Xf", value / 10)));
+    let units = value % 10;
+    if units > 0 {
+        out.append_lookup_suffix(&first_of(&[format!("_{units}f"), format!("_{units}")]));
+    }
+    out
 }
 
 fn num3_phonemes(
@@ -3922,7 +3958,7 @@ fn num3_phonemes(
     suppress_null: bool,
     grammar: &NumberGrammar,
 ) -> Pronunciation {
-    num3_phonemes_g(dict, value, suppress_null, grammar, false, false)
+    num3_phonemes_g(dict, value, suppress_null, grammar, false, None)
 }
 
 /// [`num3_phonemes`] for a group that a *scale word* follows, so a bare digit
@@ -3932,8 +3968,9 @@ fn num3_phonemes_before_scale(
     dict: &Dictionary,
     value: u32,
     grammar: &NumberGrammar,
+    scale: u8,
 ) -> Pronunciation {
-    num3_phonemes_g(dict, value, false, grammar, false, true)
+    num3_phonemes_g(dict, value, false, grammar, false, Some(scale))
 }
 
 /// Like [`num3_phonemes`], but with `feminine` gender for a trailing 1/2 unit
@@ -3945,8 +3982,10 @@ fn num3_phonemes_g(
     suppress_null: bool,
     grammar: &NumberGrammar,
     feminine: bool,
-    combining: bool,
+    combining: Option<u8>,
 ) -> Pronunciation {
+    let thousandplex = combining.unwrap_or(0);
+    let combining = combining.is_some();
     let hundreds = value / 100;
     let tensunits = value % 100;
 
@@ -3980,12 +4019,12 @@ fn num3_phonemes_g(
         } else {
             if !(hundreds == 1 && (grammar.hundreds.omit_one_prefix || skip_dedicated)) {
                 // A hundred word follows, so the digit takes its combining form.
-                hundreds_part.push_lookup_word(&unit_before_scale(dict, hundreds));
+                hundreds_part.push_lookup_word(&unit_before_scale(dict, hundreds, grammar, thousandplex));
             }
             // Bare hundred word.  For the Malayalam bare-1-hundred, an exact
             // hundred uses the dedicated `_0C0` form ("നൂറ്"); everyone else keeps
             // `_0C`, so no other language is affected.
-            let bare = if skip_dedicated && tensunits == 0 {
+            let bare = if tensunits == 0 {
                 let e = lookup_num_phonemes(dict, "_0C0");
                 if e.is_empty() { lookup_num_phonemes(dict, "_0C") } else { e }
             } else {
@@ -3997,11 +4036,13 @@ fn num3_phonemes_g(
     }
 
     if tensunits != 0 || !suppress_null {
-        if tensunits < 20 {
+        if grammar.thousand_variant_forms && thousandplex == 1 && combining && tensunits > 0 {
+            tens_part.push_pronunciation(&variant_tens_units(dict, tensunits));
+        } else if tensunits < 20 {
             // For a bare 1/2 (the whole number is just the unit) use the feminine
             // form when required — "одна"/"две" before a feminine scale word.
             let whole = if combining && !feminine && tensunits > 0 {
-                unit_before_scale(dict, tensunits)
+                unit_before_scale(dict, tensunits, grammar, thousandplex)
             } else {
                 unit_ph(dict, tensunits, feminine)
             };
@@ -4044,14 +4085,16 @@ fn num3_phonemes_g(
             let ph_full = lookup_num_phonemes(dict, &num_key(tensunits));
             if !ph_full.is_empty() {
                 tens_part.push_lookup_word(&ph_full);
-            } else if grammar.vigesimal_70_90 && (70..80).contains(&tensunits) {
-                // French 70–79 = "soixante" (60) + (10–19).
-                tens_part.push_lookup_word(&lookup_num_phonemes(dict, "_6X"));
-                tens_part.append_lookup_suffix(&lookup_num_phonemes(dict, &num_key(tensunits - 60)));
-            } else if grammar.vigesimal_70_90 && (90..100).contains(&tensunits) {
-                // French 90–99 = "quatre-vingt" (80) + (10–19).
-                tens_part.push_lookup_word(&lookup_num_phonemes(dict, "_8X"));
-                tens_part.append_lookup_suffix(&lookup_num_phonemes(dict, &num_key(tensunits - 80)));
+            } else if grammar.vigesimal
+                && lookup_num_phonemes(dict, &format!("_{}X", tensunits / 10)).is_empty()
+            {
+                // C `NUM_VIGESIMAL`: a missing tens word is the even tens below
+                // it plus the rest of the score ("soixante" + 10–19).
+                tens_part.push_lookup_word(&lookup_num_phonemes(dict, &format!("_{}X", (tensunits / 10) & 0xe)));
+                let units = tensunits % 20;
+                if units > 0 {
+                    tens_part.append_lookup_suffix(&lookup_num_phonemes(dict, &num_key(units)));
+                }
             } else {
                 let tens = tensunits / 10;
                 let units = tensunits % 10;
@@ -4060,7 +4103,7 @@ fn num3_phonemes_g(
                     TensGrammar::UnitsThenConjunction if units != 0 => {
                         // C's `NUM_SWAP_TENS` takes the combining `_<n>a` unit
                         // (German `_1a` = "ein"), else the plain `_<n>`.
-                        tens_part.push_lookup_word(&unit_before_scale(dict, units));
+                        tens_part.push_lookup_word(&unit_before_scale(dict, units, grammar, thousandplex));
                         tens_part.append_lookup_suffix(&lookup_num_phonemes(dict, "_0and"));
                         tens_part.append_lookup_suffix(&lookup_num_phonemes(dict, &format!("_{tens}X")));
                     }
@@ -4083,7 +4126,12 @@ fn num3_phonemes_g(
                                 tens_part.drop_final_phoneme();
                             }
                             // A trailing 1/2 agrees in gender ("двадцать одна").
-                            tens_part.append_lookup_suffix(&unit_ph(dict, units, feminine));
+                            let unit = if combining && !feminine {
+                                unit_before_scale(dict, units, grammar, thousandplex)
+                            } else {
+                                unit_ph(dict, units, feminine)
+                            };
+                            tens_part.append_lookup_suffix(&unit);
                         }
                     }
                 }
@@ -4769,6 +4817,14 @@ fn stress_each_word(
     }
     out.push(0);
     out
+}
+
+/// Whether the dictionary lists `word` itself (C looks a word up before it
+/// tries the number reading, so `100` in `mr_list` wins over the composed one).
+fn has_listed_word(word: &str, dict: &Dictionary, options: &LangOptions) -> bool {
+    let ctx = LookupCtx { dict_condition: options.dict_condition, ..Default::default() };
+    lookup_with_follow(dict, word, &ctx, &[])
+        .is_some_and(|r| r.flags1.found() && !r.phonemes.is_empty())
 }
 
 fn translate_number_token(
@@ -8722,15 +8778,18 @@ pub(crate) fn build_translate_entries(
                         continue;
                     }
                 }
-                let wr = translate_number_token_with_tail(
-                    token,
-                    dict,
-                    phdata,
-                    stress_opts,
-                    &options.number_grammar,
-                    &|symbol| symbol_phonemes(symbol, dict, options),
-                    number_tail(tokens, token_ix, dict),
-                )
+                let listed = matches!(token, NumberToken::Cardinal(d) if has_listed_word(d, dict, options));
+                let wr = if listed { None } else {
+                    translate_number_token_with_tail(
+                        token,
+                        dict,
+                        phdata,
+                        stress_opts,
+                        &options.number_grammar,
+                        &|symbol| symbol_phonemes(symbol, dict, options),
+                        number_tail(tokens, token_ix, dict),
+                    )
+                }
                 .unwrap_or_else(|| {
                     let surface = token.surface();
                     word_to_phonemes(&surface, dict, phdata, stress_opts, options)
