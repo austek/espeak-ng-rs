@@ -101,7 +101,7 @@ pub fn format_mnemonics(
             .as_deref()
             .and_then(|t| tables.get(data_dir, t))
             .unwrap_or(phdata);
-        let phdata = crate::translate::table_for_code(phdata, voice_phdata, pc.code);
+        let phdata = crate::translate::table_for_code(phdata, voice_phdata, pc);
 
         if pc.is_boundary && pc.code == 15 {
             // A word boundary flushes whatever stress is pending with it.

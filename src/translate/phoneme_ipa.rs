@@ -258,7 +258,7 @@ pub fn codes_to_ipa_opts(
             .and_then(|t| tables.get(data_dir, t))
             .unwrap_or(phdata);
         let segment = phdata;
-        let phdata = super::table_for_code(phdata, voice_phdata, pc.code);
+        let phdata = super::table_for_code(phdata, voice_phdata, pc);
 
         if pc.is_boundary || pc.code == PHON_END_WORD {
             out.push_str(&std::mem::take(&mut pending_stress));
@@ -432,7 +432,15 @@ fn neighbours_at(
     // C keeps a lengthen mark as a flag on the vowel, so no phoneme sees one as
     // its neighbour (`;` after `i:` still follows the `i`).
     let skip_mark = codes[i].code != PHON_LENGTHEN;
-    let sound = |k: &&usize| !skip_mark || codes[**k].code != PHON_LENGTHEN;
+    let toned_table = phdata.get(super::PHON_DEFAULT_TONE).is_some_and(|ph| ph.typ == 1);
+    let is_tone = |c: &PhonemeCode| {
+        c.voice_table || (toned_table && super::is_tone_phoneme(c.code, phdata))
+    };
+    let skip_tone = !is_tone(&codes[i]);
+    let sound = |k: &&usize| {
+        let c = &codes[**k];
+        (!skip_mark || c.code != PHON_LENGTHEN) && (!skip_tone || !is_tone(c))
+    };
     let prev_ix = real[..n].iter().rev().find(sound);
     let mut after = real[n + 1..].iter().filter(sound);
     Neighbours {

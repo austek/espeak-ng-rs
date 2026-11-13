@@ -28,6 +28,7 @@ pub mod phoneme_ipa;
 pub mod compat;
 pub mod ssml;
 mod accent;
+mod mandarin_sandhi;
 pub(crate) mod letters;
 mod ordinal;
 
@@ -5431,6 +5432,8 @@ struct PeeledSuffixes {
 /// Whether `code` is a **tone phoneme** — a `phSTRESS`-type entry that carries
 /// its own program, as Mandarin's `55`/`35`/`214`/`51`/`11` do.  Plain stress
 /// markers are the same type but have no program and `std_length <= 4`.
+pub(crate) const PHON_DEFAULT_TONE: u8 = 17;
+
 fn is_tone_phoneme(code: u8, phdata: &PhonemeData) -> bool {
     matches!(phdata.get(code), Some(ph) if ph.typ == 1 && ph.program != 0)
 }
@@ -9241,11 +9244,14 @@ fn tone_every_table(
 pub(crate) fn table_for_code<'a>(
     segment: &'a PhonemeData,
     voice: &'a PhonemeData,
-    code: u8,
+    pc: &PhonemeCode,
 ) -> &'a PhonemeData {
     const PHON_DEFAULT_TONE: u8 = 17;
+    let code = pc.code;
     let default_tone = code == PHON_DEFAULT_TONE;
-    if default_tone && !is_tone_phoneme(code, segment) && is_tone_phoneme(code, voice) {
+    if pc.voice_table
+        || (default_tone && !is_tone_phoneme(code, segment) && is_tone_phoneme(code, voice))
+    {
         voice
     } else {
         segment
@@ -9323,140 +9329,17 @@ fn assign_default_tones(entries: &mut [TranslateEntry], phdata: &PhonemeData, ba
     }
 }
 
-/// Mandarin tone sandhi and default-tone assignment — a port of the Mandarin
-/// branch of `CalcPitches_Tone()` (`intonation.c`), which rewrites the tone
-/// phonemes *after* the phoneme list is built:
+/// Default tones for the tone languages without a sandhi table.  Mandarin's
+/// sandhi runs over the finished list in `mandarin_sandhi`.
 ///
-/// * a syllable with no tone gets tone 1 (`55`) after a pause, otherwise the
-///   neutral tone 5 (`11`);
-/// * `214` + `214` → the first becomes `35` (third-tone sandhi: nǐ hǎo →
-///   "ní hǎo"); `214` before any other tone becomes `21`;
-/// * `51` + `51` → the first becomes `53`;
-/// * the neutral tone `11` takes its level from the preceding tone
-///   (`55`→`22`, `53`→`33`, `214`→`44`).
-///
-/// Runs on the whole clause, since the rules reach across word boundaries.
+/// Thai is not a tone language upstream (`langopts.tone_language`): it uses
+/// ordinary intonation, so it only gets the placement pass.
 fn apply_tone_sandhi(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang: &str) {
     let base = primary_bcp47_subtag(lang);
-    // Upstream's tone languages (`langopts.tone_language`), the ones that run
-    // `CalcPitches_Tone`.  Thai is *not* one of them — it uses ordinary
-    // intonation, so it only gets the placement pass.
-    if !matches!(base, "cmn" | "zh" | "yue" | "hak" | "vi" | "shn") {
-        return;
-    }
-    if base != "cmn" && base != "zh" {
-        // No sandhi table for these, but every syllable still ends up with a
-        // tone: `CalcPitches_Tone` gives a toneless one `phonDEFAULTTONE`
-        // ("no tone specified, use default tone 1"), which is why Vietnamese
-        // "xin" is `s'i1n` and not `s'in`.
+    if matches!(base, "yue" | "hak" | "vi" | "shn") {
+        // `CalcPitches_Tone` gives a toneless syllable `phonDEFAULTTONE`, which
+        // is why Vietnamese "xin" is `s'i1n` and not `s'in`.
         assign_default_tones(entries, phdata, base);
-        return;
-    }
-    let code_of = |m: &str| phdata.lookup_phoneme(m);
-
-    // Position of the previous syllable's tone phoneme, so sandhi can rewrite it.
-    let mut prev_slot: Option<(usize, usize)> = None;
-    let mut prev_tone = String::new();  // previous tone in this word
-    let mut prevw_tone = String::new(); // previous tone across word boundaries
-    let mut pause = true;
-    let mut promoted = false;
-
-    for ei in 0..entries.len() {
-        match entries[ei].kind {
-            TranslateEntryKind::Word => {}
-            TranslateEntryKind::ClauseBoundary => {
-                pause = true;
-                prevw_tone.clear();
-                prev_tone.clear();
-                continue;
-            }
-            _ => continue,
-        }
-        prev_tone.clear(); // forget across word boundaries
-        let mut i = 0;
-        while i < entries[ei].phonemes.len() {
-            let code = entries[ei].phonemes[i];
-            if code == 0 {
-                break;
-            }
-            let is_vowel = matches!(phdata.get(code), Some(ph) if ph.typ == 2);
-            if !is_vowel {
-                i += 1;
-                continue;
-            }
-
-            // The syllable's tone sits directly after its vowel.
-            let mut tone_pos = i + 1;
-            let existing = entries[ei]
-                .phonemes
-                .get(tone_pos)
-                .copied()
-                .filter(|&c| is_tone_phoneme(c, phdata));
-            let tone_code = match existing {
-                Some(c) => {
-                    promoted = false;
-                    c
-                }
-                None => {
-                    let mnem = if pause || promoted { "55" } else { "11" };
-                    let c = code_of(mnem);
-                    if c == 0 {
-                        i += 1;
-                        continue;
-                    }
-                    promoted = mnem == "55";
-                    entries[ei].phonemes.insert(tone_pos, c);
-                    c
-                }
-            };
-            let mut tone = phoneme_mnemonic(tone_code, phdata);
-
-            // 214 + 214 → 35 + 214;  214 + anything else → 21
-            if prevw_tone == "214" {
-                if let Some((pe, pp)) = prev_slot {
-                    let joins = tone == "214";
-                    let new = if joins { code_of("35") } else { code_of("21") };
-                    if new != 0 {
-                        entries[pe].phonemes[pp] = new;
-                    }
-                }
-            }
-            // 51 + 51 → 53 + 51 (within the word)
-            if prev_tone == "51" && tone == "51" {
-                if let Some((pe, pp)) = prev_slot {
-                    let new = code_of("53");
-                    if new != 0 {
-                        entries[pe].phonemes[pp] = new;
-                    }
-                }
-            }
-            // The neutral tone takes its level from the preceding tone.
-            if tone == "11" {
-                if i > 0 && matches!(entries[ei].phonemes[i - 1], 3..=7) {
-                    entries[ei].phonemes.remove(i - 1);
-                    tone_pos -= 1;
-                }
-                let replacement = match prevw_tone.as_str() {
-                    "55" => "22",
-                    "35" => "33",
-                    "214" => "44",
-                    _ => "",
-                };
-                if !replacement.is_empty() {
-                    let new = code_of(replacement);
-                    if new != 0 {
-                        entries[ei].phonemes[tone_pos] = new;
-                        tone = replacement.to_string();
-                    }
-                }
-            }
-
-            prev_slot = Some((ei, tone_pos));
-            prev_tone = tone.clone();
-            prevw_tone = tone;
-            pause = false;
-            i = tone_pos + 1;
-        }
     }
 }
 
@@ -10549,6 +10432,7 @@ impl Translator {
                         {
                             codes.push(PhonemeCode {
                                 code: 0, is_boundary: true, clause_char: Some(*c), marker: None,
+                                voice_table: false,
                             });
                         }
                     }
@@ -10587,7 +10471,7 @@ impl Translator {
                         });
                     if runs_on && !joined && !stream_run && entry.phonemes.iter().any(|&b| b != 0) {
                         codes.push(PhonemeCode {
-                            code: 15, is_boundary: true, clause_char: None, marker: None,
+                            code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false,
                         });
                     }
                     // `-k`: capital indication before a capitalised word.
@@ -10612,14 +10496,14 @@ impl Translator {
                                     for &b in &cap_codes {
                                         if b != 0 {
                                             codes.push(PhonemeCode {
-                                                code: b, is_boundary: false, clause_char: None, marker: None
+                                                code: b, is_boundary: false, clause_char: None, marker: None, voice_table: false
                                             });
                                         }
                                     }
                                 }
                                 if self.options.capitals != 1 {
                                     codes.push(PhonemeCode {
-                                        code: 15, is_boundary: true, clause_char: None, marker: None
+                                        code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false
                                     }); // END_WORD
                                 }
                             } else if self.options.capitals >= 3 {
@@ -10710,7 +10594,7 @@ impl Translator {
                             codes.insert(
                                 at + n,
                                 PhonemeCode {
-                                    code, is_boundary: false, clause_char: None, marker: None,
+                                    code, is_boundary: false, clause_char: None, marker: None, voice_table: false,
                                 },
                             );
                             n += 1;
@@ -10746,7 +10630,7 @@ impl Translator {
                             codes.push(PhonemeCode {
                                 code:         b,
                                 is_boundary:  false,
-                                clause_char:  None, marker: None
+                                clause_char:  None, marker: None, voice_table: false
                             });
                         }
                     }
@@ -10762,7 +10646,7 @@ impl Translator {
                         });
                         codes.push(PhonemeCode {
                             code: crate::phoneme::PHON_PAUSE_SHORT,
-                            is_boundary: false, clause_char: None, marker: None,
+                            is_boundary: false, clause_char: None, marker: None, voice_table: false,
                         });
                     }
                     // `-g` word gap: a pause phoneme (`_`) after each word.
@@ -10774,7 +10658,7 @@ impl Translator {
                                 ..Default::default()
                             });
                             codes.push(PhonemeCode {
-                                code: pause, is_boundary: false, clause_char: None, marker: None
+                                code: pause, is_boundary: false, clause_char: None, marker: None, voice_table: false
                             });
                         }
                     }
@@ -10810,7 +10694,7 @@ impl Translator {
                         codes.push(PhonemeCode {
                             code:         15,
                             is_boundary:  true,
-                            clause_char:  None, marker: None
+                            clause_char:  None, marker: None, voice_table: false
                         }); // END_WORD
                     }
                 }
@@ -10820,21 +10704,21 @@ impl Translator {
                         codes.push(PhonemeCode {
                             code:         0,
                             is_boundary:  true,
-                            clause_char:  Some(*punct), marker: None
+                            clause_char:  Some(*punct), marker: None, voice_table: false
                         }); // pause + clause
                     } else {
                         // `--punct`: the boundary became a spoken name.  It
                         // absorbed its surrounding whitespace, so bracket it with
                         // END_WORD markers to keep the name a separate word.
-                        codes.push(PhonemeCode { code: 15, is_boundary: true, clause_char: None , marker: None});
+                        codes.push(PhonemeCode { code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false });
                         for &b in &entry.phonemes {
                             if b != 0 {
                                 codes.push(PhonemeCode {
-                                    code: b, is_boundary: false, clause_char: None, marker: None
+                                    code: b, is_boundary: false, clause_char: None, marker: None, voice_table: false
                                 });
                             }
                         }
-                        codes.push(PhonemeCode { code: 15, is_boundary: true, clause_char: None , marker: None});
+                        codes.push(PhonemeCode { code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false });
                     }
                 }
             }
@@ -10945,6 +10829,9 @@ impl Translator {
             }
         }
         finish(&mut own, &mut own_flags, &mut out);
+        if matches!(primary_bcp47_subtag(lang), "cmn" | "zh") {
+            out = mandarin_sandhi::apply(out, phdata, &self.options.lang, &alts);
+        }
 
         // Regressive voicing assimilation runs over the whole clause, after the
         // per-word passes — C calls it once on `ph_list2` in `MakePhonemeList`.
@@ -10958,7 +10845,13 @@ impl Translator {
         }
         // The inter-word pause insertion runs over the finished list.
         if self.options.word_gap == 0 {
-            insert_word_gaps(&mut out, phdata, stress_opts.vowel_pause, stress_opts.word_gap);
+            insert_word_gaps(
+                &mut out,
+                phdata,
+                stress_opts.vowel_pause,
+                stress_opts.word_gap,
+                &self.options.lang,
+            );
         }
         let outer_continues = self.options.switched && !self.options.switched_last;
         let tone_language = matches!(
@@ -11114,6 +11007,10 @@ fn word_gap_phoneme(
     insert
 }
 
+fn closes_switch(code: Option<&PhonemeCode>, voice_lang: &str) -> bool {
+    matches!(code.and_then(|c| c.marker.as_ref()), Some(CodeMarker::LangSwitch(t)) if t == voice_lang)
+}
+
 /// Insert the inter-word pause phonemes a language asks for — the
 /// `(plist3+1)->sourceix != 0` block of `MakePhonemeList` (phonemelist.c).
 ///
@@ -11128,6 +11025,7 @@ fn insert_word_gaps(
     phdata: &PhonemeData,
     vowel_pause: u32,
     word_gap: u8,
+    voice_lang: &str,
 ) {
     use crate::phoneme::PHON_END_WORD;
     const PH_PAUSE: u8 = 0;
@@ -11152,7 +11050,7 @@ fn insert_word_gaps(
     let starts = word_starts(codes, &real);
 
     let typ = |code: u8| phdata.get(code).map(|p| p.typ).unwrap_or(PH_PAUSE);
-    let mut inserts: Vec<(usize, u8)> = Vec::new();
+    let mut inserts: Vec<(usize, u8, usize)> = Vec::new();
     // Every word start is a boundary, and so is the end of a clause: C's phoneme
     // list ends with a pause phoneme that carries `sourceix`, which is why
     // Chinese gets a trailing `_|` after its last word as well.
@@ -11175,16 +11073,28 @@ fn insert_word_gaps(
             while codes.get(at).is_some_and(|c| c.code == crate::phoneme::PHON_LENGTHEN && !c.is_boundary) {
                 at += 1;
             }
-            inserts.push((at, insert));
+            let boundaries = codes[at..]
+                .iter()
+                .take_while(|c| c.is_boundary && c.clause_char.is_none())
+                .count();
+            let hoist = closes_switch(codes.get(at + boundaries), voice_lang);
+            let moved = if hoist { boundaries } else { 0 };
+            if hoist {
+                at += boundaries + 1;
+            }
+            inserts.push((at, insert, moved));
         }
     }
 
-    for (at, code) in inserts.into_iter().rev() {
+    for (at, code, moved) in inserts.into_iter().rev() {
+        let boundaries: Vec<PhonemeCode> = codes.drain(at - 1 - moved..at - 1).collect();
+        let at = at - moved;
         codes.insert(
             at,
-            PhonemeCode { code, is_boundary: false, clause_char: None, marker: None },
+            PhonemeCode { code, is_boundary: false, clause_char: None, marker: None, voice_table: false },
         );
         codes.insert(at, PhonemeCode { marker: Some(CodeMarker::InsertedPause(0)), ..Default::default() });
+        codes.splice(at + 2..at + 2, boundaries);
     }
 }
 
@@ -11899,7 +11809,7 @@ fn apply_list_editing_instructions(
 /// first. An append lands after the original code and any lengthen marks that
 /// follow it, but between a same-index insert and the original.
 fn splice_list_edits(codes: &mut Vec<PhonemeCode>, edits: Vec<(usize, u8, bool)>) -> Vec<bool> {
-    let plain = |code| PhonemeCode { code, is_boundary: false, clause_char: None, marker: None };
+    let plain = |code| PhonemeCode { code, is_boundary: false, clause_char: None, marker: None, voice_table: false };
     let is_lengthen =
         |c: &PhonemeCode| c.code == crate::phoneme::PHON_LENGTHEN && !c.is_boundary;
     let old = std::mem::take(codes);
@@ -12227,6 +12137,9 @@ pub struct PhonemeCode {
     /// `code == 0` and `is_boundary == false`, so anything walking the codes for
     /// synthesis skips it unless it looks here.
     pub marker: Option<CodeMarker>,
+    /// A tone phoneme of the clause's own voice inside a stretch spoken in
+    /// another language's table, so it is named from the voice's table.
+    pub voice_table: bool,
 }
 
 /// A marker carried alongside the phoneme codes.
