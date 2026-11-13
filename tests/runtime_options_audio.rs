@@ -76,10 +76,8 @@ fn markup_tags_are_not_spoken_in_audio() {
     let tagged = samples(&e, "<emphasis>hello</emphasis>");
     // C renders the emphasised word with a pause and louder (17147 vs 15798 samples).
     assert!(
-        tagged.len() >= plain.len() && tagged.len() < plain.len() + plain.len() / 4,
-        "SSML tags should be stripped in audio, not spoken: {} vs {}",
-        tagged.len(),
-        plain.len()
+        tagged >= plain && tagged < plain + plain / 4,
+        "SSML tags should be stripped in audio, not spoken: {tagged} vs {plain}"
     );
     // Entities are decoded too.
     let entity = samples(&e, "Tom &amp; Jerry");
