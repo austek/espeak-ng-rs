@@ -621,6 +621,19 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
             if lang == "bg" {
                 set_letter_vowel(&mut bits, 0x2a); // ъ
             }
+            if lang == "mk" {
+                // C's `letter_groups[0] = letter_groups[7] = vowels_cyrillic`
+                // replaces both groups outright, and the list includes р.
+                const MK_VOWELS: &[usize] = &[
+                    0x20, 0x10, 0x15, 0x18, 0x19, 0x1e, 0x23, 0x2b, 0x2d, 0x2e, 0x2f, 0x30, 0x31,
+                    0x36, 0x37, 0x3d, 0x3e,
+                ];
+                for b in bits.iter_mut() {
+                    *b &= !0b1000_0001;
+                }
+                set_bits(&mut bits, MK_VOWELS, 0);
+                set_bits(&mut bits, MK_VOWELS, 7);
+            }
         }
         "el" | "grc" => {
             // Greek letter groups — `letter_bits_offset = OFFSET_GREEK = 0x380`,
