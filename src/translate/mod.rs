@@ -2180,22 +2180,13 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 while chars.next_if(|n| matches!(n, '?' | '!')).is_some() {}
             }
             let ends_clause = ascii_clause_end_follows(c, chars.clone());
-            let stray = (c != '.' && !ends_clause) || !clause_has_word(&tokens);
-            if stray {
-                tokens.push(Token::Punctuation(if c == '.' { ' ' } else { c }));
+            if !clause_has_word(&tokens) {
+                tokens.push(if c == '.' { Token::Punctuation(' ') } else { Token::Operator(c) });
                 continue;
             }
-            if c != '.' && !clause_has_word(&tokens) {
-                if matches!(c, '?' | '!') {
-                    while chars.next_if(|n| matches!(n, '?' | '!')).is_some() {}
-                }
-                tokens.push(Token::Operator(c));
+            if c != '.' && !ends_clause {
+                tokens.push(Token::Punctuation(c));
                 continue;
-            }
-            // Clause/sentence boundary punctuation; a run of `?` and `!` is
-            // decided by its first character (C `ReadClause`).
-            if matches!(c, '?' | '!') {
-                while chars.next_if(|n| matches!(n, '?' | '!')).is_some() {}
             }
             // Absorb trailing whitespace after punctuation
             while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
@@ -8754,7 +8745,7 @@ pub(crate) fn build_translate_entries(
                     found_in_list: false,
                 });
             }
-            Token::Punctuation(c)
+            Token::Punctuation(c) | Token::Operator(c)
                 if *c != '.'
                     && is_clause_punctuation(*c)
                     && !punct_covers(options, *c)
