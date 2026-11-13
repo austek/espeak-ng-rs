@@ -74,6 +74,7 @@ pub fn format_mnemonics(
         word_units.clear();
     };
 
+    let voice_phdata = phdata;
     for pc in codes {
         if let Some(crate::translate::CodeMarker::LangSwitch(target)) = &pc.marker {
             flush_word(&mut out, &mut word_units, sep);
@@ -100,6 +101,7 @@ pub fn format_mnemonics(
             .as_deref()
             .and_then(|t| tables.get(data_dir, t))
             .unwrap_or(phdata);
+        let phdata = crate::translate::table_for_code(phdata, voice_phdata, pc.code);
 
         if pc.is_boundary && pc.code == 15 {
             // A word boundary flushes whatever stress is pending with it.

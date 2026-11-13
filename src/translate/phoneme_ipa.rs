@@ -191,6 +191,7 @@ pub fn codes_to_ipa_opts(
     let mut pause_only_word = false;
     let mut leading_pause = false;
 
+    let voice_phdata = phdata;
     for (i, pc) in codes.iter().enumerate() {
         if let Some(CodeMarker::Punctuation(c)) = &pc.marker {
             if preserve_punctuation {
@@ -256,6 +257,8 @@ pub fn codes_to_ipa_opts(
             .as_deref()
             .and_then(|t| tables.get(data_dir, t))
             .unwrap_or(phdata);
+        let segment = phdata;
+        let phdata = super::table_for_code(phdata, voice_phdata, pc.code);
 
         if pc.is_boundary || pc.code == PHON_END_WORD {
             out.push_str(&std::mem::take(&mut pending_stress));
@@ -337,6 +340,18 @@ pub fn codes_to_ipa_opts(
                     {
                         program_ipa_name(phdata, *prev, prev_nb)
                             .unwrap_or_else(|| write_ph_mnemonic_ipa(phdata, code, &nb))
+                    }
+                    // A tone is written through its vowel's entry as well: the
+                    // vowel's declared IPA name again, else the tone's mnemonic
+                    // (never the `ipa` of the tone itself).
+                    Some((prev, prev_nb))
+                        if phdata.get(code).is_some_and(|p| p.typ == 1 && p.program != 0)
+                            && segment.get(*prev).is_some_and(|p| p.typ == 2) =>
+                    {
+                        program_ipa_name(segment, *prev, prev_nb).unwrap_or_else(|| {
+                            let mnemonic = phdata.get(code).map_or(0, |p| p.mnemonic);
+                            mnemonic_to_ipa_c(mnemonic, false)
+                        })
                     }
                     _ => write_ph_mnemonic_ipa(phdata, code, &nb),
                 };

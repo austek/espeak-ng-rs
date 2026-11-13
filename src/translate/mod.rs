@@ -2361,7 +2361,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     break;
                 }
             }
-        } else if c.is_alphabetic()
+        } else if is_word_letter(c)
             || (c == '\''
                 && (grammar.apostrophe & 1 != 0
                     || (matches!(tokens.last(), Some(Token::Number(_)))
@@ -2437,7 +2437,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     // — so `hello'` is "hello", not a word the dictionary has
                     // never seen.  Leave it for the outer loop.
                     break;
-                } else if next.is_alphabetic() || next == '\'' || is_indic_combining(next) {
+                } else if is_word_letter(next) || next == '\'' || is_indic_combining(next) {
                     // Indic combining marks (virama ्, nukta ़) aren't classed as
                     // alphabetic but are part of the word — keeping them lets the
                     // rules see a conjunct (`स्त`) instead of two broken words.
@@ -2572,6 +2572,15 @@ where
     let after2 = la.next();
     after.map(|c| c.is_lowercase()).unwrap_or(false)
         && after2.map(|c| c.is_alphabetic()).unwrap_or(false)
+}
+
+/// Whether the clause reader keeps `c` inside a word.  The Myanmar-block tone
+/// marks (Sgaw Karen, Shan, Khamti) are letters to Unicode but not to C, which
+/// reads a run of them as a word of their own.
+fn is_word_letter(c: char) -> bool {
+    let tone_mark = matches!(c as u32,
+        0x1063 | 0x1064 | 0x1069..=0x106D | 0x1087..=0x108D | 0x108F | 0x109A | 0x109B);
+    c.is_alphabetic() && !tone_mark
 }
 
 /// An Indic combining mark (virama / nukta) that continues a word but isn't
@@ -6984,8 +6993,10 @@ fn split_abandoned_words(
     dict: &Dictionary,
     options: &LangOptions,
 ) -> Vec<Option<usize>> {
+    let latin_unread = dict.letter_bits_offset == 0
+        && native_scripts(&options.lang).contains(&Script::Myanmar);
     let abandoned = |word: &str| {
-        !word.is_ascii()
+        (!word.is_ascii() || latin_unread)
             && word.chars().count() > 1
             && !dict_lists_word(word, dict, options)
             && !is_unpronounceable(&lowercase_for_lang(word, &options.lang), &[], dict, options)
@@ -8153,7 +8164,17 @@ fn mark_reading(
     if run.is_empty() {
         return None;
     }
-    let wr = word_to_phonemes(&run, dict, phdata, stress_opts, options);
+    // C applies `.replace` to the clause text, where the mark still touches its
+    // word (`क॓ > क`); a mark a replacement removes there is never read.
+    let removed = match ix.checked_sub(1).map(|p| &tokens[p]) {
+        Some(Token::Word(w)) => dict.apply_replacements(&format!("{w}{run}")).is_some(),
+        _ => false,
+    };
+    if removed {
+        return None;
+    }
+    let expect = PosExpect { rules_only: true, ..PosExpect::default() };
+    let wr = word_to_phonemes_pos(&run, dict, phdata, stress_opts, options, expect);
     let speaks = wr.phonemes.iter().any(|&b| b != 0);
     (speaks && wr.phonemes.first() != Some(&crate::phoneme::PHON_SWITCH)).then_some(wr.phonemes)
 }
@@ -9049,6 +9070,79 @@ pub(crate) fn build_translate_entries(
         }
     }
     entries
+}
+
+/// Tones for the vowels of a stretch spoken in another language's table inside a
+/// tone-language clause: C runs `CalcPitches_Tone` over every syllable of the
+/// clause, so an English word in Shan text gets the default tone `1` on each
+/// vowel, and a tone the table wrote after the coda moves onto its vowel.
+fn tone_every_table(
+    codes: Vec<PhonemeCode>,
+    flags: Vec<bool>,
+    voice: &str,
+    voice_phdata: &PhonemeData,
+    alts: &letters::AltLangs,
+) -> (Vec<PhonemeCode>, Vec<bool>) {
+    const PHON_DEFAULT_TONE: u8 = 17;
+    if voice_phdata.get(PHON_DEFAULT_TONE).is_none_or(|ph| ph.typ != 1) {
+        return (codes, flags);
+    }
+    let tone = |code: u8| PhonemeCode { code, ..Default::default() };
+    let mut out: Vec<PhonemeCode> = Vec::with_capacity(codes.len() * 2);
+    let mut out_flags: Vec<bool> = Vec::with_capacity(codes.len() * 2);
+    let mut table: Option<std::rc::Rc<letters::LangCtx>> = None;
+    let mut last_vowel: Option<usize> = None;
+    let mut pending: Option<u8> = None;
+    for (ix, c) in codes.into_iter().enumerate() {
+        let flag = flags.get(ix).copied().unwrap_or(false);
+        if let Some(CodeMarker::LangSwitch(target)) = &c.marker {
+            table = if target == voice { None } else { alts.get(target) };
+        }
+        let phdata = table.as_ref().map_or(voice_phdata, |t| &t.phdata);
+        if c.is_boundary || c.marker.is_some() {
+            (last_vowel, pending) = (None, None);
+            out.push(c);
+            out_flags.push(flag);
+        } else if is_tone_phoneme(c.code, phdata) {
+            match last_vowel {
+                Some(v) => out[v] = tone(c.code),
+                None => pending = Some(c.code),
+            }
+        } else if c.code == crate::phoneme::PHON_LENGTHEN
+            && last_vowel.is_some_and(|v| v + 1 == out.len())
+        {
+            out.insert(out.len() - 1, c);
+            out_flags.insert(out_flags.len() - 1, flag);
+            last_vowel = Some(out.len() - 1);
+        } else {
+            let vowel = matches!(phdata.get(c.code), Some(ph) if ph.typ == 2);
+            out.push(c);
+            out_flags.push(flag);
+            if vowel {
+                out.push(tone(pending.take().unwrap_or(PHON_DEFAULT_TONE)));
+                out_flags.push(false);
+                last_vowel = Some(out.len() - 1);
+            }
+        }
+    }
+    (out, out_flags)
+}
+
+/// The table that names `code` in a switched stretch.  The default tone is
+/// resolved against the table in force when the clause is written, so a table
+/// without tone phonemes (English) prints it with the voice's own.
+pub(crate) fn table_for_code<'a>(
+    segment: &'a PhonemeData,
+    voice: &'a PhonemeData,
+    code: u8,
+) -> &'a PhonemeData {
+    const PHON_DEFAULT_TONE: u8 = 17;
+    let default_tone = code == PHON_DEFAULT_TONE;
+    if default_tone && !is_tone_phoneme(code, segment) && is_tone_phoneme(code, voice) {
+        voice
+    } else {
+        segment
+    }
 }
 
 /// The mnemonic of a phoneme code as a string (`"214"`, `"55"`, …).
@@ -10706,6 +10800,12 @@ impl Translator {
             }
             out.append(own);
             own_flags.clear();
+        };
+        let toned_voice = matches!(primary_bcp47_subtag(lang), "yue" | "hak" | "vi" | "shn");
+        let (codes, from_dict) = if toned_voice {
+            tone_every_table(codes, from_dict, &self.options.lang, phdata, &alts)
+        } else {
+            (codes, from_dict)
         };
         for (ix, c) in codes.into_iter().enumerate() {
             if let Some(CodeMarker::LangSwitch(target)) = &c.marker {
