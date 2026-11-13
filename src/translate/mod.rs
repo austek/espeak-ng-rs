@@ -8764,7 +8764,7 @@ pub(crate) fn build_translate_entries(
                 entries.push(TranslateEntry {
                     phonemes, dict_flags: 0,
                     kind: TranslateEntryKind::Word, word_lower: Some(c.to_string()),
-                    no_word_gap: false, word_group: None,
+                    word_group: None,
                     found_in_list: false,
                 });
             }

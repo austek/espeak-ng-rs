@@ -954,7 +954,6 @@ fn break_returns_terminator(attrs: &str) -> bool {
     let has_strength = attrs.contains("strength=");
     !has_strength || strong || attrs.contains("time=")
 }
-}
 
 
 fn format_x(
