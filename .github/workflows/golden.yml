@@ -179,6 +179,7 @@ jobs:
           --test ku_script_runs
           --test script_double_switch
           --test indic_schwa_context
+          --test ne_pa_final_vowel
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

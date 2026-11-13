@@ -8632,7 +8632,7 @@ pub(crate) fn build_translate_entries(
                 // inherent-vowel phoneme isn't `V`.
                 if matches!(
                     primary_bcp47_subtag(&options.lang),
-                    "hi" | "mr" | "ne" | "sa" | "kok" | "bn" | "as" | "gu" | "pa"
+                    "hi" | "mr" | "sa" | "kok" | "bn" | "as" | "gu"
                 ) {
                     delete_final_schwa(&mut wr.phonemes, phdata);
                 }
