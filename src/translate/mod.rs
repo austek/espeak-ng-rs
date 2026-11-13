@@ -2146,9 +2146,14 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // are dropped instead, which is C's behaviour too.
             while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
                 chars.next();
+                before = Some(' ');
             }
             if clause_has_word(&tokens) {
                 tokens.push(Token::ClauseBoundary(c));
+            } else if previous.is_some_and(char::is_whitespace)
+                && matches!(tokens.iter().rev().find(|t| !matches!(t, Token::Space)), Some(Token::ClauseBoundary(_)))
+            {
+                tokens.push(Token::Operator(c));
             }
         } else if matches!(c, '.' | ',' | '!' | '?' | ';' | ':') {
             // A '.' immediately followed by a letter or digit is not a sentence
@@ -2194,6 +2199,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     '.' if text_ends && !empty_clause_pending(&tokens) => Token::ClauseBoundary(c),
                     '.' if text_ends => Token::Space,
                     '.' => Token::Punctuation(' '),
+                    _ if glued_to_clause_mark(&tokens, previous) => Token::Punctuation(' '),
                     _ => Token::Operator(c),
                 });
                 continue;
@@ -2205,6 +2211,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // Absorb trailing whitespace after punctuation
             while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
                 chars.next();
+                before = Some(' ');
             }
             tokens.push(Token::ClauseBoundary(c));
         } else if c == '-'
@@ -6438,12 +6445,34 @@ fn clause_has_word(tokens: &[Token]) -> bool {
         .any(|t| matches!(t, Token::Word(_) | Token::Number(_)))
 }
 
+/// A mark written right after a clause end with no space (`3.,`) belongs to
+/// that end; C reports no clause of its own for it.
+fn glued_to_clause_mark(tokens: &[Token], previous: Option<char>) -> bool {
+    previous.is_some_and(|p| !p.is_whitespace())
+        && matches!(
+            tokens.iter().rev().find(|t| !matches!(t, Token::Space | Token::Punctuation(' '))),
+            Some(Token::ClauseBoundary(_))
+        )
+}
+
+/// How many clause ends close the code list, markers aside.
+pub(crate) fn trailing_clause_ends(codes: &[PhonemeCode]) -> usize {
+    codes
+        .iter()
+        .rev()
+        .filter(|c| c.marker.is_none() && !(c.code == 15 && c.clause_char.is_none()))
+        .take_while(|c| c.is_boundary && c.clause_char.is_some())
+        .count()
+}
+
 /// Whether the text so far ends with a clause that holds no word, which C
 /// reports once however many marks follow.
 fn empty_clause_pending(tokens: &[Token]) -> bool {
     let mut rest = tokens.iter().rev().skip_while(|t| matches!(t, Token::Space));
-    matches!(rest.next(), Some(Token::ClauseBoundary(_)))
-        && !rest
+    let next = rest.next();
+    matches!(next, Some(Token::Operator(m)) if is_clause_punctuation(*m))
+        || matches!(next, Some(Token::ClauseBoundary(_)))
+            && !rest
             .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
             .any(|t| matches!(t, Token::Word(_) | Token::Number(_)))
 }
@@ -6638,7 +6667,9 @@ pub(crate) fn closes_after_mark(text: &str) -> bool {
     const MARKS: &str = ".,!?;:";
     let trimmed = text.trim_end();
     let before = trimmed.trim_end_matches(|c: char| CLOSERS.contains(c) || c.is_whitespace());
-    before.len() < trimmed.len() && before.chars().next_back().is_some_and(|c| MARKS.contains(c))
+    before.len() < trimmed.len()
+        && before.chars().next_back().is_some_and(|c| MARKS.contains(c))
+        && before.chars().rev().skip(1).any(char::is_alphanumeric)
 }
 
 /// Whether a digit directly follows a leading `-`, so the hyphen is a unary
@@ -10078,7 +10109,7 @@ impl Translator {
     /// one more clause boundary, as C reports it.
     pub fn translate_to_clause_codes(&self, text: &str) -> Result<Vec<PhonemeCode>> {
         let mut codes = self.translate_to_codes(text)?;
-        if closes_after_mark(text) {
+        if closes_after_mark(text) && trailing_clause_ends(&codes) < 2 {
             let boundary = || PhonemeCode { is_boundary: true, clause_char: Some('.'), ..Default::default() };
             let ends_clause = codes
                 .iter()
@@ -10097,7 +10128,7 @@ impl Translator {
     /// a closer after the last mark is one more, empty, line.
     pub fn text_to_ipa_clauses(&self, text: &str) -> Result<String> {
         let ipa = self.text_to_ipa(text)?;
-        Ok(if closes_after_mark(text) { format!("{ipa}\n") } else { ipa })
+        Ok(if closes_after_mark(text) && !ipa.ends_with('\n') { format!("{ipa}\n") } else { ipa })
     }
 
     /// [`translate_to_codes`](Self::translate_to_codes) with `phonSWITCH`
@@ -10489,6 +10520,18 @@ impl Translator {
                             marker: Some(CodeMarker::Punctuation(*c)),
                             ..Default::default()
                         });
+                        if entry.phonemes.is_empty()
+                            && (matches!(token, Token::Operator(_)) && is_clause_punctuation(*c)
+                                || matches!(token, Token::Punctuation(_)) && matches!(c, '(' | '[' | '{' | '<' | '\u{300a}'))
+                            && !tokens[token_ix + 1..].iter().any(|t| {
+                                matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_))
+                            })
+                            && trailing_clause_ends(&codes) == 1
+                        {
+                            codes.push(PhonemeCode {
+                                code: 0, is_boundary: true, clause_char: Some(*c), marker: None,
+                            });
+                        }
                     }
                     // C flags the start of every word in the phoneme list.  A
                     // spoken symbol standing tight between two words —

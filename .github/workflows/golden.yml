@@ -44,6 +44,7 @@ jobs:
           --test hbs_spelling_stress
           --test spelling_stress_langs
           --test time_colon_rule
+          --test trailing_clause_marks
           --test punctuation_only_clause
           --test letter_name_conditions
           --test ligurian_halflong_consonant

@@ -403,7 +403,8 @@ pub fn codes_to_ipa_opts(
             }
         })
         .collect();
-    kept.join("\n").trim_end().to_string()
+    let empty_clauses = super::trailing_clause_ends(codes).saturating_sub(1);
+    format!("{}{}", kept.join("\n").trim_end(), "\n".repeat(empty_clauses))
 }
 
 /// The neighbour context for the phoneme that is `real[n]`, built the same way
