@@ -9197,7 +9197,7 @@ fn tone_every_table(
     if voice_phdata.get(PHON_DEFAULT_TONE).is_none_or(|ph| ph.typ != 1) {
         return (codes, flags);
     }
-    let tone = |code: u8| PhonemeCode { code, ..Default::default() };
+    let tone = |code: u8| PhonemeCode { code, voice_table: true, ..Default::default() };
     let mut out: Vec<PhonemeCode> = Vec::with_capacity(codes.len() * 2);
     let mut out_flags: Vec<bool> = Vec::with_capacity(codes.len() * 2);
     let mut table: Option<std::rc::Rc<letters::LangCtx>> = None;

@@ -44,6 +44,11 @@ fn latin_words_take_the_sandhi_tone_in_phoneme_text() {
 }
 
 #[test]
+fn a_tone_between_two_vowels_hides_no_neighbour_from_the_programs() {
+    cases("yue", "--ipa", &[("CEO講嘢", "(en)sˌiː1ˌiː1ˈəʊəʊ(yue) ɡˈonɡ2 jˈe5")]);
+}
+
+#[test]
 fn the_pause_after_a_latin_word_follows_the_closing_tag() {
     cases(
         "cmn",
