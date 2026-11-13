@@ -751,6 +751,7 @@ impl NumberGrammar {
                     grammar.thousands.omit_one_prefix = false;
                 }
             }
+            "mn" => grammar.hundreds.omit_one_prefix = true,
             // Turkish/Hungarian: "yüz"/"bin", "száz"/"ezer" — no "one" prefix.
             "tr" | "hu" => {
                 grammar.hundreds.omit_one_prefix = true;
