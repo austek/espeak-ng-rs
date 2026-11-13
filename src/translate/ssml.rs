@@ -216,14 +216,6 @@ pub fn process_markup_opts(input: &str, break_mul: u32) -> (Vec<Segment>, Vec<Ma
 
         // ---- markup tag ------------------------------------------------
         if c == '<' && opens_tag(chars.get(i + 1).copied()) {
-            if starts_with(&chars, i, "<!--") {
-                i = find_seq(&chars, i + 4, "-->").map(|p| p + 3).unwrap_or(n);
-                continue;
-            }
-            if matches!(chars.get(i + 1), Some('!') | Some('?')) {
-                i = find_char(&chars, i + 1, '>').map(|p| p + 1).unwrap_or(n);
-                continue;
-            }
             let close = find_char(&chars, i + 1, '>').unwrap_or(n - 1);
             let end = close.min(n);
             let inner: String = chars[(i + 1).min(end)..end].iter().collect();
@@ -469,6 +461,10 @@ impl Walker {
         let name_end = t.find(char::is_whitespace).unwrap_or(t.len());
         let name = t[..name_end].to_ascii_lowercase();
         let attrs = &t[name_end..];
+
+        if !matches!(name.as_str(), "font" | "b" | "i" | "strong" | "em" | "code") {
+            self.cur.push(' ');
+        }
 
         match name.as_str() {
             "prosody" => {
@@ -768,24 +764,25 @@ mod tests {
         assert_eq!(marks[1].name, "b");
         // Positions are offsets into the stripped text; "a" comes before "b".
         assert!(marks[0].position < marks[1].position, "{marks:?}");
-        // A mark before any text sits at position 0.
+        // C writes a space before every tag except the HTML inline ones, so a
+        // mark before any text sits after that space.
         let (_s, m) = process_markup_with_marks("<mark name=\"start\"/>hi");
-        assert_eq!(m[0].position, 0, "{m:?}");
-        // A mark carries no text and doesn't disturb the stripped output.
-        assert_eq!(strip_markup("a<mark name=\"x\"/>b"), "ab");
+        assert_eq!(m[0].position, 1, "{m:?}");
+        assert_eq!(strip_markup("a<mark name=\"x\"/>b"), "a b");
     }
 
     #[test]
     fn strips_unknown_and_formatting_tags() {
         // `<p>`/`</p>` are both C's CLAUSE_PARAGRAPH (700 ms).
-        assert_eq!(show(&strip_markup("<p>hello</p>")), "{700}|hello{700}|");
+        assert_eq!(show(&strip_markup("<p>hello</p>")), " {700}|hello {700}|");
         // `<s>` opens with a paragraph pause and closes with a period's.
-        assert_eq!(show(&strip_markup("<s>hello</s>")), "{700}|hello{400}|");
+        assert_eq!(show(&strip_markup("<s>hello</s>")), " {700}|hello {400}|");
         // HTML `<br>` is C's HTML_BREAK — a colon, 300 ms.
-        assert_eq!(show(&strip_markup("a<br/>b")), "a{300}|b");
-        assert_eq!(strip_markup("a <emphasis>b</emphasis> c"), "a b c");
-        assert_eq!(strip_markup("<speak>hi</speak>"), "hi");
-        assert_eq!(strip_markup("x <foo bar='1'>y</foo> z"), "x y z");
+        assert_eq!(show(&strip_markup("a<br/>b")), "a {300}|b");
+        assert_eq!(strip_markup("a <emphasis>b</emphasis> c"), "a  b  c");
+        assert_eq!(strip_markup("<speak>hi</speak>"), " hi ");
+        assert_eq!(strip_markup("x <foo bar='1'>y</foo> z"), "x  y  z");
+        assert_eq!(strip_markup("a<b>x</b>c"), "axc");
     }
 
     #[test]
@@ -812,7 +809,7 @@ mod tests {
             ["c", "a", "t"]
         );
         assert_eq!(
-            strip_markup(r#"<say-as interpret-as="cardinal">42</say-as>"#),
+            strip_markup(r#"<say-as interpret-as="cardinal">42</say-as>"#).trim(),
             "42"
         );
     }
@@ -834,7 +831,7 @@ mod tests {
             ["0", "0", "7"]
         );
         // `cardinal`/`number` are read as a whole number (content untouched).
-        assert_eq!(strip_markup(r#"<say-as interpret-as="cardinal">42</say-as>"#), "42");
+        assert_eq!(strip_markup(r#"<say-as interpret-as="cardinal">42</say-as>"#).trim(), "42");
     }
 
     #[test]
@@ -909,21 +906,22 @@ mod tests {
             strip_markup(r#"<sub alias="World Health Organization">WHO</sub>"#).trim(),
             "World Health Organization"
         );
-        assert_eq!(strip_markup("<sub>WHO</sub>"), "WHO");
+        assert_eq!(strip_markup("<sub>WHO</sub>").trim(), "WHO");
     }
 
     #[test]
     fn phoneme_ph_becomes_inline_brackets() {
         // C only honours `alphabet="espeak"`, and then reads the content as well.
+        let t = |s: &str| strip_markup(s).trim().to_string();
         assert_eq!(
-            strip_markup(r#"<phoneme alphabet="espeak" ph="h@l'oU">hello</phoneme>"#),
+            t(r#"<phoneme alphabet="espeak" ph="h@l'oU">hello</phoneme>"#),
             "[[h@l'oU]]hello"
         );
-        assert_eq!(strip_markup(r#"<phoneme alphabet="espeak" ph="t"/>"#), "[[t]]");
+        assert_eq!(t(r#"<phoneme alphabet="espeak" ph="t"/>"#), "[[t]]");
         // Any other alphabet, or none, leaves the content to be read.
-        assert_eq!(strip_markup(r#"<phoneme ph="k">see</phoneme>"#), "see");
-        assert_eq!(strip_markup(r#"<phoneme alphabet="ipa" ph="k">see</phoneme>"#), "see");
-        assert_eq!(strip_markup("<phoneme>hello</phoneme>"), "hello");
+        assert_eq!(t(r#"<phoneme ph="k">see</phoneme>"#), "see");
+        assert_eq!(t(r#"<phoneme alphabet="ipa" ph="k">see</phoneme>"#), "see");
+        assert_eq!(t("<phoneme>hello</phoneme>"), "hello");
     }
 
     #[test]
@@ -939,10 +937,10 @@ mod tests {
     #[test]
     fn break_inserts_boundary() {
         // `time` is wall-clock exact (`+`); a bare break is C's 210 ms.
-        assert_eq!(show(&strip_markup("one<break time=\"500ms\"/>two")), "one{+500}|two");
-        assert_eq!(show(&strip_markup("a<break/>b")), "a{210}|b");
-        assert_eq!(show(&strip_markup("a<break time=\"2s\"/>b")), "a{+2000}|b");
-        assert_eq!(show(&strip_markup("a<break time=\"1.5s\"/>b")), "a{+1500}|b");
+        assert_eq!(show(&strip_markup("one<break time=\"500ms\"/>two")), "one {+500}|two");
+        assert_eq!(show(&strip_markup("a<break/>b")), "a {210}|b");
+        assert_eq!(show(&strip_markup("a<break time=\"2s\"/>b")), "a {+2000}|b");
+        assert_eq!(show(&strip_markup("a<break time=\"1.5s\"/>b")), "a {+1500}|b");
     }
 
     /// `strength` picks one of C's six pause lengths; below `medium` it is a
@@ -951,18 +949,18 @@ mod tests {
     /// apart.
     #[test]
     fn break_strength_sets_the_pause() {
-        assert_eq!(show(&strip_markup("a<break strength=\"x-strong\"/>b")), "a{800}|b");
-        assert_eq!(show(&strip_markup("a<break strength=\"strong\"/>b")), "a{400}|b");
-        assert_eq!(show(&strip_markup("a<break strength=\"medium\"/>b")), "a{210}|b");
-        assert_eq!(show(&strip_markup("a<break strength=\"weak\"/>b")), "a{2}b");
-        assert_eq!(show(&strip_markup("a<break strength=\"x-weak\"/>b")), "a{1}b");
-        assert_eq!(show(&strip_markup("a<break strength=\"none\"/>b")), "a{0}b");
+        assert_eq!(show(&strip_markup("a<break strength=\"x-strong\"/>b")), "a {800}|b");
+        assert_eq!(show(&strip_markup("a<break strength=\"strong\"/>b")), "a {400}|b");
+        assert_eq!(show(&strip_markup("a<break strength=\"medium\"/>b")), "a {210}|b");
+        assert_eq!(show(&strip_markup("a<break strength=\"weak\"/>b")), "a {2}b");
+        assert_eq!(show(&strip_markup("a<break strength=\"x-weak\"/>b")), "a {1}b");
+        assert_eq!(show(&strip_markup("a<break strength=\"none\"/>b")), "a {0}b");
         // An unknown strength is C's `weak`; `time` adds the clause break to
         // the `B` command a weak `strength` already wrote.
-        assert_eq!(show(&strip_markup("a<break strength=\"huh\"/>b")), "a{2}b");
+        assert_eq!(show(&strip_markup("a<break strength=\"huh\"/>b")), "a {2}b");
         assert_eq!(
             show(&strip_markup("a<break strength=\"weak\" time=\"300ms\"/>b")),
-            "a{2}{+300}|b"
+            "a {2}{+300}|b"
         );
     }
 
@@ -972,20 +970,21 @@ mod tests {
     fn ssml_break_percentage_scales_time() {
         let text = |mul| show(&process_markup_opts("a<break time=\"400ms\"/>b", mul).0
             .into_iter().map(|s| s.text).collect::<String>());
-        assert_eq!(text(100), "a{+400}|b");
-        assert_eq!(text(50), "a{+200}|b");
-        assert_eq!(text(250), "a{+1000}|b");
-        assert_eq!(text(0), "a{+0}|b");
+        assert_eq!(text(100), "a {+400}|b");
+        assert_eq!(text(50), "a {+200}|b");
+        assert_eq!(text(250), "a {+1000}|b");
+        assert_eq!(text(0), "a {+0}|b");
         let strength = |mul| show(&process_markup_opts("a<break strength=\"strong\"/>b", mul).0
             .into_iter().map(|s| s.text).collect::<String>());
-        assert_eq!(strength(50), "a{400}|b", "strength is not scaled");
+        assert_eq!(strength(50), "a {400}|b", "strength is not scaled");
     }
 
+    /// C reads every `<!…>` and `<?…>` as an unknown tag ending at the first `>`.
     #[test]
-    fn comments_and_pis_discarded() {
-        assert_eq!(strip_markup("a<!-- hidden -->b"), "ab");
-        assert_eq!(strip_markup("a<?xml version='1.0'?>b"), "ab");
-        assert_eq!(strip_markup("<!DOCTYPE speak>hi"), "hi");
+    fn comments_and_pis_are_unknown_tags() {
+        assert_eq!(strip_markup("a<!-- hidden -->b"), "a b");
+        assert_eq!(strip_markup("a<?xml version='1.0'?>b"), "a b");
+        assert_eq!(strip_markup("<!DOCTYPE speak>hi"), " hi");
     }
 
     #[test]
@@ -996,7 +995,7 @@ mod tests {
 
     #[test]
     fn unterminated_tag_is_ignored() {
-        assert_eq!(strip_markup("hello <broken"), "hello ");
+        assert_eq!(strip_markup("hello <broken"), "hello  ");
     }
 
     #[test]
@@ -1012,14 +1011,11 @@ mod tests {
 
     #[test]
     fn voice_name_and_lang_attrs() {
-        assert_eq!(
-            process_markup(r#"<voice name="de">x</voice>"#)[0].lang.as_deref(),
-            Some("de")
-        );
-        assert_eq!(
-            process_markup(r#"<voice lang="es">x</voice>"#)[0].lang.as_deref(),
-            Some("es")
-        );
+        let lang = |s: &str| {
+            process_markup(s).into_iter().find(|g| g.text.trim() == "x").and_then(|g| g.lang)
+        };
+        assert_eq!(lang(r#"<voice name="de">x</voice>"#).as_deref(), Some("de"));
+        assert_eq!(lang(r#"<voice lang="es">x</voice>"#).as_deref(), Some("es"));
     }
 
     #[test]

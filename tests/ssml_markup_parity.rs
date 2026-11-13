@@ -46,6 +46,16 @@ fn ignored_text_elements_and_sub_flag() {
     ]);
 }
 
+/// C writes a space before every tag except the inline HTML ones (`b`, `i`, `em`, ...).
+#[test]
+fn tags_separate_words_except_inline_html() {
+    check(&[
+        ("one<foo>two</foo>three", "wˈɒn tˈuː θɹˈiː", "w'0n t'u: Tr'i:"),
+        ("one<!-- c -->two", "wˈɒn tˈuː", "w'0n t'u:"),
+        ("one<b>two</b>three", "wˈɒntwəθɹˌiː", "w'0ntw@Tr,i:"),
+    ]);
+}
+
 fn run_raw(flag: &str, text: &str) -> String {
     let out = Command::new(env!("CARGO_BIN_EXE_espeak_cli"))
         .args(["-q", flag, "-m", text])

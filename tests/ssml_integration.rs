@@ -120,7 +120,7 @@ fn sub_uses_alias() {
 #[test]
 fn comments_and_pis_discarded() {
     let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
-    assert_markup_eq_plain(&t, "hello<!-- secret -->world", "helloworld");
+    assert_markup_eq_plain(&t, "hello<!-- secret -->world", "hello world");
     assert_markup_eq_plain(&t, "<?xml version='1.0'?>hi there", "hi there");
 }
 
