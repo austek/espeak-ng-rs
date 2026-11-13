@@ -63,6 +63,7 @@ fn emphasis_pauses_before_its_words() {
         ("a <emphasis>b", "ɐ bˈiː", "a#_! b'i:"),
         ("a <emphasis level=\"strong\">b c</emphasis> d", "ɐ bˈiː sˈiː dˈiː", "a#_! b'i:_! s'i: d'i:"),
         ("a <emphasis level=\"reduced\">b</emphasis> c", "ɐ bˈiː sˈiː", "a# b'i: s'i:"),
+        ("<emphasis>hello</emphasis>", "həlˈəʊ", "_!h@l'oU"),
     ]);
 }
 

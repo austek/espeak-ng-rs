@@ -19,11 +19,8 @@ fn x_markup_mode_processes_ssml() {
         eprintln!("[SKIP] no en data");
         return;
     }
-    // Tags stripped, entities decoded, say-as applied — identical to plain text.
-    assert_eq!(
-        run(&["-x", "-m", "<emphasis>hello</emphasis>"]),
-        run(&["-x", "hello"])
-    );
+    // Tags stripped; C puts a pause phoneme before an emphasised word (`_!h@l'oU`).
+    assert_eq!(run(&["-x", "-m", "<emphasis>hello</emphasis>"]), "_!h@l'oU");
     assert_eq!(
         run(&["-x", "-m", r#"<say-as interpret-as="ordinal">3</say-as>"#]),
         run(&["-x", "3rd"])

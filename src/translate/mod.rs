@@ -10276,6 +10276,15 @@ impl Translator {
                             n += 1;
                         }
                         if n > 0 {
+                            let clause_start = codes[..at].iter().rev().take_while(|c| {
+                                !(c.is_boundary && c.code == 0 && c.clause_char.is_some())
+                            }).all(|c| c.is_boundary || c.marker.is_some());
+                            let sep = codes.get(at + n).is_some_and(|c| {
+                                c.is_boundary && c.code == crate::phoneme::PHON_END_WORD
+                            });
+                            if clause_start && sep {
+                                codes.remove(at + n);
+                            }
                             from_dict.resize(codes.len(), false);
                         }
                     }
