@@ -109,7 +109,8 @@ fn spread_end(text: &str, i: usize, n: usize) -> usize {
 }
 
 fn closes_text(text: &str, end: usize) -> bool {
-    text.get(end..).is_some_and(|rest| rest.trim_end().chars().all(|c| "\"'”’»)]".contains(c)))
+    text.get(end..)
+        .is_some_and(|rest| rest.chars().all(|c| c.is_whitespace() || "\"'”’»)]".contains(c)))
 }
 
 fn last_terminator(text: &str, n: usize, marks: &[(char, usize)]) -> i32 {

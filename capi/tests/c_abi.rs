@@ -33,6 +33,30 @@ const WAV_CASES: &[(&str, &str)] = &[
     ("en", "Numbers 1 2 3 and 4.5 percent"),
 ];
 
+/// Flags `0` leave out `espeakENDPAUSE`: the synthesis ends without the final pause.
+fn final_pause_scenarios() -> Vec<Scenario> {
+    let text = "Hello world, this is a test.";
+    vec![
+        Scenario { fixture: "expected/wav_no_final_pause.txt", args: args(&["wav", "en", "0x0", text]) },
+        Scenario {
+            fixture: "expected/events_no_final_pause.txt",
+            args: args(&["events", "1", "en", "0x0", text]),
+        },
+    ]
+}
+
+/// A closing quote after the last mark is a clause of its own.
+fn closing_quote_scenarios() -> Vec<Scenario> {
+    [("en", "Come here!\""), ("en", "Hello! \""), ("de", "Komm her.\"")]
+        .iter()
+        .enumerate()
+        .map(|(i, (lang, text))| {
+            let fixture: &'static str = Box::leak(format!("expected/closing_quote_{i}.txt").into_boxed_str());
+            Scenario { fixture, args: args(&["phon", lang, "2", text]) }
+        })
+        .collect()
+}
+
 fn scenarios() -> Vec<Scenario> {
     let mut list = vec![
         Scenario { fixture: "expected/batch.txt", args: vec!["batch".into(), cases_path()] },
@@ -46,6 +70,8 @@ fn scenarios() -> Vec<Scenario> {
         let fixture: &'static str = Box::leak(format!("expected/wav_{i}.txt").into_boxed_str());
         list.push(Scenario { fixture, args: args(&["wav", lang, "0x1000", text]) });
     }
+    list.extend(final_pause_scenarios());
+    list.extend(closing_quote_scenarios());
     list
 }
 

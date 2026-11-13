@@ -1,0 +1,3 @@
+setvoice=0
+[həlˈəʊ] term=8302d
+[] term=90028
