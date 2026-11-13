@@ -211,6 +211,7 @@ jobs:
           --test offset_script_letter_bits
           --test german_time_connector
           --test clause_start_no_leading_space
+          --test silent_symbol_clause_word
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

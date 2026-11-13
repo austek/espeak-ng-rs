@@ -6070,6 +6070,9 @@ pub(crate) enum TranslateEntryKind {
     /// A letter spelled with names from several phoneme tables: `phonemes`
     /// holds `letters::encode` items, switches included.
     Stream,
+    /// A symbol the language names only as `_<char>`: silent in running text,
+    /// yet a word of the clause, so the word before it is not clause-final.
+    Silent,
 }
 
 pub(crate) struct TranslateEntry {
@@ -8231,6 +8234,9 @@ pub(crate) fn build_translate_entries(
                 is_spoken_symbol(*c)
                     || punct_covers(options, *c)
                     || dict_names_symbol(dict, *c, options.dict_condition)
+                    || (!is_clause_punctuation(*c)
+                        && primary_bcp47_subtag(&options.lang) != "en"
+                        && has_underscore_name(dict, *c, options.dict_condition))
             }
             t => is_word(t),
         })
@@ -8803,10 +8809,14 @@ pub(crate) fn build_translate_entries(
                 }
             }
             _ => {
+                let silent_name = matches!(token, Token::Punctuation(c)
+                    if !is_clause_punctuation(*c)
+                        && primary_bcp47_subtag(&options.lang) != "en"
+                        && has_underscore_name(dict, *c, options.dict_condition));
                 entries.push(TranslateEntry {
                     phonemes:   Vec::new(),
                     dict_flags: 0,
-                    kind:       TranslateEntryKind::Other,
+                    kind:       if silent_name { TranslateEntryKind::Silent } else { TranslateEntryKind::Other },
                     word_lower: None,
                         word_group: None,
                     found_in_list: false,
@@ -9077,8 +9087,10 @@ pub(crate) fn promote_translate_entries(
             let own_group = entries[i].word_group;
             let is_last_word = !outer_continues
                 && entries[i + 1..].iter().all(|e| {
-                    !matches!(e.kind, TranslateEntryKind::Word | TranslateEntryKind::LangSwitch)
-                        || (own_group.is_some() && e.word_group == own_group)
+                    !matches!(
+                        e.kind,
+                        TranslateEntryKind::Word | TranslateEntryKind::LangSwitch | TranslateEntryKind::Silent
+                    ) || (own_group.is_some() && e.word_group == own_group)
                 });
             let following_all_unstressed = entries[i + 1..]
                 .iter()
