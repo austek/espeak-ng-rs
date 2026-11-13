@@ -11554,6 +11554,21 @@ fn after_stress(
     false
 }
 
+fn stress_marks_before(codes: &[PhonemeCode], i: usize) -> usize {
+    codes[..i]
+        .iter()
+        .rev()
+        .take_while(|c| {
+            !c.is_boundary
+                && matches!(
+                    c.code,
+                    PHON_STRESS_D | PHON_STRESS_U | PHON_STRESS_2 | PHON_STRESS_3
+                        | PHON_STRESS_P | PHON_STRESS_P2 | PHON_STRESS_TONIC
+                )
+        })
+        .count()
+}
+
 fn resolve_virtual_phonemes_in_codes(
     codes: &mut Vec<PhonemeCode>,
     phdata: &PhonemeData,
@@ -11719,27 +11734,17 @@ fn resolve_virtual_phonemes_in_codes(
             true,
         );
         if let Some(changed) = extract.change_phoneme_code.filter(|&c| c != 0 && c != code) {
+            // C keeps the stress on the vowel itself, so a vowel that is deleted
+            // (`ChangePhoneme(NULL)`) or turned into a consonant (French `i` →
+            // `j`) is no longer a syllable and its stress mark goes with it.
+            let stops_being_vowel =
+                ph.typ == 2 && (changed == 1 || phdata.get(changed).is_some_and(|c| c.typ != 2));
+            if stops_being_vowel {
+                deleted.extend(i - stress_marks_before(codes, i)..i);
+            }
             if changed == 1 {
-                // The NULL phoneme: `ChangePhoneme(NULL)` deletes this phoneme.
                 deleted.push(i);
             } else {
-                // A vowel turned into a consonant (French `i` → `j`) is no
-                // longer a syllable, so the stress mark before it goes.
-                if ph.typ == 2 && phdata.get(changed).is_some_and(|c| c.typ != 2) {
-                    let marks = codes[..i]
-                        .iter()
-                        .rev()
-                        .take_while(|c| {
-                            !c.is_boundary
-                                && matches!(
-                                    c.code,
-                                    PHON_STRESS_D | PHON_STRESS_U | PHON_STRESS_2 | PHON_STRESS_3
-                                        | PHON_STRESS_P | PHON_STRESS_P2 | PHON_STRESS_TONIC
-                                )
-                        })
-                        .count();
-                    deleted.extend(i - marks..i);
-                }
                 codes[i].code = changed;
             }
         }

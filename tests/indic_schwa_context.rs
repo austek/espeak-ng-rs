@@ -17,6 +17,13 @@ fn hindi_medial_schwa_after_vowel_syllable_is_deleted() {
 }
 
 #[test]
+fn deleted_schwa_leaves_no_stress_mark() {
+    let Some(i) = ipa("hi", "अगरचे") else { return };
+    assert_eq!(i, "ˈʌɡəɾceː");
+    assert_eq!(ipa("mr", "महिला सुपरहिरो").unwrap(), "mˈʌhɪlˌaː sˈʊpəɾhɪɾˌoː");
+}
+
+#[test]
 fn marathi_medial_schwa_is_deleted() {
     let Some(i) = ipa("mr", "कोंबडी") else { return };
     assert_eq!(i, "kˈo\u{303}bɖˌi");
