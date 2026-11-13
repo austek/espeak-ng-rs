@@ -10795,6 +10795,7 @@ impl Translator {
             // Before the phoneme programs run, as in C's `MakePhonemeList`.
             double_lengthened_consonants(own, own_flags, phdata);
             resolve_virtual_phonemes_in_codes(own, phdata, own_flags, stress_opts.reduce);
+            drop_default_tone_of_lost_vowel(own, own_flags, phdata);
             apply_list_editing_instructions(
                 own,
                 phdata,
@@ -11005,6 +11006,34 @@ fn word_gap_phoneme(
         insert = PAUSE_PHONEMES[x];
     }
     insert
+}
+
+/// A syllabic consonant that a program turned into a plain consonant (Cantonese
+/// `ng` → `N` before a vowel) is no syllable, so C never gave it a tone.
+fn drop_default_tone_of_lost_vowel(
+    codes: &mut Vec<PhonemeCode>,
+    flags: &mut Vec<bool>,
+    phdata: &PhonemeData,
+) {
+    const PHON_DEFAULT_TONE: u8 = 17;
+    const PH_VOWEL: u8 = 2;
+    if phdata.get(PHON_DEFAULT_TONE).is_none_or(|ph| ph.typ != 1) {
+        return;
+    }
+    let lost = |i: usize| {
+        let c = &codes[i];
+        let before = (0..i).rev().map(|k| &codes[k]).find(|p| p.code != crate::phoneme::PHON_LENGTHEN);
+        c.code == PHON_DEFAULT_TONE
+            && c.marker.is_none()
+            && before.is_some_and(|p| {
+                p.marker.is_none() && !p.is_boundary && !phdata.get(p.code).is_some_and(|ph| ph.typ == PH_VOWEL)
+            })
+    };
+    let drop: Vec<bool> = (0..codes.len()).map(lost).collect();
+    let mut keep = drop.iter().map(|d| !d);
+    codes.retain(|_| keep.next().unwrap_or(true));
+    let mut keep = drop.iter().map(|d| !d);
+    flags.retain(|_| keep.next().unwrap_or(true));
 }
 
 fn closes_switch(code: Option<&PhonemeCode>, voice_lang: &str) -> bool {
@@ -11946,6 +11975,7 @@ fn resolve_virtual_phonemes_in_codes(
                 && c.code > 8
                 && c.code != crate::phoneme::PHON_END_WORD
                 && c.code != crate::phoneme::PHON_LENGTHEN
+                && !is_tone_phoneme(c.code, phdata)
         })
         .map(|(i, _)| i)
         .collect();
