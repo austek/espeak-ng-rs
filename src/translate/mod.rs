@@ -28,6 +28,7 @@ pub mod phoneme_ipa;
 pub mod compat;
 pub(crate) mod ucd_alpha;
 pub mod ssml;
+pub mod readclause;
 mod accent;
 mod mandarin_sandhi;
 pub(crate) mod letters;
