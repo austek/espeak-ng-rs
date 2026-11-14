@@ -457,6 +457,29 @@ fn neighbours_at(
             || matches!((real.get(n + 1), real.get(n + 2)), (Some(&a), Some(&b)) if
                 codes[a + 1..b].iter().any(|c| c.is_boundary || c.code == PHON_END_WORD)),
         next_vowel_word_end: next_vowel_ends_word(codes, real, n, phdata),
+        ..next_vowel_at(codes, real, n, phdata)
+    }
+}
+
+/// C's `nextVowel` for the IPA pass: the next vowel up to the next word start
+/// (only a `sourceix` marks one, not an end-of-word phoneme inside a spelled
+/// word), with its stress; `prevVowel` has no word data there and never holds.
+fn next_vowel_at(codes: &[PhonemeCode], real: &[usize], n: usize, phdata: &PhonemeData) -> Neighbours {
+    let starts_word = |a: usize, b: usize| codes[a + 1..b].iter().any(|c| c.is_boundary);
+    let mut from = real[n];
+    let vowel = real[n + 1..]
+        .iter()
+        .copied()
+        .take_while(|&at| {
+            let crossed = starts_word(from, at);
+            from = at;
+            !crossed
+        })
+        .find(|&at| phdata.get(codes[at].code).is_some_and(|p| p.typ == 2));
+    Neighbours {
+        vowels_tracked: true,
+        next_vowel: vowel.map_or(0, |at| codes[at].code),
+        next_vowel_stress: vowel.map_or(bytecode::STRESS_UNKNOWN, |at| syllable_stress(codes, at, phdata)),
         ..Default::default()
     }
 }
