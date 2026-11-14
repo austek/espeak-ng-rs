@@ -7070,6 +7070,74 @@ fn dict_lists_word(word: &str, dict: &Dictionary, options: &LangOptions) -> bool
     matches!(lookup(dict, &lower, &ctx), Some(r) if r.flags1.found())
 }
 
+/// The `letter_bits_offset` the C translator of this voice runs with.
+fn c_letter_bits_offset(dict: &Dictionary, options: &LangOptions) -> u32 {
+    let cyrillic_voice = matches!(
+        primary_bcp47_subtag(&options.lang),
+        "ru" | "uk" | "bg" | "mk" | "kk" | "mn" | "tt" | "be"
+    );
+    if dict.letter_bits_offset == 0x420 && !cyrillic_voice {
+        0
+    } else {
+        dict.letter_bits_offset
+    }
+}
+
+/// Where `TranslateClause` starts a new word inside `word`: between two letters
+/// of which only one is in a script foreign to the voice (plain adjacency), or
+/// between native and Latin letters of a non-Latin voice (a hyphen join).
+fn script_run_breaks(word: &str, offset: u32) -> Vec<(usize, bool)> {
+    let foreign = |c: char| {
+        letters::alphabet_from_char(c as u32).is_some_and(|a| a.offset != offset)
+    };
+    let chars: Vec<(usize, char)> = word.char_indices().collect();
+    let mut start = 0;
+    let mut breaks = Vec::new();
+    for pair in chars.windows(2) {
+        let ((_, prev), (at, c)) = (pair[0], pair[1]);
+        if !prev.is_alphabetic() || !c.is_alphabetic() {
+            continue;
+        }
+        let hyphen = offset > 0
+            && (((c as u32) < 0x250 && (prev as u32) >= offset)
+                || ((c as u32) >= offset && at > start && (prev as u32) < 0x250));
+        if foreign(c) != foreign(prev) {
+            breaks.push((at, false));
+            start = at;
+        } else if hyphen {
+            breaks.push((at, true));
+            start = at;
+        }
+    }
+    breaks
+}
+
+/// C's `TranslateClause` does not mix scripts in one word: it breaks the word
+/// where the script changes, and each run is translated in its own language.
+fn split_script_runs(tokens: &mut Vec<Token>, dict: &Dictionary, options: &LangOptions) {
+    let offset = c_letter_bits_offset(dict, options);
+    if !tokens.iter().any(|t| matches!(t, Token::Word(w) if !script_run_breaks(w, offset).is_empty())) {
+        return;
+    }
+    let mut out = Vec::with_capacity(tokens.len() + 4);
+    for token in tokens.drain(..) {
+        let Token::Word(word) = &token else {
+            out.push(token);
+            continue;
+        };
+        let mut last = 0;
+        for (at, hyphen) in script_run_breaks(word, offset) {
+            out.push(Token::Word(word[last..at].to_string()));
+            if hyphen {
+                out.push(Token::WordJoin);
+            }
+            last = at;
+        }
+        out.push(Token::Word(word[last..].to_string()));
+    }
+    *tokens = out;
+}
+
 /// C's `TranslateClause` redoes an abandoned word as separate one-letter words:
 /// the rules in `dict` cannot read `ʃab`, so it becomes `ʃ`, `a`, `b`.  Returns,
 /// for each resulting token, the index of the first letter of the word it came
@@ -10206,6 +10274,7 @@ impl Translator {
         apply_space_grouping(&mut tokens, &self.options.number_grammar);
         apply_fractions(&mut tokens, lang);
         apply_exponents(&mut tokens, lang);
+        split_script_runs(&mut tokens, dict, &self.options);
         let spelled = split_abandoned_words(&mut tokens, dict, &self.options);
         let english: std::cell::OnceCell<Option<(Translator, Dictionary)>> =
             std::cell::OnceCell::new();
