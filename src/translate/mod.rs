@@ -6497,10 +6497,6 @@ fn spaced_dash(tokens: &[Token], ix: usize) -> bool {
     ((before && after) || doubled) && !second_of_pair && !pause_pending
 }
 
-fn switched_after_digits(tokens: &[Token], token_ix: usize) -> bool {
-    token_ix.checked_sub(1).is_some_and(|k| matches!(tokens[k], Token::Number(_)))
-}
-
 fn word_tail(word: Option<&str>) -> [u8; 8] {
     let mut out = [0u8; 8];
     let Some(w) = word else { return out };
@@ -10547,7 +10543,7 @@ impl Translator {
                     let sw = sw.filter(|codes| {
                         codes.iter().any(|c| !c.is_boundary && c.marker.is_none())
                     });
-                    if said_nothing && sw.is_none() && switched_after_digits(&tokens, token_ix) {
+                    if said_nothing && sw.is_none() {
                         continue;
                     }
                     if let Some(sw) = sw {
