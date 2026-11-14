@@ -67,6 +67,7 @@ jobs:
           --test shn_my_script_words
           --test ucd_alpha_word_letters
           --test hak_latin_words
+          --test plural_possessive_quote
           --test unknown_letter_byte_walk
           --test vi_final_tone_and_vowels
           --test ru_voice_replace

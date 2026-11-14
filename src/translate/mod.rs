@@ -7044,6 +7044,28 @@ fn own_break_stream(e: &TranslateEntry) -> bool {
         && e.phonemes.get(..2) == Some(&[crate::phoneme::PHON_PAUSE, crate::phoneme::PHON_END_WORD])
 }
 
+/// C's `single_quoted` after each quote before `token_ix`: a quote that follows a space opens
+/// a quoted stretch, any other quote ends it.
+fn inside_single_quotes(tokens: &[Token], token_ix: usize) -> bool {
+    (0..token_ix)
+        .rev()
+        .find(|&j| matches!(tokens[j], Token::Punctuation('\'')))
+        .is_some_and(|j| j == 0 || matches!(tokens[j - 1], Token::Space))
+}
+
+/// The token is a word whose last letter is `s`.
+fn ends_with_plural_s(token: Option<&Token>) -> bool {
+    matches!(token, Some(Token::Word(w)) if w.ends_with('s'))
+}
+
+/// An apostrophe right after a word's `s` outside a quoted stretch is dropped without the
+/// pause other quotes add (`dogs' bones`).
+fn plural_possessive_quote(tokens: &[Token], token_ix: usize) -> bool {
+    token_ix > 0
+        && ends_with_plural_s(tokens.get(token_ix - 1))
+        && !inside_single_quotes(tokens, token_ix)
+}
+
 /// The word before `token_ix` in its clause holds a quote the rules do not cover.
 fn previous_word_has_open_quote(
     tokens: &[Token],
@@ -10540,7 +10562,8 @@ impl Translator {
                         // clause ("don't add extra pause at beginning of
                         // clause") — so `'hello` has no pause while the curly
                         // `‘hello`, a real bracket, keeps its own.
-                        let clause_initial_quote = *c == '\'' && !spoken_before_clause[token_ix];
+                        let clause_initial_quote = *c == '\''
+                            && (!spoken_before_clause[token_ix] || plural_possessive_quote(&tokens, token_ix));
                         let spoken_before = spoken_before_clause[token_ix];
                         let pause_dash = *c == '-' && spaced_dash(&tokens, token_ix) && spoken_before;
                         if (is_bracket(*c) || pause_dash)
