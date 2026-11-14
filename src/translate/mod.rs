@@ -12271,6 +12271,7 @@ fn resolve_virtual_phonemes_in_codes(
         .collect();
     let starts = word_starts(codes, &real);
     let mut deleted: Vec<usize> = Vec::new();
+    let mut dropped: Vec<usize> = Vec::new();
     for (n, &i) in real.iter().enumerate() {
         let code = codes[i].code;
         let Some(ph) = phdata.get(code) else { continue };
@@ -12417,6 +12418,7 @@ fn resolve_virtual_phonemes_in_codes(
             }
             if changed == 1 {
                 deleted.push(i);
+                dropped.push(i);
             } else {
                 codes[i].code = changed;
             }
@@ -12425,7 +12427,11 @@ fn resolve_virtual_phonemes_in_codes(
     deleted.sort_unstable();
     deleted.dedup();
     for &i in deleted.iter().rev() {
-        codes.remove(i);
+        if dropped.contains(&i) {
+            codes[i] = PhonemeCode { marker: Some(CodeMarker::Deleted), ..Default::default() };
+        } else {
+            codes.remove(i);
+        }
     }
 }
 
@@ -12491,6 +12497,9 @@ pub enum CodeMarker {
     /// phoneme's `InsertPhoneme`, so in C it takes over the neighbour's list
     /// entry (stress and syllable flag) and the neighbour is re-added bare.
     InsertedBefore,
+    /// A phoneme stood here that its own program deleted. C's list still held
+    /// it when it looked at the phoneme before.
+    Deleted,
 }
 
 // ---------------------------------------------------------------------------

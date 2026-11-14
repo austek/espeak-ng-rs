@@ -37,6 +37,8 @@ pub struct Ph {
     /// A pause `MakePhonemeList` inserts between words, after it has looked
     /// ahead from the phonemes before it.
     pub inserted: bool,
+    /// A phoneme a program deletes came next in C's list, inside the word.
+    pub deleted_next: bool,
     /// The tone phoneme of a tone-language syllable (C's `tone_ph`).
     pub tone: Option<PhonemeTab>,
     pub tone_env: ToneEnv,
@@ -68,6 +70,7 @@ impl Ph {
             pitch2: 255,
             embedded: Vec::new(),
             inserted: false,
+            deleted_next: false,
             tone: None,
             tone_env: ToneEnv::default(),
         }
@@ -156,6 +159,14 @@ pub fn build_list(
     let mut bare: Vec<usize> = Vec::new();
     for (idx, c) in codes.iter().enumerate() {
         match &c.marker {
+            Some(CodeMarker::Deleted) => {
+                if newword & PHLIST_START_OF_WORD == 0 {
+                    if let Some(last) = list.last_mut() {
+                        last.deleted_next = true;
+                    }
+                }
+                continue;
+            }
             Some(CodeMarker::InsertedBefore) => {
                 insert = Insert::Marked;
                 continue;
@@ -342,7 +353,8 @@ fn diminish_unstressed(list: &mut [Ph], stress_flags: u32) {
         if stress_flags & 0x08 != 0 {
             diminish_pair(list, i);
         } else if unstress_count > 1 && unstress_count & 1 == 0 {
-            let next_word = list[i + 1..].iter().find(|n| !n.inserted).is_some_and(|n| n.newword != 0);
+            let next_word = !list[i].deleted_next
+                && list[i + 1..].iter().find(|n| !n.inserted).is_some_and(|n| n.newword != 0);
             if stress_flags & S_NO_DIM != 0 || (word_stress > 3 && next_word) {
                 unstress_count = 1;
             } else {
