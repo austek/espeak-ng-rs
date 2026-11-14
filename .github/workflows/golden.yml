@@ -250,6 +250,7 @@ jobs:
           --test cmn_neutral_tone_last_stress
           --test armenian_letter_groups
           --test comma_between_numbers
+          --test number_punctuation_c_parity
           --test stray_marks_between_clauses
           --test trailing_period_runs
       - name: C ABI tests

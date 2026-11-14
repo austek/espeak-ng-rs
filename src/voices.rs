@@ -747,6 +747,14 @@ pub fn voice_bracket_pause(data_dir: &Path, lang: &str) -> (u8, u8) {
         .map_or((4, 2), |v| (v.brackets.unwrap_or(4), v.brackets_announced.unwrap_or(2)))
 }
 
+/// The `numbers` bits (`langopts.numbers`, `numbers2`) a voice file adds to its language.
+pub fn voice_numbers(data_dir: &Path, lang: &str) -> (u32, u32) {
+    list_voices(data_dir)
+        .iter()
+        .find(|v| v.language.eq_ignore_ascii_case(lang))
+        .map_or((0, 0), |v| v.numbers)
+}
+
 /// An MBROLA voice: the `voices/mb/mb-<db>` file's `language` and its
 /// `mbrola <database> <phtrans>` directive.
 #[derive(Debug, Clone, PartialEq, Eq)]

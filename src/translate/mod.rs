@@ -500,6 +500,10 @@ pub struct NumberGrammar {
     /// longer limit).  Leading zeros are still spoken one at a time, and a
     /// fraction longer than the limit falls back to digit-by-digit.  `0` = off.
     pub fraction_digits_as_number: u8,
+    /// A fraction that starts with a zero is read digit by digit as a whole,
+    /// without the leading zeros being named first — upstream `NUM_DFRACTION_3`
+    /// (ro, rup).
+    pub fraction_zero_reads_digits: bool,
     /// Read a fraction of any length as one number unless it starts with a zero
     /// (which falls back to single digits) — upstream `NUM_DFRACTION_1`
     /// (Italian: "3,14" is "tre virgola **quattordici**").
@@ -697,6 +701,11 @@ pub struct ThousandsGrammar {
 
 impl NumberGrammar {
     fn for_lang(lang: &str) -> Self {
+        Self::for_lang_with(lang, (0, 0))
+    }
+
+    /// The grammar for `lang` with the voice file's `numbers` bits (C `ReadNumbers`) added.
+    fn for_lang_with(lang: &str, voice_numbers: (u32, u32)) -> Self {
         let mut grammar = Self::default();
         let lang = primary_bcp47_subtag(lang);
         grammar.thousands.swap = matches!(lang, "bpy" | "om");
@@ -796,7 +805,7 @@ impl NumberGrammar {
             "ar" | "fa" | "ur" => {
                 grammar.group_separator = Some(',');
             }
-            "nl" | "mt" => {
+            "nl" => {
                 grammar.ordinals.dot_marks_ordinal = true;
                 grammar.ordinals.indicator = Some("e".to_string());
                 // Dutch, like German, suffixes the whole cardinal for compound
@@ -977,10 +986,16 @@ impl NumberGrammar {
             "et" | "fi" | "he" | "hr" | "bs" | "sr" | "mk" | "pl" | "pt" | "sk" | "cs"
             | "sl" | "smj" | "tr" | "az" => 2,
             // NUM_DFRACTION_4 — the same, up to five digits.
-            "es" | "an" | "ca" | "ia" | "pap" | "fr" | "ht" | "lt" | "lv" | "ltg" | "sq"
+            "es" | "ca" | "pap" | "fr" | "ht" | "lt" | "lv" | "ltg" | "sq"
             | "tt" | "vi" => 5,
+            // NUM_DFRACTION_3 — up to four digits, none of them a leading zero.
+            "ro" | "rup" => 4,
             _ => 0,
         };
+        if lang == "smj" {
+            grammar.tens = TensGrammar::UnitsThenConjunction;
+        }
+        grammar.fraction_zero_reads_digits = matches!(primary_bcp47_subtag(lang), "ro" | "rup");
         grammar.fraction_whole_number = primary_bcp47_subtag(lang) == "it";
         // C `NUM_HUNDRED_AND` for the languages whose arm above doesn't set it:
         // a conjunction joins hundreds→remainder ("mi'a WA wahid", "sto I edno").
@@ -1027,7 +1042,9 @@ impl NumberGrammar {
             lang,
             "af" | "da" | "en" | "fo" | "is" | "kl" | "nb" | "nl" | "no" | "sv"
         );
-        (grammar.c_numbers, grammar.c_numbers2) = ordinal::c_number_flags(lang);
+        let (numbers, numbers2) = ordinal::c_number_flags(lang);
+        (grammar.c_numbers, grammar.c_numbers2) =
+            (numbers | voice_numbers.0, numbers2 | voice_numbers.1);
         (grammar.group_separator, grammar.decimal_separator, grammar.space_group) =
             ordinal::c_separators(lang, grammar.c_numbers);
         if grammar.c_numbers == 0 {
@@ -1052,6 +1069,7 @@ impl Default for NumberGrammar {
             thousands: ThousandsGrammar::default(),
             tone_numbers: false,
             fraction_digits_as_number: 0,
+            fraction_zero_reads_digits: false,
             fraction_whole_number: false,
             fraction_suffix: false,
             fraction_feminine: false,
@@ -4106,17 +4124,22 @@ fn num3_phonemes_g(
                 // the dict lookup above is empty, so compose ten + unit.  (Without
                 // this, `tr`/`tk`/`hy`/`hu` produced nothing for 11–19.)
                 let ten = lookup_num_phonemes(dict, "_1X");
-                let ten = if ten.is_empty() { lookup_num_phonemes(dict, "_10") } else { ten };
-                if !ten.is_empty() {
+                let unit = lookup_num_phonemes(dict, &num_key(tensunits - 10));
+                if ten.is_empty() {
+                    // C drops the tens word a language lacks and speaks the unit alone.
+                    tens_part.push_lookup_word(&unit);
+                } else {
                     tens_part.push_lookup_word(&ten);
                     // Some languages join the compositional teen with a
                     // conjunction ("kumi NA tano" = 15 in Swahili), the same one
                     // used between tens and units.  Turkish/Turkmen ("on beş")
                     // do not — they are `Standard`, so this stays gated.
-                    if grammar.tens == TensGrammar::WithConjunction {
+                    if grammar.c_numbers & (ordinal::NUM_SWAP_TENS | ordinal::NUM_AND_UNITS) != 0
+                        && !unit.is_empty()
+                    {
                         tens_part.append_lookup_suffix(&lookup_num_phonemes(dict, "_0and"));
                     }
-                    tens_part.append_lookup_suffix(&lookup_num_phonemes(dict, &num_key(tensunits - 10)));
+                    tens_part.append_lookup_suffix(&unit);
                 }
             }
         } else {
@@ -4229,7 +4252,10 @@ fn push_decimal_part(
     dict: &Dictionary,
     grammar: &NumberGrammar,
 ) {
-    let decimal_point = lookup_num_phonemes(dict, "_dpt");
+    let mut decimal_point = lookup_num_phonemes(dict, "_dpt");
+    if decimal_point.is_empty() && grammar.decimal_separator == '.' {
+        decimal_point = lookup_num_phonemes(dict, "_.");
+    }
     if !decimal_point.is_empty() && with_point {
         pronunciation.push_lookup_word(&decimal_point);
     }
@@ -4362,6 +4388,9 @@ fn push_fraction_as_number(
         return push_fraction_whole(pronunciation, fractional, dict, grammar);
     }
     let zeros = fractional.bytes().take_while(|&b| b == b'0').count();
+    if grammar.fraction_zero_reads_digits && zeros > 0 {
+        return 0;
+    }
     for _ in 0..zeros {
         pronunciation.append_lookup_suffix(&lookup_num_phonemes(dict, &num_key(0)));
     }
@@ -6679,9 +6708,9 @@ fn stray_mark_phonemes(
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     options: &LangOptions,
-) -> Option<Vec<u8>> {
+) -> Option<(Vec<u8>, bool)> {
     let wr = word_to_phonemes(&c.to_string(), dict, phdata, stress_opts, options);
-    wr.phonemes.iter().any(|&b| b != 0).then_some(wr.phonemes)
+    wr.phonemes.iter().any(|&b| b != 0).then_some((wr.phonemes, wr.found_in_list))
 }
 
 /// C ends a clause at a mark that a quote or bracket follows, and reads that
@@ -7977,8 +8006,14 @@ fn time_connector(lang: &str) -> Vec<Token> {
         "fr" => vec![Token::Word("heures".to_string()), Token::Space],
         "de" => vec![Token::InlinePhonemes("_|%u:r".to_string()), Token::Space],
         "it" => vec![Token::InlinePhonemes("_%%E_".to_string()), Token::Space],
+        "lij" => vec![Token::InlinePhonemes("_%%e_".to_string()), Token::Space],
         _ => Vec::new(),
     }
+}
+
+/// Languages whose rules omit the colon of a time (`D_) : (_DD_`).
+fn time_colon_is_silent(lang: &str) -> bool {
+    matches!(primary_bcp47_subtag(lang), "en" | "lt" | "lv" | "ltg")
 }
 
 fn normalized_hour(h: &str) -> String {
@@ -8005,8 +8040,14 @@ fn colon_run_end(tokens: &[Token], from: usize) -> Option<usize> {
     (run > 0).then_some(start + run)
 }
 
+/// C reads a colon after a digit string as a word of its own.
+fn colon_word() -> Vec<Token> {
+    vec![Token::Punctuation(':'), Token::Space]
+}
+
 fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
     let connector = time_connector(lang);
+    let silent = time_colon_is_silent(lang);
     let read_colon = primary_bcp47_subtag(lang) == "en";
     // A cardinal token whose surface is exactly two digits (a minute/second).
     let two_digit = |t: Option<&Token>| -> Option<String> {
@@ -8036,16 +8077,24 @@ fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
                 let h_norm = if h.len() <= 2 { normalized_hour(&h) } else { h.clone() };
                 out.push(Token::Number(NumberToken::Cardinal(h_norm)));
                 out.push(Token::Space);
-                if time_rule_matches(&h, &minute) && !dot_decimal_follows(tokens, minute_at + 1) {
+                if time_rule_matches(&h, &minute) && !dot_decimal_follows(tokens, minute_at + 1) && !connector.is_empty() {
                     out.extend(connector.clone());
+                } else if !silent {
+                    out.extend(colon_word());
                 }
-                out.push(Token::Number(NumberToken::Cardinal(minute.clone())));
+                let seconds_follow = colon_run_end(tokens, minute_at + 1)
+                    .and_then(|e| two_digit(tokens.get(e)))
+                    .is_some();
+                let minute_spoken = if seconds_follow { normalized_hour(&minute) } else { minute.clone() };
+                out.push(Token::Number(NumberToken::Cardinal(minute_spoken)));
                 let mut j = minute_at + 1;
                 if let Some(e) = colon_run_end(tokens, j) {
                     if let Some(sec) = two_digit(tokens.get(e)) {
                         out.push(Token::Space);
-                        if time_rule_matches(&minute, &sec) {
+                        if time_rule_matches(&minute, &sec) && !connector.is_empty() {
                             out.extend(connector.clone());
+                        } else if !silent {
+                            out.extend(colon_word());
                         }
                         out.push(Token::Number(NumberToken::Cardinal(sec)));
                         j = e + 1;
@@ -8058,11 +8107,13 @@ fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
         // A ':' that isn't a valid time (a ratio like "3:2"): English reads it as
         // "colon", every other language drops it — neither breaks the clause.
         if matches!(&tokens[i], Token::Punctuation(':')) {
+            out.push(Token::Space);
             if read_colon {
-                out.push(Token::Space);
                 out.push(Token::Word("colon".to_string()));
-                out.push(Token::Space);
+            } else {
+                out.push(Token::Punctuation(':'));
             }
+            out.push(Token::Space);
             i += 1;
             continue;
         }
@@ -9136,6 +9187,18 @@ pub(crate) fn build_translate_entries(
                     }
                 }
                 let listed = matches!(token, NumberToken::Cardinal(d) if has_listed_word(d, dict, options));
+                let number_voice = lookup_num_phonemes(dict, "_0lang");
+                if !listed && number_voice.first() == Some(&crate::phoneme::PHON_SWITCH) {
+                    entries.push(TranslateEntry {
+                        phonemes:   number_voice,
+                        dict_flags: 0,
+                        found_in_list: false,
+                        kind:       TranslateEntryKind::Word,
+                        word_lower: Some(token.surface().to_string().to_lowercase()),
+                        word_group: None,
+                    });
+                    continue;
+                }
                 let wr = if listed { None } else {
                     translate_number_token_with_tail(
                         token,
@@ -9200,17 +9263,18 @@ pub(crate) fn build_translate_entries(
                 if *c != '.'
                     && is_clause_punctuation(*c)
                     && !punct_covers(options, *c)
-                    && !(token_ix > 0
-                        && matches!(tokens[token_ix - 1], Token::Number(_))
-                        && matches!(tokens.get(token_ix + 1), Some(Token::Number(_))))
+                    && !(*c == ','
+                        && token_ix > 0
+                        && matches!(tokens[token_ix - 1], Token::Number(_)))
                     && stray_mark_phonemes(*c, dict, phdata, stress_opts, options).is_some() =>
             {
-                let phonemes = stray_mark_phonemes(*c, dict, phdata, stress_opts, options).unwrap_or_default();
+                let (phonemes, found_in_list) =
+                    stray_mark_phonemes(*c, dict, phdata, stress_opts, options).unwrap_or_default();
                 entries.push(TranslateEntry {
                     phonemes, dict_flags: 0,
                     kind: TranslateEntryKind::Word, word_lower: Some(c.to_string()),
                     word_group: None,
-                    found_in_list: false,
+                    found_in_list,
                 });
             }
             Token::Operator(c) | Token::Punctuation(c)
@@ -9776,6 +9840,10 @@ impl Translator {
         // Honour the voice's `dictrules` directive (Brazilian Portuguese etc.).
         options.dict_condition = crate::voices::voice_dict_condition(&dir, base);
         options.bracket_pause = crate::voices::voice_bracket_pause(&dir, base);
+        let voice_numbers = crate::voices::voice_numbers(&dir, base);
+        if voice_numbers != (0, 0) {
+            options.number_grammar = NumberGrammar::for_lang_with(base, voice_numbers);
+        }
         Ok(Translator { options, data_dir: dir, loaded: std::sync::Mutex::new(None) })
     }
 
@@ -12454,7 +12522,10 @@ mod tests {
         assert_eq!(g("mt").decimal_separator, '.');
         (nl.group_separator, nl.decimal_separator, nl.space_group) =
             (g("mt").group_separator, g("mt").decimal_separator, g("mt").space_group);
-        assert_eq!(nl, g("mt"), "nl and mt share the same number arm (apart from Dutch-only flags)");
+        // Maltese sets only `NUM_DEFAULT` in C: tens first, no ordinal dot.
+        assert_eq!(g("mt").tens, TensGrammar::Standard, "mt: tens first (C: 34 is 'tletin erba')");
+        assert!(!g("mt").ordinals.dot_marks_ordinal);
+        assert_ne!(nl, g("mt"));
         // Danish/Faroese/Slovenian are units-first ("enogtyve"), so they differ
         // from the tens-first Finnish/Estonian they used to share an arm with.
         assert_eq!(g("da").tens, TensGrammar::UnitsThenConjunction, "da: 'enogtyve'");
