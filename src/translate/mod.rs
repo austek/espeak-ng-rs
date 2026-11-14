@@ -26,6 +26,7 @@
 pub mod ipa_table;
 pub mod phoneme_ipa;
 pub mod compat;
+mod ucd_alpha;
 pub mod ssml;
 mod accent;
 mod mandarin_sandhi;
@@ -2602,13 +2603,9 @@ where
         && after2.map(|c| c.is_alphabetic()).unwrap_or(false)
 }
 
-/// Whether the clause reader keeps `c` inside a word.  The Myanmar-block tone
-/// marks (Sgaw Karen, Shan, Khamti) are letters to Unicode but not to C, which
-/// reads a run of them as a word of their own.
+/// Whether the clause reader keeps `c` inside a word: C's `IsAlpha` over its own Unicode tables.
 fn is_word_letter(c: char) -> bool {
-    let tone_mark = matches!(c as u32,
-        0x1063 | 0x1064 | 0x1069..=0x106D | 0x1087..=0x108D | 0x108F | 0x109A | 0x109B);
-    c.is_alphabetic() && !tone_mark
+    ucd_alpha::is_alpha(c)
 }
 
 /// An Indic combining mark (virama / nukta) that continues a word but isn't
