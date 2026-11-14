@@ -149,8 +149,14 @@ pub fn build_list(
     let mut next_tone: Option<PhonemeTab> = None;
     let mut inserted: Option<i32> = None;
     let mut gaps: Vec<(usize, i32)> = Vec::new();
-    for c in codes {
+    let mut insert = Insert::None;
+    let mut bare: Vec<usize> = Vec::new();
+    for (idx, c) in codes.iter().enumerate() {
         match &c.marker {
+            Some(CodeMarker::InsertedBefore) => {
+                insert = Insert::Marked;
+                continue;
+            }
             Some(CodeMarker::Embedded(cmd)) => {
                 pending.push(*cmd);
                 continue;
@@ -217,19 +223,28 @@ pub fn build_list(
             }
             continue;
         }
-        let s = if t.typ == PH_VOWEL { stress.take().unwrap_or(1) } else { 0 };
+        let before = std::mem::replace(&mut insert, Insert::None);
+        let s = entry_stress(before, t.typ, &mut stress, || follows_vowel(&codes[idx + 1..], table));
         let mut p = Ph::new(t.clone(), s, newword);
         newword = 0;
+        if before == Insert::Neighbour {
+            bare.push(list.len());
+        }
         if let Some(units) = inserted.take() {
             p.inserted = true;
             if units > 0 && t.typ == PH_PAUSE {
                 gaps.push((list.len(), units * 14));
             }
         }
-        if t.typ == PH_VOWEL {
+        if before == Insert::Neighbour {
+            insert = Insert::None;
+        } else if t.typ == PH_VOWEL {
             p.synthflags |= SFLAG_SYLLABLE;
             p.tone = next_tone.take();
             prev_vowel = Some(list.len());
+        }
+        if before == Insert::Marked {
+            insert = Insert::Neighbour;
         }
         if !pending.is_empty() {
             p.synthflags |= SFLAG_EMBEDDED;
@@ -240,8 +255,39 @@ pub fn build_list(
     finish_list(&mut list, phdata, post_pause);
     gaps.into_iter().for_each(|(i, length)| list[i].length = length);
     set_word_stress(&mut list);
+    bare.iter().for_each(|&i| list[i].wordstress = 0);
     diminish_unstressed(&mut list, stress_flags);
     Clause { list, clause_char: None, embedded_after: pending }
+}
+
+/// Where the phoneme being added stands to a phoneme a program inserted
+/// before another: the inserted one, or that neighbour added again.
+#[derive(Clone, Copy, PartialEq)]
+enum Insert {
+    None,
+    Marked,
+    Neighbour,
+}
+
+/// The inserted phoneme takes the neighbour's pending stress, and is
+/// unstressed when it is a vowel before a consonant; the neighbour is added
+/// again with no stress.
+fn entry_stress(insert: Insert, typ: u8, pending: &mut Option<u8>, next_is_vowel: impl Fn() -> bool) -> u8 {
+    match insert {
+        Insert::None if typ == PH_VOWEL => pending.take().unwrap_or(1),
+        Insert::Marked if next_is_vowel() => {
+            let s = pending.take().unwrap_or(1);
+            if typ == PH_VOWEL { s } else { 0 }
+        }
+        _ => 0,
+    }
+}
+
+fn follows_vowel(rest: &[PhonemeCode], table: &PhonemeData) -> bool {
+    rest.iter()
+        .filter(|c| c.marker.is_none() && !c.is_boundary)
+        .find_map(|c| table.get(c.code).filter(|t| t.typ != PH_STRESS))
+        .is_some_and(|t| t.typ == PH_VOWEL)
 }
 
 fn finish_list(list: &mut Vec<Ph>, phdata: &PhonemeData, post_pause: i32) {

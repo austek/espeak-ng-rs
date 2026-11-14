@@ -12142,6 +12142,10 @@ fn splice_list_edits(codes: &mut Vec<PhonemeCode>, edits: Vec<(usize, u8, bool)>
         while let Some((_, c, before)) = pending.next_if(|e| e.0 == j) {
             if before { pre = Some(c) } else { post = Some(c) }
         }
+        if pre.is_some() {
+            codes.push(PhonemeCode { marker: Some(CodeMarker::InsertedBefore), ..Default::default() });
+            inserted.push(false);
+        }
         for c in pre.into_iter().chain(pre.and(post)) {
             codes.push(plain(c));
             inserted.push(true);
@@ -12483,6 +12487,10 @@ pub enum CodeMarker {
     /// not by the word's translation.  A non-zero value makes it the `-g` word
     /// gap, lasting that many units of 10 ms at the default speed.
     InsertedPause(i32),
+    /// The phoneme that follows was inserted before the one after it by that
+    /// phoneme's `InsertPhoneme`, so in C it takes over the neighbour's list
+    /// entry (stress and syllable flag) and the neighbour is re-added bare.
+    InsertedBefore,
 }
 
 // ---------------------------------------------------------------------------

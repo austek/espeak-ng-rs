@@ -106,6 +106,7 @@ jobs:
           --test synth_parity_penultimate
           --test synth_parity_unstressend
           --test synth_parity_syllabic
+          --test synth_parity_insert_before
           --test tr_phoneme_program_context
           --test tr_next_phoneme_word_end
           --test max_digits
