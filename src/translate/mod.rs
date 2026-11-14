@@ -10510,11 +10510,12 @@ impl Translator {
                         it.next().filter(|_| it.next().is_none())
                     };
                     // A Latin letter handed to English (C's default-Latin switch)
-                    // is named; a word of another script goes to its language's
+                    // or a lone digit handed over by `_0lang` is named, so it gets
+                    // no word break of a number; a word of another script goes to its language's
                     // own reading, rules or list.
                     let char_name = word.strip_prefix('_').and_then(lone).or_else(|| {
                         lone(word)
-                            .filter(|c| c.is_alphabetic() && (*c as u32) <= 0x241)
+                            .filter(|c| c.is_ascii_digit() || (c.is_alphabetic() && (*c as u32) <= 0x241))
                             .and_then(|c| c.to_lowercase().next())
                     });
                     // `translate_to_codes_inner` with switching disabled: a
@@ -11407,7 +11408,9 @@ fn insert_word_gaps(
             }
             let boundaries = codes[at..]
                 .iter()
-                .take_while(|c| c.is_boundary && c.clause_char.is_none())
+                .take_while(|c| {
+                    (c.is_boundary || (c.code == PHON_END_WORD && c.marker.is_none())) && c.clause_char.is_none()
+                })
                 .count();
             let hoist = closes_switch(codes.get(at + boundaries), voice_lang);
             let moved = if hoist { boundaries } else { 0 };
@@ -11427,6 +11430,36 @@ fn insert_word_gaps(
         );
         codes.insert(at, PhonemeCode { marker: Some(CodeMarker::InsertedPause(0)), ..Default::default() });
         codes.splice(at + 2..at + 2, boundaries);
+    }
+    insert_switch_start_gaps(codes, phdata, vowel_pause, word_gap);
+}
+
+/// A switched word whose phonemes open with a word break starts two words in C: one at the
+/// `phonSWITCH` and one after the break, so the word gap also goes between the switch and
+/// the first sound.
+fn insert_switch_start_gaps(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData, vowel_pause: u32, word_gap: u8) {
+    let (level, _) = stress_levels(codes, phdata);
+    let opens: Vec<usize> = (2..codes.len())
+        .filter(|&first| {
+            codes[first].marker.is_none()
+                && !codes[first].is_boundary
+                && codes[first].code > 8
+                && codes[first - 1].marker.is_none()
+                && codes[first - 1].code == crate::phoneme::PHON_END_WORD
+                && matches!(codes[first - 2].marker, Some(CodeMarker::LangSwitch(_)))
+        })
+        .collect();
+    for first in opens.into_iter().rev() {
+        let next_type = phdata.get(codes[first].code).map_or(0, |p| p.typ);
+        let stressed = level.get(first).is_some_and(|&l| l >= 4);
+        let gap = word_gap_phoneme(vowel_pause, word_gap, 0, next_type, stressed);
+        if gap != 0 && phdata.get(gap).is_some() {
+            let pause = [
+                PhonemeCode { marker: Some(CodeMarker::InsertedPause(0)), ..Default::default() },
+                PhonemeCode { code: gap, ..Default::default() },
+            ];
+            codes.splice(first - 1..first - 1, pause);
+        }
     }
 }
 
