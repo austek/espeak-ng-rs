@@ -7164,15 +7164,17 @@ fn dict_lists_word(word: &str, dict: &Dictionary, options: &LangOptions) -> bool
 /// Where `TranslateClause` starts a new word inside `word`: between two letters
 /// of which only one is in a script foreign to the voice (plain adjacency), or
 /// between native and Latin letters of a non-Latin voice (a hyphen join).
-fn script_run_breaks(word: &str, offset: u32) -> Vec<(usize, bool)> {
+fn script_run_breaks(word: &str, offset: u32, dict: &Dictionary, lang: &str) -> Vec<(usize, bool)> {
     let foreign = |c: char| {
         letters::alphabet_from_char(c as u32).is_some_and(|a| a.offset != offset)
     };
     let chars: Vec<(usize, char)> = word.char_indices().collect();
+    let heard = replaced_letters(word, dict, lang);
     let mut start = 0;
     let mut breaks = Vec::new();
-    for pair in chars.windows(2) {
-        let ((_, prev), (at, c)) = (pair[0], pair[1]);
+    for (ix, pair) in chars.windows(2).enumerate() {
+        let at = pair[1].0;
+        let (prev, c) = (heard[ix], heard[ix + 1]);
         if !prev.is_alphabetic() || !c.is_alphabetic() {
             continue;
         }
@@ -7190,11 +7192,25 @@ fn script_run_breaks(word: &str, offset: u32) -> Vec<(usize, bool)> {
     breaks
 }
 
+/// The letters of `word` under the voice's `.replace` table: C substitutes
+/// each character (`SubstituteChar`) before it decides where a script run
+/// ends. A table that changes the number of letters (digraphs) leaves the word
+/// as written.
+fn replaced_letters(word: &str, dict: &Dictionary, lang: &str) -> Vec<char> {
+    let lower = lowercase_for_lang(word, lang);
+    let replaced = dict.apply_replacements(&lower).unwrap_or(lower);
+    if replaced.chars().count() != word.chars().count() {
+        return word.chars().collect();
+    }
+    replaced.chars().collect()
+}
+
 /// C's `TranslateClause` does not mix scripts in one word: it breaks the word
 /// where the script changes, and each run is translated in its own language.
 fn split_script_runs(tokens: &mut Vec<Token>, dict: &Dictionary, options: &LangOptions) {
     let offset = options.letter_bits_offset;
-    if !tokens.iter().any(|t| matches!(t, Token::Word(w) if !script_run_breaks(w, offset).is_empty())) {
+    let breaks = |w: &str| script_run_breaks(w, offset, dict, &options.lang);
+    if !tokens.iter().any(|t| matches!(t, Token::Word(w) if !breaks(w).is_empty())) {
         return;
     }
     let mut out = Vec::with_capacity(tokens.len() + 4);
@@ -7204,7 +7220,7 @@ fn split_script_runs(tokens: &mut Vec<Token>, dict: &Dictionary, options: &LangO
             continue;
         };
         let mut last = 0;
-        for (at, hyphen) in script_run_breaks(word, offset) {
+        for (at, hyphen) in breaks(word) {
             out.push(Token::Word(word[last..at].to_string()));
             if hyphen {
                 out.push(Token::WordJoin);

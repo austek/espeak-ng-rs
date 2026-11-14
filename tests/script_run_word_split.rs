@@ -15,6 +15,24 @@ fn spoken(lang: &str, flag: &str, text: &str) -> String {
 }
 
 #[test]
+fn the_rules_replace_table_runs_before_the_script_change_is_looked_for() {
+    let cases = [
+        ("sr", "Москваcity", "m'oskv&ts,ItI"),
+        ("sr", "дваcity", "dv'atsItI"),
+        ("sr", "smartфон", "sm'ARtfon"),
+        ("sr", "кафеbar", "k'afEbAR"),
+        ("mk", "кафеbar", "k'afeb,&R"),
+        ("mk", "smartфон", "sm'aRtfon"),
+        ("mk", "дваcity", "dv'atsIt(en)w'aI(mk)"),
+        ("mk", "Москваcity", "m'oskv&ts,It(en)w'aI(mk)"),
+        ("hr", "смартphone", "sm'ARtphonE"),
+    ];
+    for (lang, text, want) in cases {
+        assert_eq!(spoken(lang, "-x", text), want, "{lang} {text}");
+    }
+}
+
+#[test]
 fn mixed_script_words_are_read_in_runs() {
     let cases = [
         ("ky", "кгkм", "kilˌoɡrɑm (en)kˈeɪ(ky) m"),
