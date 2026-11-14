@@ -1238,6 +1238,11 @@ pub enum Token {
     /// rather than as the dictionary's name for the character, which is often
     /// the name of the sign itself ("minus sign").
     Operator(char),
+    /// A colon between two digit strings (`10:30`, `3:2`).  C makes it a word of its own and
+    /// translates it with the digits around it as rule context, so the language's rules
+    /// decide whether it is silent, a connector ("Uhr") or its name.  `before` and `after`
+    /// are the digit strings as written.
+    DigitColon { before: String, after: String },
     /// Inline phonemes given directly in `[[ … ]]` (espeak phoneme mnemonics).
     /// These bypass the dictionary and are emitted verbatim.
     InlinePhonemes(String),
@@ -2220,10 +2225,9 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 continue;
             }
             // A ':' immediately followed by a digit is a time or ratio separator,
-            // not a clause break — "10:30" (a time; the colon is silent, handled
-            // by `apply_time_reading`) or "3:2" (a ratio; the colon reads as the
-            // ":" symbol in English, silent elsewhere).  A ':' before whitespace/
-            // end ("Note: this") stays a clause boundary below.
+            // not a clause break: `apply_time_reading` makes it a word the rules
+            // read in context.  A ':' before whitespace/end ("Note: this") stays a
+            // clause boundary below.
             if c == ':' && matches!(chars.peek(), Some(n) if n.is_ascii_digit()) {
                 tokens.push(Token::Punctuation(':'));
                 continue;
@@ -8026,27 +8030,16 @@ fn suppress_abbreviation_periods(tokens: &mut [Token]) {
 
 }
 
-/// Read a `H:MM` (or `H:MM:SS`) time.  The colon is a time separator, not a
-/// clause boundary: it is silent, the hour drops any leading zero (`02:30` →
-/// "two thirty", `00:30` → "zero thirty"), and languages with a spoken connector
-/// insert it between hour and minute for a valid hour (0–23) — German "uhr",
-/// French "heures", Italian "e" (`10:30` → "zehn uhr dreißig" / "dix heures
-/// trente" / "dieci e trenta").  A field must be *exactly* two digits, so `10:3`
-/// and `10:300` are not times (their `:` stays a boundary).  The minute keeps its
-/// leading zero (`10:05` → "…zero five"), matching espeak-ng.
-fn time_connector(lang: &str) -> Vec<Token> {
-    match primary_bcp47_subtag(lang) {
-        "fr" => vec![Token::Word("heures".to_string()), Token::Space],
-        "de" => vec![Token::InlinePhonemes("_|%u:r".to_string()), Token::Space],
-        "it" => vec![Token::InlinePhonemes("_%%E_".to_string()), Token::Space],
-        "lij" => vec![Token::InlinePhonemes("_%%e_".to_string()), Token::Space],
-        _ => Vec::new(),
-    }
-}
-
-/// Languages whose rules omit the colon of a time (`D_) : (_DD_`).
-fn time_colon_is_silent(lang: &str) -> bool {
-    matches!(primary_bcp47_subtag(lang), "en" | "lt" | "lv" | "ltg")
+/// The rule context of a colon word: the end of the digit string before it and the one
+/// after it, each with its word break, as C's clause buffer holds them.
+fn colon_context(before: &str, after: &str) -> PosExpect {
+    let mut expect = PosExpect::default();
+    let tail = format!(" {before}");
+    let tail = &tail.as_bytes()[tail.len().saturating_sub(expect.prev_tail.len())..];
+    expect.prev_tail[..tail.len()].copy_from_slice(tail);
+    let next = &after.as_bytes()[..after.len().min(expect.next_word.len())];
+    expect.next_word[..next.len()].copy_from_slice(next);
+    expect
 }
 
 fn normalized_hour(h: &str) -> String {
@@ -8054,16 +8047,13 @@ fn normalized_hour(h: &str) -> String {
     if trimmed.is_empty() { "0" } else { trimmed }.to_string()
 }
 
-/// The context of the `_L05_) : (_L06D_` rules: a whole-word hour 0-9 or 00-23
-/// before the colon and a two-digit minute whose tens digit is 0-5 after it.
-fn time_rule_matches(hour: &str, minute: &str) -> bool {
-    let hour_ok = hour.len() <= 2 && hour.parse::<u32>().is_ok_and(|v| v <= 23);
-    hour_ok && minute.as_bytes().first().is_some_and(|b| (b'0'..=b'5').contains(b))
-}
-
-/// A `.` plus digit right after the minute keeps the word from ending there.
-fn dot_decimal_follows(tokens: &[Token], at: usize) -> bool {
-    matches!(tokens.get(at), Some(Token::Punctuation('.'))) && matches!(tokens.get(at + 1), Some(Token::Number(_)))
+/// The word after a colon as it stands in C's clause buffer: a `.` plus digits right after
+/// it stay part of the word.
+fn word_after_colon(tokens: &[Token], at: usize, digits: &str) -> String {
+    match (tokens.get(at + 1), tokens.get(at + 2)) {
+        (Some(Token::Punctuation('.')), Some(Token::Number(n))) => format!("{digits}.{}", n.surface()),
+        _ => digits.to_string(),
+    }
 }
 
 /// Index just after a run of colons that starts at `from` or after one space.
@@ -8073,15 +8063,13 @@ fn colon_run_end(tokens: &[Token], from: usize) -> Option<usize> {
     (run > 0).then_some(start + run)
 }
 
-/// C reads a colon after a digit string as a word of its own.
-fn colon_word() -> Vec<Token> {
-    vec![Token::Punctuation(':'), Token::Space]
+/// C reads the colons after a digit string as one word of its own, translated with the
+/// digit strings around it as context.
+fn colon_word(before: &str, after: &str) -> Vec<Token> {
+    vec![Token::DigitColon { before: before.to_string(), after: after.to_string() }, Token::Space]
 }
 
-fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
-    let connector = time_connector(lang);
-    let silent = time_colon_is_silent(lang);
-    let read_colon = primary_bcp47_subtag(lang) == "en";
+fn apply_time_reading(tokens: &mut Vec<Token>) {
     // A cardinal token whose surface is exactly two digits (a minute/second).
     let two_digit = |t: Option<&Token>| -> Option<String> {
         match t {
@@ -8110,11 +8098,7 @@ fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
                 let h_norm = if h.len() <= 2 { normalized_hour(&h) } else { h.clone() };
                 out.push(Token::Number(NumberToken::Cardinal(h_norm)));
                 out.push(Token::Space);
-                if time_rule_matches(&h, &minute) && !dot_decimal_follows(tokens, minute_at + 1) && !connector.is_empty() {
-                    out.extend(connector.clone());
-                } else if !silent {
-                    out.extend(colon_word());
-                }
+                out.extend(colon_word(&h, &word_after_colon(tokens, minute_at, &minute)));
                 let seconds_follow = colon_run_end(tokens, minute_at + 1)
                     .and_then(|e| two_digit(tokens.get(e)))
                     .is_some();
@@ -8124,11 +8108,7 @@ fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
                 if let Some(e) = colon_run_end(tokens, j) {
                     if let Some(sec) = two_digit(tokens.get(e)) {
                         out.push(Token::Space);
-                        if time_rule_matches(&minute, &sec) && !connector.is_empty() {
-                            out.extend(connector.clone());
-                        } else if !silent {
-                            out.extend(colon_word());
-                        }
+                        out.extend(colon_word(&minute, &word_after_colon(tokens, e, &sec)));
                         out.push(Token::Number(NumberToken::Cardinal(sec)));
                         j = e + 1;
                     }
@@ -8137,17 +8117,26 @@ fn apply_time_reading(tokens: &mut Vec<Token>, lang: &str) {
                 continue;
             }
         }
-        // A ':' that isn't a valid time (a ratio like "3:2"): English reads it as
-        // "colon", every other language drops it — neither breaks the clause.
-        if matches!(&tokens[i], Token::Punctuation(':')) {
+        // A ':' that isn't a valid time (a ratio like "3:2") is a word of its own as well,
+        // and never breaks the clause.
+        if let Some(end) = colon_run_end(tokens, i).filter(|_| matches!(tokens[i], Token::Punctuation(':'))) {
+            let before = match out.iter().rev().find(|t| !matches!(t, Token::Space)) {
+                Some(Token::Number(n)) => Some(n.surface()),
+                _ => None,
+            };
+            let after = match tokens.get(end) {
+                Some(Token::Number(n)) => Some(word_after_colon(tokens, end, &n.surface())),
+                _ => None,
+            };
             out.push(Token::Space);
-            if read_colon {
-                out.push(Token::Word("colon".to_string()));
-            } else {
-                out.push(Token::Punctuation(':'));
+            match before.zip(after) {
+                Some((before, after)) => out.extend(colon_word(&before, &after)),
+                None => {
+                    out.extend(std::iter::repeat_n(Token::Punctuation(':'), end - i));
+                    out.push(Token::Space);
+                }
             }
-            out.push(Token::Space);
-            i += 1;
+            i = end;
             continue;
         }
         out.push(tokens[i].clone());
@@ -9254,6 +9243,17 @@ pub(crate) fn build_translate_entries(
                     kind:       TranslateEntryKind::Word,
                     word_lower: Some(token.surface().to_string().to_lowercase()),
                         word_group: None
+                });
+            }
+            Token::DigitColon { before, after } => {
+                let wr = word_to_phonemes_inner(":", dict, phdata, stress_opts, options, 0, colon_context(before, after));
+                entries.push(TranslateEntry {
+                    phonemes: wr.phonemes,
+                    dict_flags: wr.dict_flags,
+                    kind: TranslateEntryKind::Word,
+                    word_lower: Some(":".to_string()),
+                    word_group: None,
+                    found_in_list: wr.found_in_list,
                 });
             }
             Token::InlinePhonemes(content) => {
@@ -10397,7 +10397,7 @@ impl Translator {
         tokens = announce_clause_punctuation(tokens, &self.options);
         suppress_abbreviation_periods(&mut tokens);
         if number_grammar.c_numbers != 0 {
-            apply_time_reading(&mut tokens, lang);
+            apply_time_reading(&mut tokens);
         }
         apply_dash_reading(&mut tokens, lang);
         apply_decades(&mut tokens, lang);
@@ -10649,6 +10649,7 @@ impl Translator {
                 Token::Word(_)
                 | Token::Number(_)
                 | Token::InlinePhonemes(_)
+                | Token::DigitColon { .. }
                 | Token::Operator(_)
                 | Token::Punctuation(_) => {
                     if let Token::Punctuation(c) | Token::Operator(c) = token {
@@ -11256,6 +11257,7 @@ fn token_surface(token: &Token, grammar: &NumberGrammar) -> String {
         Token::Number(n) => n.surface(),
         Token::InlinePhonemes(p) => format!("[[{p}]]"),
         Token::Operator(c) | Token::Punctuation(c) | Token::ClauseBoundary(c) => c.to_string(),
+        Token::DigitColon { .. } => ":".to_string(),
         Token::Space | Token::WordJoin | Token::Embedded(_) => String::new(),
     }
 }
