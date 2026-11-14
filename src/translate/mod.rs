@@ -6894,17 +6894,27 @@ fn dict_knows_word(word: &str, dict: &Dictionary) -> bool {
 
 /// Whether the rules abandon `word` at a letter they do not cover (C's
 /// `FLAG_SPELLWORD`).
-fn rules_abort_word(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
+fn rules_abort_word(
+    word: &str,
+    dict: &Dictionary,
+    lang_opts: &LangOptions,
+    phdata: Option<&PhonemeData>,
+) -> bool {
     crate::dictionary::rules::without_bracket_recording(|| {
-        word_rules(word, dict, lang_opts, true).is_some_and(|r| r.aborted)
-    })
+        word_rules(word, dict, lang_opts, true, phdata).is_some_and(|r| r.aborted)
+    }) && !rules_switch_again(word, dict, lang_opts, phdata)
 }
 
 /// Whether the rules hand `word` on to yet another voice; C then returns
 /// `FLAG_SPELLWORD` instead of switching twice.
-fn rules_switch_again(word: &str, dict: &Dictionary, lang_opts: &LangOptions) -> bool {
+fn rules_switch_again(
+    word: &str,
+    dict: &Dictionary,
+    lang_opts: &LangOptions,
+    phdata: Option<&PhonemeData>,
+) -> bool {
     crate::dictionary::rules::without_bracket_recording(|| {
-        word_rules(word, dict, lang_opts, false)
+        word_rules(word, dict, lang_opts, false, phdata)
             .is_some_and(|r| r.phonemes.first() == Some(&crate::phoneme::PHON_SWITCH))
     })
 }
@@ -6914,6 +6924,7 @@ fn word_rules(
     dict: &Dictionary,
     lang_opts: &LangOptions,
     want_ending: bool,
+    phdata: Option<&PhonemeData>,
 ) -> Option<crate::dictionary::rules::RulesResult> {
     if dict.rules().is_empty() {
         return None;
@@ -6936,7 +6947,7 @@ fn word_rules(
         lang_opts.dict_condition,
         &mut vowels,
         &mut stressed,
-        None,
+        phdata,
         want_ending,
     ))
 }
@@ -6958,7 +6969,7 @@ fn spell_aborted_switch(
     }
     let target = String::from_utf8_lossy(&phonemes[1..]).trim_end_matches('\0').to_string();
     let tr = alts.get(&target)?;
-    if !rules_abort_word(word, &tr.dict, &tr.options) && !rules_switch_again(word, &tr.dict, &tr.options) {
+    if !rules_abort_word(word, &tr.dict, &tr.options, None) && !rules_switch_again(word, &tr.dict, &tr.options, None) {
         return None;
     }
     let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
@@ -6975,7 +6986,7 @@ fn spell_aborted_switch(
 /// One letter of a spelled word, read as a word of its own in the original
 /// voice: handed to the voice its script names, or spoken by `TranslateLetter`.
 fn spell_lone_letter(c: char, voice: letters::Ctx, alts: &letters::AltLangs) -> Option<Vec<letters::Item>> {
-    let own = word_rules(&c.to_string(), voice.dict, voice.options, false)
+    let own = word_rules(&c.to_string(), voice.dict, voice.options, false, None)
         .map(|r| r.phonemes)
         .filter(|p| p.first() == Some(&crate::phoneme::PHON_SWITCH));
     let handed = |p: &[u8]| letters::spell_in_switched(voice, alts, &letters::switch_language(p), c);
@@ -7143,30 +7154,32 @@ fn split_abandoned_words(
     tokens: &mut Vec<Token>,
     dict: &Dictionary,
     options: &LangOptions,
+    phdata: &PhonemeData,
 ) -> Vec<Option<usize>> {
-    let latin_unread = dict.letter_bits_offset == 0
-        && (native_scripts(&options.lang).contains(&Script::Myanmar)
-            || primary_bcp47_subtag(&options.lang) == "hak");
     let abandoned = |word: &str| {
-        (!word.is_ascii() || latin_unread)
+        (!word.is_ascii() || dict.letter_bits_offset == 0)
             && word.chars().count() > 1
             && !dict_lists_word(word, dict, options)
             && {
                 let lower = lowercase_for_lang(word, &options.lang);
                 match unpronounceable_remainder(&lower, &[], dict, options) {
-                    Some(rest) => !rest.is_empty() && rules_abort_word(rest, dict, options),
-                    None => rules_abort_word(word, dict, options),
+                    Some(rest) => !rest.is_empty() && rules_abort_word(rest, dict, options, Some(phdata)),
+                    None => rules_abort_word(word, dict, options, Some(phdata)),
                 }
             }
     };
-    if !tokens.iter().any(|t| matches!(t, Token::Word(w) if abandoned(w))) {
+    let suffix_of_number = |prev: Option<&Token>| matches!(prev, Some(Token::Number(_)));
+    let any = tokens.iter().enumerate().any(|(i, t)| {
+        matches!(t, Token::Word(w) if !suffix_of_number(i.checked_sub(1).map(|p| &tokens[p])) && abandoned(w))
+    });
+    if !any {
         return vec![None; tokens.len()];
     }
     let mut out = Vec::with_capacity(tokens.len() + 4);
     let mut letters_at = Vec::with_capacity(tokens.len() + 4);
     for token in tokens.drain(..) {
         match token {
-            Token::Word(word) if abandoned(&word) => {
+            Token::Word(word) if !suffix_of_number(out.last()) && abandoned(&word) => {
                 let first = out.len();
                 let letters = word.chars().filter(|c| !matches!(*c as u32, 0x300..=0x36f));
                 for (i, letter) in letters.enumerate() {
@@ -7392,10 +7405,6 @@ fn unnamed_letter_phonemes(
     options: &LangOptions,
     alts: &letters::AltLangs,
 ) -> Option<Vec<u8>> {
-    let in_cyrillic_voice = dict.letter_bits_offset == 0x420 && (c as u32) >= 0x400;
-    if !in_cyrillic_voice {
-        return None;
-    }
     let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
     match letters::translate_letter(&letters::LetterEnv { voice, tr: voice, alts }, c) {
         letters::LetterOut::Items(items) if !items.is_empty() => {
@@ -10272,7 +10281,7 @@ impl Translator {
         apply_fractions(&mut tokens, lang);
         apply_exponents(&mut tokens, lang);
         split_script_runs(&mut tokens, dict, &self.options);
-        let spelled = split_abandoned_words(&mut tokens, dict, &self.options);
+        let spelled = split_abandoned_words(&mut tokens, dict, &self.options, phdata);
         let english: std::cell::OnceCell<Option<(Translator, Dictionary)>> =
             std::cell::OnceCell::new();
         let english_word = |c: char, by_name: bool| {
