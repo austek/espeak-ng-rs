@@ -462,10 +462,10 @@ fn neighbours_at(
 }
 
 /// C's `nextVowel` for the IPA pass: the next vowel up to the next word start
-/// (only a `sourceix` marks one, not an end-of-word phoneme inside a spelled
-/// word), with its stress; `prevVowel` has no word data there and never holds.
+/// (a `sourceix`, which an end-of-word phoneme gives the phoneme after it),
+/// with its stress; `prevVowel` has no word data there and never holds.
 fn next_vowel_at(codes: &[PhonemeCode], real: &[usize], n: usize, phdata: &PhonemeData) -> Neighbours {
-    let starts_word = |a: usize, b: usize| codes[a + 1..b].iter().any(|c| c.is_boundary);
+    let starts_word = |a: usize, b: usize| codes[a + 1..b].iter().any(|c| c.is_boundary || c.code == PHON_END_WORD);
     let mut from = real[n];
     let vowel = real[n + 1..]
         .iter()
