@@ -7086,11 +7086,13 @@ fn split_abandoned_words(
         (!word.is_ascii() || latin_unread)
             && word.chars().count() > 1
             && !dict_lists_word(word, dict, options)
-            && !is_unpronounceable(&lowercase_for_lang(word, &options.lang), &[], dict, options)
-            && rules_abort_word(word, dict, options)
-            // `TranslateWord3` spells an unpronounceable word before the
-            // rules get to abandon it.
-            && !is_unpronounceable(&lowercase_for_lang(word, &options.lang), &[], dict, options)
+            && {
+                let lower = lowercase_for_lang(word, &options.lang);
+                match unpronounceable_remainder(&lower, &[], dict, options) {
+                    Some(rest) => !rest.is_empty() && rules_abort_word(rest, dict, options),
+                    None => rules_abort_word(word, dict, options),
+                }
+            }
     };
     if !tokens.iter().any(|t| matches!(t, Token::Word(w) if abandoned(w))) {
         return vec![None; tokens.len()];
@@ -7229,6 +7231,31 @@ fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &La
         vowel_posn = vowel_posn.saturating_sub(1);
     }
     vowel_posn > lang_opts.max_initial_consonants + 1
+}
+
+/// The part of an unpronounceable word left after its leading letters are
+/// spelled (the `TranslateWord3` loop); `None` when the word is pronounceable.
+fn unpronounceable_remainder<'a>(
+    word: &'a str,
+    next: &[u8],
+    dict: &Dictionary,
+    options: &LangOptions,
+) -> Option<&'a str> {
+    let mut rest = word;
+    let mut posn = 0usize;
+    let mut length = 999usize;
+    while (length < 3 && length > 0)
+        || (word.chars().count() > 1 && is_unpronounceable(rest, next, dict, options))
+    {
+        let Some(c) = rest.chars().next().filter(|&c| c != '\'') else { break };
+        rest = &rest[c.len_utf8()..];
+        posn += 1;
+        length = rest.chars().count();
+        if posn > 16 {
+            break;
+        }
+    }
+    (posn > 0).then_some(rest)
 }
 
 /// Spell the leading letters of an unpronounceable word, returning them and the
