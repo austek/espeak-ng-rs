@@ -33,3 +33,13 @@ fn plural_quote_follows_the_single_quoted_state() {
         assert_eq!(cli("en", text), want, "{text:?}");
     }
 }
+
+#[test]
+fn plural_quote_keeps_a_switched_run_open() {
+    for (lang, text, want) in [
+        ("ru", "It's the dogs' bowl.", "(en)Its D@ d'0gz b'oUl(ru)"),
+        ("ar", "It's the dogs' bowl.", "(en)Its D@ d'0gz b'oUl(ar)"),
+    ] {
+        assert_eq!(cli(lang, text), want, "{lang} {text:?}");
+    }
+}

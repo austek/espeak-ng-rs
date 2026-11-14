@@ -10621,7 +10621,8 @@ impl Translator {
             // spanning the comma — and at a bracket, whose pause belongs to the
             // base language (`(en)'eI(ru)_:_: (en)b'i:(ru)`).
             let bracket_here = matches!(token, Token::Punctuation(c) if is_bracket(*c))
-                && entry.phonemes.is_empty();
+                && entry.phonemes.is_empty()
+                && !(matches!(token, Token::Punctuation('\'')) && plural_possessive_quote(&tokens, token_ix));
             if open_switch.is_some()
                 && (entry.phonemes.iter().any(|&b| b != 0 && b != crate::phoneme::PHON_END_WORD)
                     || bracket_here
