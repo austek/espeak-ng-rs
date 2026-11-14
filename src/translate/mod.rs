@@ -6969,7 +6969,10 @@ fn spell_aborted_switch(
     for c in word.chars().filter(|c| c.is_alphabetic()) {
         let mut letter = spell_lone_letter(c, voice, alts)?;
         let after_pause = usize::from(letter.first() == Some(&letters::Item::Ph(crate::phoneme::PHON_PAUSE)));
-        letter.insert(after_pause, letters::Item::Ph(crate::phoneme::PHON_END_WORD));
+        let nothing_spoken = items.iter().all(|i| *i == letters::Item::Ph(crate::phoneme::PHON_END_WORD));
+        if !(nothing_spoken && after_pause == 1) {
+            letter.insert(after_pause, letters::Item::Ph(crate::phoneme::PHON_END_WORD));
+        }
         items.extend(letter);
     }
     Some(items)
