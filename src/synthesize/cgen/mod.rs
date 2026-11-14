@@ -3,7 +3,6 @@
 //! phoneme codes.
 
 pub mod breath;
-pub mod clause_type;
 pub mod generate;
 pub mod klatt;
 pub mod langtab;
@@ -23,8 +22,7 @@ use crate::phoneme::PhonemeData;
 use crate::synthesize::intonation::{parse_tunes, Tune};
 use crate::synthesize::VoiceParams;
 use crate::translate::PhonemeCode;
-use clause_type::{clause_type, ClauseType};
-use phlist::{Ph, SFLAG_EMBEDDED};
+use phlist::{ClauseCodes, Ph, SFLAG_EMBEDDED};
 use speed::Speed;
 use voice::{LangSynth, WVoice};
 use wavegen::{Wavegen, EMBEDDED_DEFAULT, EMBED_A, EMBED_P, EMBED_S, EMBED_S2, N_EMBEDDED_VALUES};
@@ -77,17 +75,6 @@ pub fn apply_embedded(cur: i32, sign: i32, value: i32, max: i32) -> i32 {
         _ => value,
     };
     v.clamp(0, max)
-}
-
-/// Clause pause (ms), intonation type and whether a new sentence follows,
-/// from the punctuation that ended the clause (`TranslateClause`).
-fn clause_info(c: Option<char>, last: bool, no_final_pause: bool) -> (i32, usize, bool) {
-    let ClauseType { pause, tone, sentence } =
-        c.and_then(clause_type).unwrap_or(ClauseType { pause: 400, tone: 0, sentence: true });
-    if last && no_final_pause {
-        return (10, tone, sentence);
-    }
-    (pause, tone, sentence)
 }
 
 fn read_tunes_line(data_dir: &Path, lang: &str) -> Option<Vec<String>> {
@@ -259,13 +246,18 @@ impl<'a> Renderer<'a> {
         if last && (empty || self.no_final_pause) { 10 } else { pause }
     }
 
-    pub fn clause(&mut self, codes: &[PhonemeCode], clause_char: Option<char>, brk: Option<(i32, bool)>, start_sentence: bool, last: bool) -> Vec<i16> {
-        let (base_pause, mut clause_type, _) = clause_info(clause_char, false, false);
+    /// Hook for the voice a clause switches to once generated (C `DoVoiceChange`).
+    pub fn change_voice(&mut self, _voice: &VoiceParams) {}
+
+    pub fn clause(&mut self, clause: &ClauseCodes, start_sentence: bool) -> Vec<i16> {
+        let codes = &clause.codes;
+        let base_pause = clause.terminator.pause_ms() as i32;
+        let mut clause_type = clause.terminator.intonation() as usize;
         let empty = codes
             .iter()
             .all(|c| c.marker.is_none() && (c.code == 0 || c.code == crate::phoneme::PHON_END_WORD));
-        let mut post_pause = self.clause_pause(base_pause, empty, last);
-        if let Some((ms, exact)) = brk {
+        let mut post_pause = self.clause_pause(base_pause, empty, clause.eof);
+        if let Some((ms, exact)) = clause.brk {
             post_pause = self.break_pause(ms, exact);
             clause_type = 4;
         }
@@ -365,10 +357,9 @@ pub fn render(
     let mut r = Renderer::new(phdata, data_dir, params);
     r.switched = switched_tables(codes, data_dir, &params.lang);
     let mut start_sentence = true;
-    let n = clauses.len();
-    for (i, c) in clauses.iter().enumerate() {
-        let pcm = r.clause(&c.codes, c.clause_char, c.brk, start_sentence, i + 1 == n);
-        start_sentence = c.brk.is_none() && clause_info(c.clause_char, false, false).2;
+    for c in &clauses {
+        let pcm = r.clause(c, start_sentence);
+        start_sentence = c.brk.is_none() && c.terminator.is_sentence();
         sink(&pcm);
     }
     (r.word_marks, r.sentence_marks)

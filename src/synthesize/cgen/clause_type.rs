@@ -69,6 +69,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn terminator_table_equals_this_table() {
+        use crate::translate::readclause::Terminator;
+        for cp in 0..0x11_0000u32 {
+            let old = char::from_u32(cp).and_then(clause_type);
+            let new = Terminator::from_codepoint(cp)
+                .map(|t| ClauseType { pause: t.pause_ms() as i32, tone: t.intonation() as usize, sentence: t.is_sentence() });
+            assert_eq!(old, new, "U+{cp:04X}");
+        }
+    }
+
+    #[test]
     fn matches_the_c_constants() {
         assert_eq!(clause_type('，'), Some(ct(200, 1, false)));
         assert_eq!(clause_type('！'), Some(ct(450, 3, true)));

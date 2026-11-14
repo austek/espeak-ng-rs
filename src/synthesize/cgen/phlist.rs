@@ -5,6 +5,7 @@ use crate::phoneme::{
     PhonemeData, PhonemeTab, PHON_DEFAULTTONE, PHON_END_WORD, PHON_LENGTHEN, PHON_PAUSE, PHON_PAUSE_SHORT, PHON_SWITCH, PHON_SYLLABIC, PH_LIQUID,
     PH_NASAL, PH_PAUSE, PH_PREVOICE, PH_STRESS, PH_VFRICATIVE, PH_VOWEL, PH_VSTOP,
 };
+use crate::translate::readclause::Terminator;
 use crate::translate::{CodeMarker, EmbeddedCmd, PhonemeCode};
 
 pub const SFLAG_SEQCONTINUE: u16 = 0x01;
@@ -95,10 +96,21 @@ fn tab(phdata: &PhonemeData, code: u8) -> PhonemeTab {
 /// One clause of the code stream, as `TranslateClause` hands it over.
 pub struct ClauseCodes {
     pub codes: Vec<PhonemeCode>,
-    pub clause_char: Option<char>,
+    pub terminator: Terminator,
+    /// C `Eof()` after the clause was read.
+    pub eof: bool,
+    /// The voice id to switch to once this clause is generated.
+    pub voice_after: Option<String>,
     /// An SSML `<break>` that ended the clause: its length in ms, and whether
     /// it is wall-clock exact (`time`) rather than in clause units (`strength`).
     pub brk: Option<(i32, bool)>,
+}
+
+impl ClauseCodes {
+    fn plain(codes: Vec<PhonemeCode>, clause_char: Option<char>, brk: Option<(i32, bool)>) -> Self {
+        let terminator = clause_char.and_then(|c| Terminator::from_codepoint(c as u32)).unwrap_or(Terminator::PERIOD);
+        ClauseCodes { codes, terminator, eof: false, voice_after: None, brk }
+    }
 }
 
 fn take_break(cur: &mut Vec<PhonemeCode>) -> Option<(i32, bool)> {
@@ -121,16 +133,19 @@ pub fn split_clauses(codes: &[PhonemeCode]) -> Vec<ClauseCodes> {
     for c in codes {
         if c.code == 0 && c.is_boundary && c.marker.is_none() {
             let brk = take_break(&mut cur);
-            out.push(ClauseCodes { codes: std::mem::take(&mut cur), clause_char: c.clause_char, brk });
+            out.push(ClauseCodes::plain(std::mem::take(&mut cur), c.clause_char, brk));
         } else {
             cur.push(c.clone());
         }
     }
     if cur.iter().any(|c| c.code != 0 || c.marker.is_some()) {
-        out.push(ClauseCodes { codes: cur, clause_char: None, brk: None });
+        out.push(ClauseCodes::plain(cur, None, None));
     }
     if out.is_empty() {
-        out.push(ClauseCodes { codes: Vec::new(), clause_char: None, brk: None });
+        out.push(ClauseCodes::plain(Vec::new(), None, None));
+    }
+    if let Some(last) = out.last_mut() {
+        last.eof = true;
     }
     out
 }
@@ -383,5 +398,39 @@ fn diminish_pair(list: &mut [Ph], i: usize) {
             }
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::translate::readclause::Terminator;
+
+    fn boundary(c: Option<char>) -> PhonemeCode {
+        PhonemeCode { is_boundary: true, clause_char: c, ..Default::default() }
+    }
+
+    fn word(code: u8) -> PhonemeCode {
+        PhonemeCode { code, ..Default::default() }
+    }
+
+    #[test]
+    fn clauses_carry_the_terminator_of_their_punctuation() {
+        let codes = [word(5), boundary(Some('?')), word(6), boundary(Some('，')), word(7), boundary(Some('\u{1}'))];
+        let got: Vec<Terminator> = split_clauses(&codes).iter().map(|c| c.terminator).collect();
+        assert_eq!(got, [Terminator::QUESTION, Terminator::from_codepoint(0xFF0C).unwrap(), Terminator::PERIOD]);
+    }
+
+    #[test]
+    fn only_the_last_clause_is_eof() {
+        let codes = [word(5), boundary(Some('.')), word(6), boundary(Some('!'))];
+        let got: Vec<bool> = split_clauses(&codes).iter().map(|c| c.eof).collect();
+        assert_eq!(got, [false, true]);
+    }
+
+    #[test]
+    fn a_trailing_clause_without_punctuation_ends_the_stream() {
+        let clauses = split_clauses(&[word(5)]);
+        assert_eq!((clauses[0].terminator, clauses[0].eof, clauses[0].voice_after.clone()), (Terminator::PERIOD, true, None));
     }
 }

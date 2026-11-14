@@ -157,3 +157,37 @@ fn properties(c: u32) -> Option<(Kind, bool, bool)> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn constants_match_translate_h() {
+        assert_eq!(Terminator::PARAGRAPH.bits(), 0x80046);
+        assert_eq!(Terminator::EOF.bits(), 0x90028);
+        assert_eq!(Terminator::VOICE.bits(), 0x24000);
+        assert_eq!(Terminator::PERIOD.bits(), 0x80028);
+        assert_eq!(Terminator::COMMA.bits(), 0x41014);
+        assert_eq!(Terminator::EXCLAMATION.bits(), 0x8302d);
+        assert_eq!(Terminator::COLON.bits(), 0x4001e);
+    }
+
+    #[test]
+    fn long_pause_is_32_times_longer() {
+        assert_eq!(Terminator::PERIOD.pause_ms(), 400);
+        assert_eq!(Terminator::PERIOD.with(Terminator::PAUSE_LONG).pause_ms(), 12800);
+    }
+
+    #[test]
+    fn codepoints_map_to_c_terminators() {
+        assert_eq!(Terminator::from_codepoint(0x2E), Some(Terminator::PERIOD));
+        assert_eq!(Terminator::from_codepoint(0xFF01).map(Terminator::intonation), Some(3));
+        assert_eq!(Terminator::from_codepoint(0x964).map(Terminator::pause_ms), Some(400));
+        assert_eq!(Terminator::from_codepoint(0x61), None);
+        let shape = |c: char| Terminator::from_codepoint(c as u32).map(|t| (t.pause_ms(), t.intonation(), t.is_sentence()));
+        assert_eq!(shape('，'), Some((200, 1, false)));
+        assert_eq!(shape('॥'), Some((700, 0, true)));
+        assert_eq!(shape('…'), Some((300, 1, false)));
+    }
+}
