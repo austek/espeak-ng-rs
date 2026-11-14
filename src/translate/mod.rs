@@ -457,6 +457,8 @@ pub struct LangOptions {
     /// word the rules can't read, or that a `$unpron` rule marks, is spelled),
     /// and any other value is a letter code to discount when counting.
     pub unpronouncable: u32,
+    /// C's `Translator::letter_bits_offset` for this voice (`tr_languages.c`).
+    pub letter_bits_offset: u32,
     /// This translator re-reads a word another language handed over.  C applied
     /// the *first* language's `.replace` table while reading the clause, so the
     /// table of the language that reads the word is not applied again.
@@ -1115,6 +1117,7 @@ impl Default for LangOptions {
             ipa_separator: None,
             max_initial_consonants: 3,
             unpronouncable: 0,
+            letter_bits_offset: 0,
             switched: false,
             switched_last: false,
             switched_after: None,
@@ -1179,10 +1182,36 @@ impl LangOptions {
             ipa_separator: None,
             max_initial_consonants,
             unpronouncable,
+            letter_bits_offset: c_letter_bits_offset_for(primary_bcp47_subtag(&lang)),
             lang_word_gap,
             lang,
             ..Default::default()
         }
+    }
+}
+
+/// `tr->letter_bits_offset` as `SelectTranslator` sets it; `0` for every
+/// voice that has no case of its own there.
+fn c_letter_bits_offset_for(primary: &str) -> u32 {
+    match primary {
+        "el" | "grc" => 0x380,
+        "be" | "bg" | "kk" | "mk" | "mn" | "ru" | "tt" | "uk" => 0x420,
+        "hy" => 0x530,
+        "ar" | "fa" | "ur" | "sd" => 0x600,
+        "hi" | "ne" | "mr" => 0x900,
+        "bn" | "as" | "bpy" => 0x980,
+        "pa" => 0xa00,
+        "gu" => 0xa80,
+        "or" => 0xb00,
+        "ta" => 0xb80,
+        "te" => 0xc00,
+        "kn" => 0xc80,
+        "ml" => 0xd00,
+        "si" => 0xd80,
+        "ka" => 0x10a0,
+        "ko" => 0x1100,
+        "am" => 0x1200,
+        _ => 0,
     }
 }
 
@@ -7129,19 +7158,6 @@ fn dict_lists_word(word: &str, dict: &Dictionary, options: &LangOptions) -> bool
     matches!(lookup(dict, &lower, &ctx), Some(r) if r.flags1.found())
 }
 
-/// The `letter_bits_offset` the C translator of this voice runs with.
-fn c_letter_bits_offset(dict: &Dictionary, options: &LangOptions) -> u32 {
-    let cyrillic_voice = matches!(
-        primary_bcp47_subtag(&options.lang),
-        "ru" | "uk" | "bg" | "mk" | "kk" | "mn" | "tt" | "be"
-    );
-    if dict.letter_bits_offset == 0x420 && !cyrillic_voice {
-        0
-    } else {
-        dict.letter_bits_offset
-    }
-}
-
 /// Where `TranslateClause` starts a new word inside `word`: between two letters
 /// of which only one is in a script foreign to the voice (plain adjacency), or
 /// between native and Latin letters of a non-Latin voice (a hyphen join).
@@ -7174,7 +7190,7 @@ fn script_run_breaks(word: &str, offset: u32) -> Vec<(usize, bool)> {
 /// C's `TranslateClause` does not mix scripts in one word: it breaks the word
 /// where the script changes, and each run is translated in its own language.
 fn split_script_runs(tokens: &mut Vec<Token>, dict: &Dictionary, options: &LangOptions) {
-    let offset = c_letter_bits_offset(dict, options);
+    let offset = options.letter_bits_offset;
     if !tokens.iter().any(|t| matches!(t, Token::Word(w) if !script_run_breaks(w, offset).is_empty())) {
         return;
     }
@@ -7208,7 +7224,7 @@ fn split_abandoned_words(
     phdata: &PhonemeData,
 ) -> Vec<Option<usize>> {
     let abandoned = |word: &str| {
-        (!word.is_ascii() || dict.letter_bits_offset == 0)
+        (!word.is_ascii() || options.letter_bits_offset == 0)
             && word.chars().count() > 1
             && !dict_lists_word(word, dict, options)
             && {
@@ -7219,18 +7235,14 @@ fn split_abandoned_words(
                 }
             }
     };
-    let suffix_of_number = |prev: Option<&Token>| matches!(prev, Some(Token::Number(_)));
-    let any = tokens.iter().enumerate().any(|(i, t)| {
-        matches!(t, Token::Word(w) if !suffix_of_number(i.checked_sub(1).map(|p| &tokens[p])) && abandoned(w))
-    });
-    if !any {
+    if !tokens.iter().any(|t| matches!(t, Token::Word(w) if abandoned(w))) {
         return vec![None; tokens.len()];
     }
     let mut out = Vec::with_capacity(tokens.len() + 4);
     let mut letters_at = Vec::with_capacity(tokens.len() + 4);
     for token in tokens.drain(..) {
         match token {
-            Token::Word(word) if !suffix_of_number(out.last()) && abandoned(&word) => {
+            Token::Word(word) if abandoned(&word) => {
                 let first = out.len();
                 let letters = word.chars().filter(|c| !matches!(*c as u32, 0x300..=0x36f));
                 for (i, letter) in letters.enumerate() {

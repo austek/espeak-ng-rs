@@ -184,6 +184,8 @@ pub fn letter_bits_offset_for(lang: &str) -> u32 {
             // ko_rules keys its groups on those jamo — so index groups3 from the
             // jamo block start.
             "ko" => 0x1100u32,
+            // Ethiopic (Amharic): OFFSET_ETHIOPIC
+            "am" => 0x1200u32,
             // All other languages: no offset
             _ => 0u32,
     }

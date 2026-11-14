@@ -253,6 +253,7 @@ jobs:
           --test number_punctuation_c_parity
           --test stray_marks_between_clauses
           --test trailing_period_runs
+          --test number_suffix_word
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config
