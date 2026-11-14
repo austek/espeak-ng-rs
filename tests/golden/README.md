@@ -4,6 +4,8 @@ Baseline: C espeak-ng upstream commit `f0fb11a8` (master, 2026-11-07), Release b
 
 `corpus/<lang>.txt` holds one input per line for every voice of the C build (151 corpora, 55863 inputs). The original 13 languages have 100 to 6200 inputs each; the others have 135 to 290, built by `gen_corpus.py` from the C `dictsource` (word lists, rule match strings, emoji names, `test_phon` inputs) plus a fixed set of numbers, dates, punctuation and abbreviations. `capture.py` records the C output; `gaps.py` writes `GAPS.md` (differing rows per language with samples). The full check takes about 3 minutes on 8 cores. `baseline/<lang>.tsv` holds the C output per line: text, IPA (`--ipa`), espeak phonemes (`-x`).
 
+`gen_corpus.py` appends the per-voice `EXTRA` rows (ru, uk and mk words with long initial consonant runs) to a new corpus; the 13 original corpora, ru among them, are hand-maintained, so add an `EXTRA` row to the corpus file as well and run `capture.py --langs <lang> --force`. `deviations.md` holds the known deliberate deviations and is copied into `GAPS.md`.
+
 The Rust port is not bit-identical to C. The ratchet does not demand zero differences. It caps the number of differing rows per language at the value in `ceilings.json`, so a change can fix rows but must not break rows that match.
 
 ## Run
