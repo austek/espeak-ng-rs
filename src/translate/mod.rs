@@ -7171,7 +7171,7 @@ fn script_run_breaks(word: &str, offset: u32, dict: &Dictionary, lang: &str) -> 
     let mut breaks = Vec::new();
     for (ix, pair) in chars.windows(2).enumerate() {
         let at = pair[1].0;
-        let (prev, c) = (heard[ix], heard[ix + 1]);
+        let (prev, c) = (heard[ix].0, heard[ix + 1].1);
         if !prev.is_alphabetic() || !c.is_alphabetic() {
             continue;
         }
@@ -7193,16 +7193,20 @@ fn script_run_breaks(word: &str, offset: u32, dict: &Dictionary, lang: &str) -> 
 /// each character (`SubstituteChar`) before it decides where a script run
 /// ends. A table that changes the number of letters (digraphs) leaves the word
 /// as written.
-fn replaced_letters(word: &str, dict: &Dictionary, lang: &str) -> Vec<char> {
+fn replaced_letters(word: &str, dict: &Dictionary, lang: &str) -> Vec<(char, char)> {
     let lower = lowercase_for_lang(word, lang);
     let replaced = dict.apply_replacements(&lower).unwrap_or_else(|| lower.clone());
     if replaced.chars().count() != word.chars().count() {
-        return word.chars().collect();
+        return lower.chars().zip(word.chars()).collect();
     }
-    let untouched = lower.chars().zip(replaced.chars()).map(|(a, b)| a == b);
+    let current = |own: char, low: char, new: char| match (low == new, own.is_uppercase()) {
+        (true, _) => own,
+        (false, true) => new.to_uppercase().next().unwrap_or(new),
+        (false, false) => new,
+    };
     word.chars()
-        .zip(replaced.chars().zip(untouched))
-        .map(|(own, (new, same))| if same { own } else { new })
+        .zip(lower.chars().zip(replaced.chars()))
+        .map(|(own, (low, new))| (new, current(own, low, new)))
         .collect()
 }
 

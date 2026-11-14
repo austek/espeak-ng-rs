@@ -260,6 +260,7 @@ jobs:
           --test cyrillic_voice_without_translator_case
           --test ssml_tag_port
           --test switched_word_says_nothing
+          --test script_run_case_fold
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config
