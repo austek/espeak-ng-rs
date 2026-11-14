@@ -652,6 +652,18 @@ pub struct OrdinalGrammar {
     pub alt2_suffixes: Vec<String>,
 }
 
+/// C's `LookupNum2` order: `NUM_SWAP_TENS` puts the units first, `NUM_AND_UNITS` alone puts
+/// the conjunction between tens and units.
+fn tens_grammar_from_flags(numbers: u32) -> TensGrammar {
+    if numbers & ordinal::NUM_SWAP_TENS != 0 {
+        TensGrammar::UnitsThenConjunction
+    } else if numbers & ordinal::NUM_AND_UNITS != 0 {
+        TensGrammar::WithConjunction
+    } else {
+        TensGrammar::Standard
+    }
+}
+
 /// Word-order rule for tens and units.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TensGrammar {
@@ -718,7 +730,6 @@ impl NumberGrammar {
                 grammar.group_separator = Some(','); // 1,000 → one thousand
             }
             "es" => {
-                grammar.tens = TensGrammar::WithConjunction;
                 grammar.hundreds.omit_one_prefix = true;
                 grammar.thousands.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
@@ -739,7 +750,6 @@ impl NumberGrammar {
             "de" => {
                 grammar.ordinals.dot_marks_ordinal = true;
                 grammar.ordinals.compound_cardinal_suffix = true;
-                grammar.tens = TensGrammar::UnitsThenConjunction;
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
                 // German keeps the "ein": upstream reads 100 as "einhundert" and
@@ -815,7 +825,6 @@ impl NumberGrammar {
                 // ordinals ("eenentwintigste"); Maltese ordinals differ, so it's
                 // Dutch-only.
                 grammar.ordinals.compound_cardinal_suffix = lang == "nl";
-                grammar.tens = TensGrammar::UnitsThenConjunction;
                 grammar.hundreds.omit_one_prefix = true;
                 grammar.thousands.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
@@ -833,7 +842,6 @@ impl NumberGrammar {
                 grammar.portuguese_cardinals = false;
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
-                grammar.tens = TensGrammar::WithConjunction;
                 grammar.hundreds.use_conjunction_with_remainder = true;
                 grammar.fraction_digits_as_number = 2;
             }
@@ -843,7 +851,6 @@ impl NumberGrammar {
             // compound ordinals suffix the whole cardinal ("enogtyvende").
             "da" | "fo" | "kl" | "sl" => {
                 grammar.ordinals.dot_marks_ordinal = true;
-                grammar.tens = TensGrammar::UnitsThenConjunction;
                 grammar.ordinals.compound_cardinal_suffix = true;
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
@@ -880,7 +887,6 @@ impl NumberGrammar {
             "ro" | "is" => {
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
-                grammar.tens = TensGrammar::WithConjunction;
                 // Icelandic also joins hundreds→remainder, but only when the
                 // remainder is a single word (`NUM_SINGLE_AND | NUM_HUNDRED_AND`):
                 // "hundrað OG einn", but "nítján hundruð áttatíu og fjórir".
@@ -891,7 +897,6 @@ impl NumberGrammar {
             "sq" => {
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
-                grammar.tens = TensGrammar::WithConjunction;
                 grammar.hundreds.use_conjunction_with_remainder = true;
             }
             // Armenian: "100" is "harjur", not "mek harjur".
@@ -918,7 +923,6 @@ impl NumberGrammar {
             // (Afrikaans reads "3,14" as two numbers — its decimal separator is
             // the period, like English: `af "3.14"` → "drie punt een vier".)
             "af" => {
-                grammar.tens = TensGrammar::UnitsThenConjunction;
                 grammar.hundreds.conjunction_before_simple_remainder = true;
             }
             // Czech: the scale word declines for count exactly 2–4 ("dva tisíce",
@@ -954,7 +958,6 @@ impl NumberGrammar {
             // hundreds→remainder when the remainder is a single word ("mia moja
             // na moja/kumi/ishirini", but "mia moja thelethini na nne").
             "sw" => {
-                grammar.tens = TensGrammar::WithConjunction;
                 grammar.hundreds.conjunction_before_simple_remainder = true;
             }
             // Malayalam: "100" is the bare "നൂറ്" (not "ഒരു നൂറ്"); 200+ keep
@@ -995,9 +998,6 @@ impl NumberGrammar {
             "ro" | "rup" => 4,
             _ => 0,
         };
-        if lang == "smj" {
-            grammar.tens = TensGrammar::UnitsThenConjunction;
-        }
         grammar.fraction_zero_reads_digits = matches!(primary_bcp47_subtag(lang), "ro" | "rup");
         grammar.fraction_whole_number = primary_bcp47_subtag(lang) == "it";
         // C `NUM_HUNDRED_AND` for the languages whose arm above doesn't set it:
@@ -1012,15 +1012,6 @@ impl NumberGrammar {
         }
         grammar.hundreds.conjunction_before_hundreds = matches!(lang, "ar" | "ku");
         grammar.hundreds.conjunction_before_bare_group = lang == "ar";
-        // C `NUM_AND_UNITS`: a conjunction joins tens→units ("si O chahar",
-        // "shloshim VE arba").  Arabic also has `NUM_SWAP_TENS`, so its units
-        // come first ("arba'a WA thalathun").
-        if matches!(lang, "bg" | "fa" | "he" | "io" | "ka" | "ku" | "mk" | "tn") {
-            grammar.tens = TensGrammar::WithConjunction;
-        }
-        if lang == "ar" {
-            grammar.tens = TensGrammar::UnitsThenConjunction;
-        }
         grammar.max_digits = match lang {
             "en" | "lv" | "ltg" => 33,
             "ka" | "ru" | "uk" => 32,
@@ -1048,6 +1039,7 @@ impl NumberGrammar {
         let (numbers, numbers2) = ordinal::c_number_flags(lang);
         (grammar.c_numbers, grammar.c_numbers2) =
             (numbers | voice_numbers.0, numbers2 | voice_numbers.1);
+        grammar.tens = tens_grammar_from_flags(grammar.c_numbers);
         (grammar.group_separator, grammar.decimal_separator, grammar.space_group) =
             ordinal::c_separators(lang, grammar.c_numbers);
         if grammar.c_numbers == 0 {
@@ -4163,6 +4155,9 @@ fn num3_phonemes_g(
                 tens_part.push_lookup_word(&lookup_num_phonemes(dict, &format!("_{}X", (tensunits / 10) & 0xe)));
                 let units = tensunits % 20;
                 if units > 0 {
+                    if grammar.tens != TensGrammar::Standard {
+                        tens_part.append_lookup_suffix(&lookup_num_phonemes(dict, "_0and"));
+                    }
                     tens_part.append_lookup_suffix(&lookup_num_phonemes(dict, &num_key(units)));
                 }
             } else {
