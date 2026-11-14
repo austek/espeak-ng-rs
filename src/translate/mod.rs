@@ -11449,17 +11449,21 @@ fn insert_word_gaps(
 /// the first sound.
 fn insert_switch_start_gaps(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData, vowel_pause: u32, word_gap: u8) {
     let (level, _) = stress_levels(codes, phdata);
-    let opens: Vec<usize> = (2..codes.len())
-        .filter(|&first| {
-            codes[first].marker.is_none()
-                && !codes[first].is_boundary
-                && codes[first].code > 8
-                && codes[first - 1].marker.is_none()
-                && codes[first - 1].code == crate::phoneme::PHON_END_WORD
-                && matches!(codes[first - 2].marker, Some(CodeMarker::LangSwitch(_)))
+    let plain = |c: &PhonemeCode| c.marker.is_none() && !c.is_boundary;
+    let first_sound = |at: usize| {
+        (at..codes.len())
+            .take_while(|&j| plain(&codes[j]) && (codes[j].code > 8 || codes[j].code < crate::phoneme::PHON_PAUSE))
+            .find(|&j| codes[j].code > 8)
+    };
+    let opens: Vec<(usize, usize)> = (1..codes.len().saturating_sub(1))
+        .filter(|&brk| {
+            codes[brk].marker.is_none()
+                && codes[brk].code == crate::phoneme::PHON_END_WORD
+                && matches!(codes[brk - 1].marker, Some(CodeMarker::LangSwitch(_)))
         })
+        .filter_map(|brk| first_sound(brk + 1).map(|first| (brk, first)))
         .collect();
-    for first in opens.into_iter().rev() {
+    for (brk, first) in opens.into_iter().rev() {
         let next_type = phdata.get(codes[first].code).map_or(0, |p| p.typ);
         let stressed = level.get(first).is_some_and(|&l| l >= 4);
         let gap = word_gap_phoneme(vowel_pause, word_gap, 0, next_type, stressed);
@@ -11468,7 +11472,7 @@ fn insert_switch_start_gaps(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData, 
                 PhonemeCode { marker: Some(CodeMarker::InsertedPause(0)), ..Default::default() },
                 PhonemeCode { code: gap, ..Default::default() },
             ];
-            codes.splice(first - 1..first - 1, pause);
+            codes.splice(brk..brk, pause);
         }
     }
 }

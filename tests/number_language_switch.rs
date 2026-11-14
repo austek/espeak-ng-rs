@@ -29,6 +29,7 @@ fn switched_number_follows_the_c_word_breaks() {
         ("100", "(en)w'0nh'VndrI2d(grc)_:"),
         ("1000", "(en)w'0n_: T'aUz@nd(grc)_:"),
         ("05", "(en)z'i@roU_: f'aIv(grc)_:"),
+        ("80", "(en)_: 'eIti(grc)_:"),
     ] {
         assert_eq!(cli("grc", text), want, "grc {text:?}");
     }
