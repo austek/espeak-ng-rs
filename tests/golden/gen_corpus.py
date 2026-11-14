@@ -54,6 +54,12 @@ FIXED = (
     "tel. 555-1234", "It is 5 o'clock.", "Page 12 of 300.", "10.5 kg", "1 234 567", "3 + 4 = 7",
 ]
 
+EXTRA = {
+    "ru": "взгляд встреча вздрогнуть Вскрытие Всплеск Взбрело Встряска Встретимся".split(),
+    "uk": "вздрогнути Встромити".split(),
+    "mk": "крв прст врв дрво српски".split(),
+}
+
 
 def is_wordish(s):
     ok = all(c.isalpha() or unicodedata.category(c).startswith("M") or c in "-'" for c in s)
@@ -143,7 +149,7 @@ def build(src, voice, code, tests, small):
     pool = words + rules
     rows = words + sample(emoji_names(src, code), n_emoji) + rules + sample(given, n_tests)
     rows += sentences(pool, rng, n_sent * 3 // 5, n_sent * 2 // 5)
-    rows += FIXED
+    rows += FIXED + EXTRA.get(voice, [])
     return [r for r in dict.fromkeys(x.strip() for x in rows) if r and "\t" not in r]
 
 
