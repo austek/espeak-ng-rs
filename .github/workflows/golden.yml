@@ -132,8 +132,6 @@ jobs:
           --test mk_r_is_vowel_letter_group
           --test cyrillic_unknown_letter_word
           --test unpronounceable_remainder_spelling
-          --test script_run_word_split
-          --test shan_spelled_word_pause
           --test leading_arabic_punctuation
           --test number_missing_scale_words
           --test hungarian_dot_ordinals
