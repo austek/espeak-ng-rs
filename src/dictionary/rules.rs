@@ -1076,7 +1076,9 @@ pub fn clear_uncovered_brackets() {
 /// Runs `f` without recording uncovered brackets (probe translations).
 pub fn without_bracket_recording<T>(f: impl FnOnce() -> T) -> T {
     let prev = RECORDING.with(|r| r.replace(false));
+    let suspended = TRACE.with(|t| t.borrow_mut().take());
     let out = f();
+    TRACE.with(|t| *t.borrow_mut() = suspended);
     RECORDING.with(|r| r.set(prev));
     out
 }
