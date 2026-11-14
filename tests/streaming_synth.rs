@@ -73,7 +73,7 @@ fn empty_text_still_signals_completion() {
     })
     .expect("stream");
     assert_eq!(calls, 1);
-    assert_eq!(samples_seen, 0);
+    assert_eq!(samples_seen, 154, "C writes the 154 samples of an empty clause");
 }
 
 /// Returning `true` stops synthesis: the remaining clauses are never rendered.

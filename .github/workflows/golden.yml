@@ -108,6 +108,7 @@ jobs:
           --test synth_parity_syllabic
           --test synth_parity_insert_before
           --test synth_parity_echo_tail
+          --test synth_parity_empty_text
           --test tr_phoneme_program_context
           --test tr_next_phoneme_word_end
           --test max_digits

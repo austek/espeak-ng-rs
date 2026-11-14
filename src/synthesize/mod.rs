@@ -694,11 +694,11 @@ impl Synthesizer {
         sentence_marks: &mut Vec<usize>,
         sink: &mut PcmSink<'_>,
     ) -> Result<PcmBuffer> {
-        if codes.is_empty() {
-            return Ok(Vec::new());
-        }
         if let Some(dir) = self.voice.data_dir.clone() {
             return Ok(self.render_c(codes, phdata, &dir, word_marks, sentence_marks, sink));
+        }
+        if codes.is_empty() {
+            return Ok(Vec::new());
         }
 
         // `VoiceParams::speed_percent` is derived from upstream's `speed_lookup`

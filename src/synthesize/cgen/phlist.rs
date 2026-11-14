@@ -126,6 +126,9 @@ pub fn split_clauses(codes: &[PhonemeCode]) -> Vec<ClauseCodes> {
     if cur.iter().any(|c| c.code != 0 || c.marker.is_some()) {
         out.push(ClauseCodes { codes: cur, clause_char: None, brk: None });
     }
+    if out.is_empty() {
+        out.push(ClauseCodes { codes: Vec::new(), clause_char: None, brk: None });
+    }
     out
 }
 
