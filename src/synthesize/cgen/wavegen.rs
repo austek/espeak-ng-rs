@@ -204,6 +204,9 @@ pub struct Wavegen {
     /// Samples written since C's output buffer was last emptied by
     /// `WavegenFill` returning with the queue empty.
     since_reset: usize,
+    /// The last command of the queue filled the output buffer exactly, so C
+    /// leaves its fill loop before it sees the queue empty.
+    ended_full: bool,
     /// The part of an echo tail that did not fit the output buffer; the next
     /// pause command plays it instead of its own length.
     silence_left: Option<i32>,
@@ -282,6 +285,7 @@ impl Wavegen {
             libc_rand: LibcRand::new(),
             out: Vec::new(),
             since_reset: 0,
+            ended_full: false,
             silence_left: None,
         };
         w.general_amplitude = w.get_amplitude();
@@ -817,7 +821,10 @@ impl Wavegen {
             self.wdata.pitch = 102400;
         }
         for (qi, cmd) in queue.iter().enumerate() {
+            let before = self.out.len();
             self.run_cmd(qi, cmd, queue, frames, phondata, on_marker);
+            let filled = self.since_reset > 0 && self.since_reset % KLATT_BUFFER_SAMPLES == 0;
+            self.ended_full = filled && self.out.len() > before;
         }
     }
 
@@ -989,8 +996,7 @@ impl Wavegen {
     /// tail is dropped once the next clause's queue starts.
     pub fn finish(&mut self) {
         let filled = self.since_reset % KLATT_BUFFER_SAMPLES;
-        let buffer_just_filled = filled == 0 && self.since_reset > 0;
-        if self.echo_complete > 0 && !buffer_just_filled {
+        if self.echo_complete > 0 && !self.ended_full {
             let tail = self.echo_complete;
             let room = (KLATT_BUFFER_SAMPLES - filled) as i32;
             self.play_silence(tail.min(room));
