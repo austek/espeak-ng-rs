@@ -176,6 +176,7 @@ impl LangCtx {
         let mut options = Translator::new(lang, Some(data_dir)).ok()?.options;
         options.switched = true;
         dict.dict_condition = options.dict_condition;
+        dict.voice_letter_bits_offset = options.letter_bits_offset;
         let mut phdata = PhonemeData::load(data_dir).ok()?;
         select_phoneme_table(&mut phdata, data_dir, lang).ok()?;
         let stress_opts = StressOpts::for_lang(lang);

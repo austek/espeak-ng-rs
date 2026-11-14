@@ -129,6 +129,11 @@ pub struct Dictionary {
     /// | Arabic | 0x600 | ar, fa |
     pub letter_bits_offset: u32,
 
+    /// `tr->letter_bits_offset` of the voice using this dictionary, which can
+    /// differ from the dictionary's own (`hyw` reads the `hy` dictionary with
+    /// offset 0).  Set by the translator after loading.
+    pub voice_letter_bits_offset: u32,
+
     /// Per-character letter-group bitmask table.
     ///
     /// Indexed by `(codepoint - letter_bits_offset) & 0x7f` (clamped to 128).
@@ -276,6 +281,7 @@ impl Dictionary {
             lang: lang.to_owned(),
             transpose,
             letter_bits_offset,
+            voice_letter_bits_offset: letter_bits_offset,
             letter_bits,
             replace_pairs,
         })

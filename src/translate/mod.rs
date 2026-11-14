@@ -9897,6 +9897,7 @@ impl Translator {
         let dict_bytes = std::fs::read(&dict_path).map_err(Error::Io)?;
         let mut dict = Dictionary::from_bytes(&dict_stem, dict_bytes)?;
         dict.dict_condition = self.options.dict_condition;
+        dict.voice_letter_bits_offset = self.options.letter_bits_offset;
         if !self.data_dir.join("phontab").exists() {
             return Err(Error::NotImplemented("translate_to_codes: phontab not found"));
         }
@@ -10118,6 +10119,7 @@ impl Translator {
         let dict_bytes = std::fs::read(dict_path(&self.data_dir, &dict_stem)?).ok()?;
         let mut dict = Dictionary::from_bytes(&dict_stem, dict_bytes).ok()?;
         dict.dict_condition = self.options.dict_condition;
+        dict.voice_letter_bits_offset = self.options.letter_bits_offset;
         Some(dict)
     }
 
