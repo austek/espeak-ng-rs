@@ -142,18 +142,9 @@ pub fn is_alpha(c: u32) -> bool {
     (c as u8).is_ascii_alphabetic() || (0xc0..0x2c0).contains(&c)
 }
 
-/// C's `IsAlpha`: `iswalpha` plus the in-word marks of the Indic, Hebrew and
-/// Arabic scripts.
+/// C's `IsAlpha`.
 pub fn is_alpha_c(c: u32) -> bool {
-    let Some(ch) = char::from_u32(c) else { return false };
-    if ch.is_alphabetic() {
-        return true;
-    }
-    match c {
-        0x901..=0xdf7 => (c & 0x7f) < 0x64 || matches!(c, 0xa70 | 0xa71 | 0xd7a..=0xd7f),
-        0x5b0..=0x5c2 | 0x605 | 0x670 | 0x64b..=0x65e | 0x300..=0x36f => true,
-        _ => false,
-    }
+    char::from_u32(c).is_some_and(crate::translate::ucd_alpha::is_alpha)
 }
 
 /// The language a letter with no rule hands its word to: English for a Latin

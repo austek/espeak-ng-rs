@@ -26,7 +26,7 @@
 pub mod ipa_table;
 pub mod phoneme_ipa;
 pub mod compat;
-mod ucd_alpha;
+pub(crate) mod ucd_alpha;
 pub mod ssml;
 mod accent;
 mod mandarin_sandhi;
@@ -2437,7 +2437,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     break;
                 }
             }
-        } else if is_word_letter(c)
+        } else if (is_word_letter(c) && !is_emoji_char(c))
             || (c == '\''
                 && (grammar.apostrophe & 1 != 0
                     || (matches!(tokens.last(), Some(Token::Number(_)))
@@ -2513,7 +2513,10 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     // — so `hello'` is "hello", not a word the dictionary has
                     // never seen.  Leave it for the outer loop.
                     break;
-                } else if is_word_letter(next) || next == '\'' || is_indic_combining(next) {
+                } else if (is_word_letter(next) && !is_emoji_char(next))
+                    || next == '\''
+                    || is_indic_combining(next)
+                {
                     // Indic combining marks (virama ्, nukta ़) aren't classed as
                     // alphabetic but are part of the word — keeping them lets the
                     // rules see a conjunct (`स्त`) instead of two broken words.
@@ -2681,12 +2684,7 @@ fn is_indic_combining(c: char) -> bool {
 /// transport, dingbats, misc symbols, stars/arrows, regional-indicator flags).
 /// These are read via the dictionary's emoji-name entries.
 fn is_emoji_char(c: char) -> bool {
-    matches!(c as u32,
-        0x1F000..=0x1FAFF   // emoji, pictographs, supplemental & extended-A
-                            // (includes 1F1E6..1F1FF regional-indicator flags)
-        | 0x2600..=0x27BF   // miscellaneous symbols + dingbats
-        | 0x2B00..=0x2BFF   // stars, arrows
-    )
+    ucd_alpha::is_emoji(c)
 }
 
 /// A codepoint that modifies/joins an emoji rather than starting a new one:
@@ -7031,11 +7029,16 @@ fn spell_aborted_switch(
         return None;
     }
     let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
+    let opens_with_pause = |letter: &[letters::Item]| {
+        letter.first() == Some(&letters::Item::Ph(crate::phoneme::PHON_PAUSE))
+    };
     let mut items = Vec::new();
-    for c in word.chars().filter(|c| c.is_alphabetic()) {
+    let mut after_foreign = true;
+    for c in word.chars().filter(|&c| is_word_letter(c)) {
         let mut letter = spell_lone_letter(c, voice, alts)?;
-        let after_pause = usize::from(letter.first() == Some(&letters::Item::Ph(crate::phoneme::PHON_PAUSE)));
-        letter.insert(after_pause, letters::Item::Ph(crate::phoneme::PHON_END_WORD));
+        let at = usize::from(after_foreign && opens_with_pause(&letter));
+        after_foreign = opens_with_pause(&letter);
+        letter.insert(at, letters::Item::Ph(crate::phoneme::PHON_END_WORD));
         items.extend(letter);
     }
     Some(items)
@@ -8921,7 +8924,7 @@ pub(crate) fn build_translate_entries(
                     && !tone_only()
                 {
                     let mut chars = lower.chars();
-                    let lone = chars.next().filter(|c| c.is_alphabetic() && chars.next().is_none());
+                    let lone = chars.next().filter(|&c| is_word_letter(c) && chars.next().is_none());
                     let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
                     let env = letters::LetterEnv { voice, tr: voice, alts };
                     let reading = lone.map(|c| (c, letters::translate_letter(&env, c)));
