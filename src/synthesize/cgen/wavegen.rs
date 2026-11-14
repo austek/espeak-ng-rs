@@ -1,10 +1,15 @@
 //! Port of `wavegen.c`: plays the command queue `generate` builds.
 
 use super::breath::Breath;
+use super::splayer::{self, Frame, LibcRand, SpeechPlayer};
 use super::klatt::{Klatt, KlattCmd, KlattWdata};
 
 /// The samples in C's output buffer, which `parwave` stops at: 60 ms at 22.05 kHz.
 const KLATT_BUFFER_SAMPLES: usize = 1324;
+
+/// `klattv[0]` value that selects the Speech Player generator.
+const SPEECH_PLAYER_SOURCE: i32 = 6;
+const FADE_SAMPLES: i32 = 110;
 use super::voice::WVoice;
 use super::{Env, Wcmd};
 use crate::synthesize::envelopes::ENVELOPE_DATA;
@@ -193,6 +198,8 @@ pub struct Wavegen {
     voicing: i32,
     breath: Breath,
     klatt: Klatt,
+    player: SpeechPlayer,
+    libc_rand: LibcRand,
     pub out: Vec<i16>,
     /// Samples written since C's output buffer was last emptied by
     /// `WavegenFill` returning with the queue empty.
@@ -271,6 +278,8 @@ impl Wavegen {
             voicing: 64,
             breath: Breath::new(rand_seed),
             klatt: Klatt::new(),
+            player: SpeechPlayer::new(),
+            libc_rand: LibcRand::new(),
             out: Vec::new(),
             since_reset: 0,
             silence_left: None,
@@ -823,12 +832,14 @@ impl Wavegen {
                 self.wdata.mix.n = 0;
                 self.wdata.amplitude_fmt = 100;
                 self.klatt.reset(1);
+                self.player = SpeechPlayer::new();
                 self.play_silence(if len == 0 { 0 } else { carried.unwrap_or(len) });
             }
             Wcmd::Wave { len, addr, scale, amp } => {
                 self.echo_complete = self.echo_length;
                 self.wdata.mix.n = 0;
                 self.klatt.reset(1);
+                self.player = SpeechPlayer::new();
                 self.play_wave(len, phondata, addr, scale, amp);
             }
             Wcmd::Wave2 { len, max, addr, scale, amp } => {
@@ -840,6 +851,11 @@ impl Wavegen {
                     self.wdata.mix.n = 0;
                 }
                 self.echo_complete = self.echo_length;
+                if self.voice.klatt == SPEECH_PLAYER_SOURCE {
+                    let follows = next_klatt(&queue[qi + 1..], frames).is_some();
+                    self.run_speech_player(len, &frames[fr1], &frames[fr2], follows, phondata);
+                    return;
+                }
                 if self.voice.klatt != 0 {
                     let next = next_klatt(&queue[qi + 1..], frames);
                     self.run_klatt(len, &frames[fr1], &frames[fr2], next, phondata);
@@ -853,6 +869,81 @@ impl Wavegen {
             Wcmd::Embedded { cmd, value } => self.set_embedded(cmd, value),
             Wcmd::FmtAmplitude(a) => self.wdata.amplitude_fmt = if a == 0 { 100 } else { a },
             Wcmd::Marker(kind) => on_marker(kind, self.out.len()),
+        }
+    }
+
+    /// `speechPlayer_frame_t` for one espeak frame (`fillSpeechPlayerFrame`).
+    fn player_frame(&self, f: &SpectFrame) -> Frame {
+        let v = &self.voice;
+        let mut p = [0.0f64; splayer::N_PARAMS];
+        p[splayer::VOICE_PITCH] = f64::from(self.wdata.pitch) / 4096.0;
+        p[splayer::VOICE_AMPLITUDE] = f64::from(v.voicing) / 64.0;
+        p[splayer::ASPIRATION_AMPLITUDE] = f64::from(v.breath[1]) / 64.0;
+        for k in 1..=6 {
+            p[splayer::CF1 + k - 1] = f64::from(i32::from(f.ffreq[k]) * v.freq[k]) / 256.0 + f64::from(v.freqadd[k]);
+        }
+        p[splayer::CF_NP] = 200.0;
+        p[splayer::CF_N0] = 250.0;
+        let fnz = i32::from(f.klattp[1]);
+        if fnz > 0 {
+            p[splayer::CA_NP] = 1.0;
+            p[splayer::CF_N0] = f64::from(fnz * 2);
+        }
+        for k in 0..4 {
+            p[splayer::CB1 + k] = f64::from(i32::from(f.bw[k]) * 2) * (f64::from(v.width[k + 1]) / 256.0);
+        }
+        p[splayer::CB1 + 4] = 1000.0;
+        p[splayer::CB1 + 5] = 1000.0;
+        p[splayer::CB_NP] = 100.0;
+        p[splayer::CB_N0] = 100.0;
+        p[splayer::PRE_FORMANT_GAIN] = 1.0;
+        p[splayer::OUTPUT_GAIN] = 3.0 * (f64::from(self.wdata.amplitude) / 100.0);
+        p[splayer::END_VOICE_PITCH] = p[splayer::VOICE_PITCH];
+        Frame(p)
+    }
+
+    /// `Wavegen_KlattSP`: queue the command's frames once, then drain the
+    /// generator into the output buffer.
+    fn run_speech_player(&mut self, len: i32, fr1: &SpectFrame, fr2: &SpectFrame, follows: bool, phondata: &[u8]) {
+        let (f1, mut f2) = (self.player_frame(fr1), self.player_frame(fr2));
+        self.queue_player_frames(len, f1, &mut f2, follows, phondata);
+        loop {
+            let room = KLATT_BUFFER_SAMPLES - self.since_reset % KLATT_BUFFER_SAMPLES;
+            let mut samples = self.player.synthesize(room, &mut self.libc_rand);
+            mix_player_wave(&mut self.wdata.mix, phondata, self.wdata.amplitude_v, &mut samples);
+            let full = samples.len() == room;
+            for s in samples {
+                self.out.push(s);
+                self.since_reset += 1;
+            }
+            if !full {
+                return;
+            }
+        }
+    }
+
+    fn queue_player_frames(&mut self, len: i32, mut f1: Frame, f2: &mut Frame, follows: bool, phondata: &[u8]) {
+        self.wdata.pitch_ix += self.wdata.pitch_inc * (len / STEPSIZE);
+        let env = env_table(self.wdata.pitch_env, phondata);
+        let step = env.get((self.wdata.pitch_ix >> 8).clamp(0, 127) as usize).copied().unwrap_or(0);
+        self.wdata.pitch = ((i32::from(step) * self.wdata.pitch_range) >> 8) + self.wdata.pitch_base;
+        f2.0[splayer::END_VOICE_PITCH] = f64::from(self.wdata.pitch / 4096);
+        if self.wdata.mix.n != 0 {
+            f1.0[splayer::OUTPUT_GAIN] /= 5.0;
+            f2.0[splayer::OUTPUT_GAIN] /= 5.0;
+        }
+        let fade = FADE_SAMPLES as u32;
+        self.player.queue_frame(&f1, fade, fade);
+        let main = len - FADE_SAMPLES - if follows { 0 } else { FADE_SAMPLES };
+        if main >= 1 {
+            self.player.queue_frame(f2, main as u32, main as u32);
+        }
+        if !follows {
+            f2.0[splayer::VOICE_PITCH] = f2.0[splayer::END_VOICE_PITCH];
+            f2.0[splayer::PRE_FORMANT_GAIN] = 0.0;
+            self.player.queue_frame(f2, fade / 2, fade / 2);
+            f2.0[splayer::OUTPUT_GAIN] = 0.0;
+            self.player.queue_frame(f2, fade / 2, fade / 2);
         }
     }
 
@@ -930,6 +1021,33 @@ fn klatt_mix(m: &mut Mix, phondata: &[u8], amplitude_v: i32) -> Option<i32> {
         m.offset -= (m.max * 3) / 4;
     }
     Some(z2)
+}
+
+/// `mixWaveFile`: add the concurrent consonant wave to the generator's output.
+fn mix_player_wave(m: &mut Mix, phondata: &[u8], amplitude_v: i32, out: &mut [i16]) {
+    let at = |i: i32| phondata.get(m_index(m.addr, i)).copied().unwrap_or(0);
+    let mut i = 0;
+    while m.ix < m.n && i < out.len() {
+        let mut val = if m.scale == 0 {
+            let low = i32::from(at(m.ix + m.offset));
+            m.ix += 1;
+            low + i32::from(at(m.ix + m.offset) as i8) * 256
+        } else {
+            i32::from(at(m.ix + m.offset) as i8) * m.scale
+        };
+        val = (f64::from(val) * (f64::from(amplitude_v) / 1024.0)) as i32;
+        val = (val * m.amp) / 40;
+        out[i] = out[i].wrapping_add(val as i16);
+        if m.ix + m.offset >= m.max {
+            m.offset -= (m.max * 3) / 4;
+        }
+        m.ix += 1;
+        i += 1;
+    }
+}
+
+fn m_index(addr: usize, i: i32) -> usize {
+    addr + i.max(0) as usize
 }
 
 /// The first frame of the next Klatt command, as `SetSynth_Klatt` looks ahead

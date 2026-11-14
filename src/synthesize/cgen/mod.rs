@@ -11,6 +11,7 @@ pub mod lengths;
 pub mod phlist;
 pub mod pitches;
 pub mod speed;
+pub mod splayer;
 pub mod tone;
 pub mod voice;
 pub mod voicefile;
