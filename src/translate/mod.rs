@@ -1194,26 +1194,7 @@ impl LangOptions {
 /// `tr->letter_bits_offset` as `SelectTranslator` sets it; `0` for every
 /// voice that has no case of its own there.
 pub(crate) fn c_letter_bits_offset_for(primary: &str) -> u32 {
-    match primary {
-        "el" | "grc" => 0x380,
-        "be" | "bg" | "kk" | "mk" | "mn" | "ru" | "tt" | "uk" => 0x420,
-        "hy" => 0x530,
-        "ar" | "fa" | "ur" | "sd" => 0x600,
-        "hi" | "ne" | "mr" => 0x900,
-        "bn" | "as" | "bpy" => 0x980,
-        "pa" => 0xa00,
-        "gu" => 0xa80,
-        "or" => 0xb00,
-        "ta" => 0xb80,
-        "te" => 0xc00,
-        "kn" => 0xc80,
-        "ml" => 0xd00,
-        "si" => 0xd80,
-        "ka" => 0x10a0,
-        "ko" => 0x1100,
-        "am" => 0x1200,
-        _ => 0,
-    }
+    crate::dictionary::file::letter_bits_offset_for(primary)
 }
 
 // ---------------------------------------------------------------------------

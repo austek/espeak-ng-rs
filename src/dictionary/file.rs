@@ -156,17 +156,16 @@ pub struct Dictionary {
 pub fn letter_bits_offset_for(lang: &str) -> u32 {
     match lang {
             // Cyrillic-script: OFFSET_CYRILLIC
-            "ru" | "bg" | "tt" | "uk" | "be" | "mk" | "mn" | "kk" | "ky"
-            | "ba" | "cv" | "tg" | "os" | "cu" => 0x420u32,
+            "ru" | "bg" | "tt" | "uk" | "be" | "mk" | "mn" | "kk" => 0x420u32,
             // Greek: OFFSET_GREEK
             "el" | "grc" => 0x380u32,
             // Armenian: OFFSET_ARMENIAN
-            "hy" | "hyw" => 0x530u32,
+            "hy" => 0x530u32,
             // Georgian: OFFSET_GEORGIAN
             "ka" => 0x10A0u32,
             // Indic scripts (block start = offset).  They share the ISCII-derived
             // relative layout, so one letter-group classification serves all.
-            "hi" | "mr" | "ne" | "sa" | "kok" => 0x900u32, // Devanagari
+            "hi" | "mr" | "ne" => 0x900u32, // Devanagari
             "bn" | "as" | "bpy" => 0x980u32,               // Bengali/Assamese/Bishnupriya
             "pa" => 0xA00u32,                              // Gurmukhi
             "gu" => 0xA80u32,                              // Gujarati
@@ -697,7 +696,7 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
                 bits[ix] |= 1 << 2;
             }
         }
-        "hy" | "hyw" => {
+        "hy" => {
             // C's `hy_vowels`, `hy_consonants` and `hy_consonants2`, as offsets
             // from U+0530; the table starts empty rather than from the Latin one.
             const VOWELS: &[usize] = &[0x31, 0x35, 0x37, 0x38, 0x3b, 0x48, 0x55];
@@ -714,7 +713,7 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
             }
             bits[0x45] |= 1 << 2;
         }
-        "hi" | "mr" | "ne" | "sa" | "kok" | "bn" | "as" | "bpy" | "pa" | "gu" | "or"
+        "hi" | "mr" | "ne" | "bn" | "as" | "bpy" | "pa" | "gu" | "or"
         | "ta" | "te" | "kn" | "ml" => {
             // Indic scripts share the ISCII-derived layout, so the built-in
             // groups apply at the same *offset-relative* positions regardless of

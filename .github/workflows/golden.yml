@@ -262,6 +262,7 @@ jobs:
           --test switched_word_says_nothing
           --test script_run_case_fold
           --test voice_letter_bits_offset
+          --test c_letter_group_offsets
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config
