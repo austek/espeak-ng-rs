@@ -2,7 +2,7 @@
 //! the stress handling `MakePhonemeList` does after translation.
 
 use crate::phoneme::{
-    PhonemeData, PhonemeTab, PHON_DEFAULTTONE, PHON_END_WORD, PHON_LENGTHEN, PHON_PAUSE, PHON_PAUSE_SHORT, PHON_SWITCH, PH_LIQUID,
+    PhonemeData, PhonemeTab, PHON_DEFAULTTONE, PHON_END_WORD, PHON_LENGTHEN, PHON_PAUSE, PHON_PAUSE_SHORT, PHON_SWITCH, PHON_SYLLABIC, PH_LIQUID,
     PH_NASAL, PH_PAUSE, PH_PREVOICE, PH_STRESS, PH_VFRICATIVE, PH_VOWEL, PH_VSTOP,
 };
 use crate::translate::{CodeMarker, EmbeddedCmd, PhonemeCode};
@@ -206,6 +206,14 @@ pub fn build_list(
         if c.code == PHON_LENGTHEN {
             if let Some(last) = list.last_mut() {
                 last.synthflags |= SFLAG_LENGTHEN;
+            }
+            continue;
+        }
+        if c.code == PHON_SYLLABIC {
+            if let Some(last) = list.last_mut() {
+                last.synthflags |= SFLAG_SYLLABLE;
+                last.stresslevel = stress.unwrap_or(1);
+                prev_vowel = Some(list.len() - 1);
             }
             continue;
         }
