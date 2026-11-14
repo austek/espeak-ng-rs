@@ -139,6 +139,15 @@ impl TransposeConfig {
         frequent_pairs: Some(PAIRS_RU),
     };
 
+    /// Belarusian: U+0430..U+045E, still indexed through the Latin map the
+    /// translator starts with (its `tr_languages.c` block never resets it).
+    pub const BELARUSIAN: Self = TransposeConfig {
+        transpose_min: 0x430,
+        transpose_max: 0x45e,
+        transpose_map: Some(TRANSPOSE_MAP_LATIN),
+        frequent_pairs: None,
+    };
+
     /// Arabic-script configuration.
     /// Used by: ar.
     ///
@@ -177,7 +186,8 @@ impl TransposeConfig {
     /// in sync with `Dictionary::from_bytes`.
     pub fn for_lang(lang: &str) -> Self {
         match lang {
-            "ru" | "bg" | "tt" | "uk" | "be" => Self::CYRILLIC,
+            "ru" | "bg" | "tt" | "uk" => Self::CYRILLIC,
+            "be" => Self::BELARUSIAN,
             "ar" => Self::ARABIC,
             "fa" => Self::PERSIAN,
             _ => Self::LATIN,
