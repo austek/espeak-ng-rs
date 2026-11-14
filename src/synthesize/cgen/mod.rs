@@ -289,9 +289,7 @@ impl<'a> Renderer<'a> {
             _ => {}
         };
         self.wavegen.run(&g.queue, &g.frames, &self.phdata.phondata, &mut on_marker);
-        if last {
-            self.wavegen.finish();
-        }
+        self.wavegen.finish();
         let pcm = std::mem::take(&mut self.wavegen.out);
         self.emitted += pcm.len();
         pcm

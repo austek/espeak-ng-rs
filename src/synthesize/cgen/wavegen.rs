@@ -194,6 +194,12 @@ pub struct Wavegen {
     breath: Breath,
     klatt: Klatt,
     pub out: Vec<i16>,
+    /// Samples written since C's output buffer was last emptied by
+    /// `WavegenFill` returning with the queue empty.
+    since_reset: usize,
+    /// The part of an echo tail that did not fit the output buffer; the next
+    /// pause command plays it instead of its own length.
+    silence_left: Option<i32>,
 }
 
 fn env_table(env: Env, phondata: &[u8]) -> &[u8] {
@@ -266,6 +272,8 @@ impl Wavegen {
             breath: Breath::new(rand_seed),
             klatt: Klatt::new(),
             out: Vec::new(),
+            since_reset: 0,
+            silence_left: None,
         };
         w.general_amplitude = w.get_amplitude();
         w.set_voice();
@@ -648,6 +656,7 @@ impl Wavegen {
     fn emit(&mut self, z: i32) {
         let z = z as i16;
         self.out.push(z);
+        self.since_reset += 1;
         self.echo_buf[self.echo_head] = z;
         self.echo_head = (self.echo_head + 1) % N_ECHO_BUF;
     }
@@ -755,6 +764,7 @@ impl Wavegen {
             value += self.echo() >> 8;
             let value = value.clamp(-32768, 32767);
             self.out.push(value as i16);
+            self.since_reset += 1;
             self.echo_buf[self.echo_head] = ((value * 3) / 4) as i16;
             self.echo_head = (self.echo_head + 1) % N_ECHO_BUF;
         }
@@ -803,14 +813,17 @@ impl Wavegen {
     }
 
     fn run_cmd(&mut self, qi: usize, cmd: &Wcmd, queue: &[Wcmd], frames: &[SpectFrame], phondata: &[u8], on_marker: &mut dyn FnMut(u8, usize)) {
+        let carried = self.silence_left.take();
         match *cmd {
             Wcmd::Pitch { len, env, p1, p2 } => self.set_pitch(len, env, p1, p2, phondata),
             Wcmd::Pause(len) => {
-                self.echo_complete -= len;
+                if carried.is_none() {
+                    self.echo_complete -= len;
+                }
                 self.wdata.mix.n = 0;
                 self.wdata.amplitude_fmt = 100;
                 self.klatt.reset(1);
-                self.play_silence(len);
+                self.play_silence(if len == 0 { 0 } else { carried.unwrap_or(len) });
             }
             Wcmd::Wave { len, addr, scale, amp } => {
                 self.echo_complete = self.echo_length;
@@ -848,7 +861,7 @@ impl Wavegen {
         let cmd = KlattCmd { length: len, fr1, fr2, next };
         let mut resume = false;
         loop {
-            let room = KLATT_BUFFER_SAMPLES - self.out.len() % KLATT_BUFFER_SAMPLES;
+            let room = KLATT_BUFFER_SAMPLES - self.since_reset % KLATT_BUFFER_SAMPLES;
             let (samples, full) = self.klatt_pass(&cmd, resume, room, phondata);
             for s in samples {
                 let value = (s + (self.echo() >> 8)).clamp(-32768, 32767);
@@ -880,13 +893,19 @@ impl Wavegen {
         result
     }
 
-    /// The silence C plays after the queue empties, to let an echo die away.
+    /// What C does when its queue runs empty: play silence for the echo to die
+    /// away, but only as far as the output buffer reaches. The rest of the
+    /// tail is dropped once the next clause's queue starts.
     pub fn finish(&mut self) {
-        if self.echo_complete > 0 {
-            let n = self.echo_complete;
-            self.play_silence(n);
-            self.echo_complete = 0;
+        let filled = self.since_reset % KLATT_BUFFER_SAMPLES;
+        let buffer_just_filled = filled == 0 && self.since_reset > 0;
+        if self.echo_complete > 0 && !buffer_just_filled {
+            let tail = self.echo_complete;
+            let room = (KLATT_BUFFER_SAMPLES - filled) as i32;
+            self.play_silence(tail.min(room));
+            self.silence_left = (tail >= room).then_some(tail - room);
         }
+        self.since_reset = 0;
     }
 }
 
