@@ -7083,18 +7083,40 @@ fn own_break_stream(e: &TranslateEntry) -> bool {
         && e.phonemes.get(..2) == Some(&[crate::phoneme::PHON_PAUSE, crate::phoneme::PHON_END_WORD])
 }
 
-/// C's `single_quoted` after each quote before `token_ix`: a quote that follows a space opens
-/// a quoted stretch, any other quote ends it.
-fn inside_single_quotes(tokens: &[Token], token_ix: usize) -> bool {
-    (0..token_ix)
-        .rev()
-        .find(|&j| matches!(tokens[j], Token::Punctuation('\'')))
-        .is_some_and(|j| j == 0 || matches!(tokens[j - 1], Token::Space))
+/// The token is a word whose last letter is `s`, in either case.
+fn ends_with_plural_s(token: Option<&Token>) -> bool {
+    matches!(token, Some(Token::Word(w)) if w.ends_with(['s', 'S']))
 }
 
-/// The token is a word whose last letter is `s`.
-fn ends_with_plural_s(token: Option<&Token>) -> bool {
-    matches!(token, Some(Token::Word(w)) if w.ends_with('s'))
+/// C's `single_quoted` after one more token.  An apostrophe inside a word clears it; a quote
+/// after a plural `s` keeps it while it is clear; any other quote sets it when C's previous
+/// output character is a space.  A new clause starts clear.
+fn single_quoted_after(state: bool, prev: Option<&Token>, token: &Token) -> bool {
+    match token {
+        Token::ClauseBoundary(_) => false,
+        Token::Word(w) if w.contains('\'') => false,
+        Token::Punctuation('\'') if ends_with_plural_s(prev) && !state => state,
+        Token::Punctuation('\'') => output_ends_in_space(prev),
+        _ => state,
+    }
+}
+
+/// C's `prev_out` is a space after this token: a digit string gets a space before the next
+/// character, and a quote turns into one.
+fn output_ends_in_space(prev: Option<&Token>) -> bool {
+    matches!(
+        prev,
+        None | Some(
+            Token::Space | Token::Number(_) | Token::ClauseBoundary(_) | Token::Punctuation('\'')
+        )
+    )
+}
+
+/// C's `single_quoted` as it stands when `token_ix` is reached.
+fn inside_single_quotes(tokens: &[Token], token_ix: usize) -> bool {
+    (0..token_ix).fold(false, |state, j| {
+        single_quoted_after(state, j.checked_sub(1).map(|k| &tokens[k]), &tokens[j])
+    })
 }
 
 /// An apostrophe right after a word's `s` outside a quoted stretch is dropped without the

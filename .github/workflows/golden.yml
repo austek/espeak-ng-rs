@@ -230,6 +230,7 @@ jobs:
           --test ku_arabic_script_words
           --test sep_lengthen
           --test apostrophe_word_pause
+          --test plural_quote_state
           --test switched_symbol_stress
           --test foreign_script_digits
           --test cli_sep_and_closing_clause
