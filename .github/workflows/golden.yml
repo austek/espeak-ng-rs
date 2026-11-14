@@ -257,6 +257,7 @@ jobs:
           --test indic_alpha_marks
           --test script_run_word_split
           --test ipa_next_vowel_number_words
+          --test cyrillic_voice_without_translator_case
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

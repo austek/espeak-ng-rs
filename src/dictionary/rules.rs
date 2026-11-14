@@ -151,11 +151,12 @@ pub fn is_alpha_c(c: u32) -> bool {
 /// letter in a non-Latin voice, else the language the letter's alphabet nominates
 /// (`alt_alphabet`, or `AL_WORDS`).
 fn script_switch(dict: &Dictionary, wc: u32) -> Option<&'static str> {
-    if dict.letter_bits_offset > 0 && wc <= 0x241 && char::from_u32(wc)?.is_alphabetic() {
+    let offset = crate::translate::c_letter_bits_offset_for(crate::translate::primary_bcp47_subtag(&dict.lang));
+    if offset > 0 && wc <= 0x241 && char::from_u32(wc)?.is_alphabetic() {
         return Some("en");
     }
     let alphabet = crate::translate::letters::alphabet_from_char(wc)?;
-    if alphabet.offset == dict.letter_bits_offset {
+    if alphabet.offset == offset {
         return None;
     }
     let (alt, alt_lang, _) = crate::translate::letters::voice_alphabets(&dict.lang);

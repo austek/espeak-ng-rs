@@ -1192,7 +1192,7 @@ impl LangOptions {
 
 /// `tr->letter_bits_offset` as `SelectTranslator` sets it; `0` for every
 /// voice that has no case of its own there.
-fn c_letter_bits_offset_for(primary: &str) -> u32 {
+pub(crate) fn c_letter_bits_offset_for(primary: &str) -> u32 {
     match primary {
         "el" | "grc" => 0x380,
         "be" | "bg" | "kk" | "mk" | "mn" | "ru" | "tt" | "uk" => 0x420,
