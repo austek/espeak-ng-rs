@@ -564,8 +564,7 @@ fn build_letter_bits(lang: &str) -> Box<[u8; 256]> {
     let mut bits = Box::new([0u8; 256]);
 
     match lang {
-        "ru" | "bg" | "uk" | "be" | "tt" | "mk" | "mn" | "kk" | "ky"
-        | "ba" | "cv" | "tg" | "os" | "cu" => {
+        l if letter_bits_offset_for(l) == 0x420 => {
             // Cyrillic letter groups — `letter_bits_offset = OFFSET_CYRILLIC = 0x420`
             // Indices are (codepoint - 0x420); stored at that index in bits[].
 

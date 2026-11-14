@@ -6907,8 +6907,8 @@ fn char_script(c: char) -> Option<Script> {
 /// slice rather than a single script.
 fn native_scripts(lang: &str) -> &'static [Script] {
     match primary_bcp47_subtag(lang) {
-        "ru" | "uk" | "bg" | "be" | "mk" | "mn" | "kk" | "ky" | "tt" | "ba"
-        | "cv" | "tg" | "os" | "cu" | "ab" | "nog" => &[Script::Cyrillic],
+        "ab" | "nog" => &[Script::Cyrillic],
+        l if crate::dictionary::file::letter_bits_offset_for(l) == 0x420 => &[Script::Cyrillic],
         // Serbo-Croatian is digraphic, and all three voices share one
         // dictionary (C: `strcpy(tr->dictionary_name, "hbs")`) and declare
         // Cyrillic as `langopts.our_alphabet` — so `sr "Beograd"` ==
@@ -7345,8 +7345,7 @@ fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &La
     }
     // A Cyrillic voice without a translator case of its own has the Latin
     // letter table in C.
-    let bare_cyrillic = dict.letter_bits_offset == 0x420
-        && !matches!(primary_bcp47_subtag(&lang_opts.lang), "be" | "bg" | "kk" | "mk" | "mn" | "ru" | "tt" | "uk");
+    let bare_cyrillic = dict.letter_bits_offset == 0x420 && lang_opts.letter_bits_offset == 0;
     let offset = if bare_cyrillic { 0 } else { dict.letter_bits_offset };
     let in_other_alphabet = |c: char| {
         letters::alphabet_from_char(c as u32).is_some_and(|a| a.offset != offset)
