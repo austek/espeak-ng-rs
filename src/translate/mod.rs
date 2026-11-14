@@ -10710,7 +10710,13 @@ impl Translator {
                             let tight_after_bracket = token_ix
                                 .checked_sub(1)
                                 .is_some_and(|k| matches!(&tokens[k], Token::Punctuation(p) if is_bracket(*p)));
-                            let pause_open = tight_after_bracket
+                            // Quote pauses are C's `pre_pause_add`, kept as the largest before the next word.
+                            let quote_after_quote = *c == '\''
+                                && tokens[..token_ix]
+                                    .iter()
+                                    .rfind(|t| !matches!(t, Token::Space))
+                                    .is_some_and(|t| matches!(t, Token::Punctuation('\'')));
+                            let pause_open = (tight_after_bracket || quote_after_quote)
                                 && codes
                                     .iter()
                                     .rposition(|k| k.marker.is_none())
