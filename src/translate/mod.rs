@@ -7198,11 +7198,15 @@ fn script_run_breaks(word: &str, offset: u32, dict: &Dictionary, lang: &str) -> 
 /// as written.
 fn replaced_letters(word: &str, dict: &Dictionary, lang: &str) -> Vec<char> {
     let lower = lowercase_for_lang(word, lang);
-    let replaced = dict.apply_replacements(&lower).unwrap_or(lower);
+    let replaced = dict.apply_replacements(&lower).unwrap_or_else(|| lower.clone());
     if replaced.chars().count() != word.chars().count() {
         return word.chars().collect();
     }
-    replaced.chars().collect()
+    let untouched = lower.chars().zip(replaced.chars()).map(|(a, b)| a == b);
+    word.chars()
+        .zip(replaced.chars().zip(untouched))
+        .map(|(own, (new, same))| if same { own } else { new })
+        .collect()
 }
 
 /// C's `TranslateClause` does not mix scripts in one word: it breaks the word
