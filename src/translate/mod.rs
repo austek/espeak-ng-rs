@@ -1676,12 +1676,20 @@ fn portuguese_number_word(token: &NumberToken) -> Option<String> {
 /// two words (`s'imbolo d'El 'EURo`), not one.
 fn normalize_apostrophes(text: &str) -> std::borrow::Cow<'_, str> {
     const SMART: [char; 4] = ['\u{2019}', '\u{00B4}', '\u{2032}', '\u{0092}'];
-    if !text.chars().any(|c| SMART.contains(&c)) {
+    let chars: Vec<char> = text.chars().collect();
+    let apostrophe = |i: usize| SMART.contains(&chars[i]) || lost_smart_quote(&chars, i);
+    if !(0..chars.len()).any(apostrophe) {
         return std::borrow::Cow::Borrowed(text);
     }
-    std::borrow::Cow::Owned(
-        text.chars().map(|c| if SMART.contains(&c) { '\'' } else { c }).collect(),
-    )
+    std::borrow::Cow::Owned((0..chars.len()).map(|i| if apostrophe(i) { '\'' } else { chars[i] }).collect())
+}
+
+/// C reads a `?` or `‘` between two letters as an apostrophe: a smart quote that may have
+/// been replaced by `?`.
+fn lost_smart_quote(chars: &[char], i: usize) -> bool {
+    matches!(chars[i], '?' | '\u{2018}')
+        && i.checked_sub(1).is_some_and(|p| chars[p].is_alphabetic())
+        && chars.get(i + 1).is_some_and(|n| n.is_alphabetic())
 }
 
 /// Dutch and Afrikaans write the article `een` as `'n` and `het` as `'t`.  C's

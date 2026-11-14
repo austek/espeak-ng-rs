@@ -235,6 +235,7 @@ jobs:
           --test number_language_switch
           --test time_zero_minute
           --test digit_colon_rules
+          --test question_mark_apostrophe
           --test switched_symbol_stress
           --test foreign_script_digits
           --test cli_sep_and_closing_clause
