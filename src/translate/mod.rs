@@ -736,7 +736,7 @@ impl NumberGrammar {
             }
             // Chinese / Cantonese / Hakka: dictionary readings are pinyin with a
             // trailing tone digit, so digits glued to letters stay in the word.
-            "cmn" | "yue" | "hak" | "zh" => {
+            lang if crate::dictionary::rules::tone_numbers(lang) => {
                 grammar.tone_numbers = true;
             }
             // (the reversed-textmode flag for these is set on LangOptions below)
@@ -7260,7 +7260,7 @@ fn is_unpronounceable(rest: &str, next: &[u8], dict: &Dictionary, lang_opts: &La
     // A Cyrillic voice without a translator case of its own has the Latin
     // letter table in C.
     let bare_cyrillic = dict.letter_bits_offset == 0x420
-        && !matches!(primary_bcp47_subtag(&lang_opts.lang), "ru" | "uk" | "bg" | "mk" | "kk" | "mn" | "tt");
+        && !matches!(primary_bcp47_subtag(&lang_opts.lang), "be" | "bg" | "kk" | "mk" | "mn" | "ru" | "tt" | "uk");
     let offset = if bare_cyrillic { 0 } else { dict.letter_bits_offset };
     let in_other_alphabet = |c: char| {
         letters::alphabet_from_char(c as u32).is_some_and(|a| a.offset != offset)
@@ -9492,7 +9492,7 @@ fn assign_default_tones(entries: &mut [TranslateEntry], phdata: &PhonemeData, ba
 /// ordinary intonation, so it only gets the placement pass.
 fn apply_tone_sandhi(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang: &str) {
     let base = primary_bcp47_subtag(lang);
-    if matches!(base, "yue" | "hak" | "vi" | "shn") {
+    if crate::dictionary::rules::default_tone_language(base) {
         // `CalcPitches_Tone` gives a toneless syllable `phonDEFAULTTONE`, which
         // is why Vietnamese "xin" is `s'i1n` and not `s'in`.
         assign_default_tones(entries, phdata, base);
@@ -10989,7 +10989,7 @@ impl Translator {
             out.append(own);
             own_flags.clear();
         };
-        let toned_voice = matches!(primary_bcp47_subtag(lang), "yue" | "hak" | "vi" | "shn");
+        let toned_voice = crate::dictionary::rules::default_tone_language(lang);
         let (codes, from_dict) = if toned_voice {
             tone_every_table(codes, from_dict, &self.options.lang, phdata, &alts)
         } else {
@@ -11035,10 +11035,7 @@ impl Translator {
             );
         }
         let outer_continues = self.options.switched && !self.options.switched_last;
-        let tone_language = matches!(
-            primary_bcp47_subtag(&self.options.lang),
-            "cmn" | "zh" | "yue" | "hak" | "vi" | "shn"
-        );
+        let tone_language = crate::dictionary::rules::tone_language(&self.options.lang);
         if !outer_continues && !tone_language {
             promote_clause_tonics(&mut out, phdata, &self.options.lang, stress_opts.stress_flags);
         }

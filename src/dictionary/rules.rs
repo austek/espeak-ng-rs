@@ -1507,9 +1507,21 @@ pub fn translate_rules_ext(
 
 /// Languages whose rules read a number after letters as a tone number
 /// (`langopts.tone_numbers`), so a digit in a post-context is optional.
-fn tone_numbers(lang: &str) -> bool {
+pub(crate) fn tone_numbers(lang: &str) -> bool {
     let base = lang.split(['-', '_']).next().unwrap_or(lang);
     matches!(base, "cmn" | "zh" | "yue" | "hak")
+}
+
+/// Tone languages other than Mandarin, whose sandhi runs over the finished list.
+pub(crate) fn default_tone_language(lang: &str) -> bool {
+    let base = lang.split(['-', '_']).next().unwrap_or(lang);
+    tone_language(base) && !matches!(base, "cmn" | "zh")
+}
+
+/// Languages whose translator sets `langopts.tone_language` in `SelectTranslator`.
+pub(crate) fn tone_language(lang: &str) -> bool {
+    let base = lang.split(['-', '_']).next().unwrap_or(lang);
+    tone_numbers(base) || matches!(base, "vi" | "shn")
 }
 
 #[allow(clippy::too_many_arguments)]
