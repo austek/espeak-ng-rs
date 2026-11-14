@@ -96,6 +96,7 @@ jobs:
           --test ssml_full_stop_before_tag
           --test readclause_terminator
           --test readclause_reader
+          --test readclause_ssml_tags
           --test synth_parity_tone
           --test synth_parity_klatt
           --test synth_parity_next3

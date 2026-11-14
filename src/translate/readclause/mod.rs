@@ -11,8 +11,10 @@ mod entity;
 mod iface;
 mod punct;
 mod reader;
+mod ssml_tags;
 mod terminator;
 
+pub use ssml_tags::SsmlTags;
 pub use iface::{CharMap, DefaultLang, NoTags, ReaderFlags, ReaderLang, ReaderOptions, TagProcessor};
 pub use reader::ClauseReader;
 pub use terminator::Terminator;
