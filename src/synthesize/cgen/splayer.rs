@@ -68,7 +68,7 @@ impl LibcRand {
         LibcRand { ring, pos: 0 }
     }
 
-    pub fn next(&mut self) -> i32 {
+    pub fn draw(&mut self) -> i32 {
         let v = self.ring[(self.pos + 3) % 34].wrapping_add(self.ring[(self.pos + 31) % 34]);
         self.ring[self.pos] = v;
         self.pos = (self.pos + 1) % 34;
@@ -97,7 +97,7 @@ struct Noise {
 
 impl Noise {
     fn next(&mut self, rand: &mut LibcRand) -> f64 {
-        self.last = f64::from(rand.next()) / RAND_MAX + 0.75 * self.last;
+        self.last = f64::from(rand.draw()) / RAND_MAX + 0.75 * self.last;
         self.last
     }
 }
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     fn libc_rand_matches_glibc_seed_one() {
         let mut r = LibcRand::new();
-        let first: Vec<i32> = (0..4).map(|_| r.next()).collect();
+        let first: Vec<i32> = (0..4).map(|_| r.draw()).collect();
         assert_eq!(first, [1_804_289_383, 846_930_886, 1_681_692_777, 1_714_636_915]);
     }
 }

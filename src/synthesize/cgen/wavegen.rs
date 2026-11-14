@@ -823,7 +823,7 @@ impl Wavegen {
         for (qi, cmd) in queue.iter().enumerate() {
             let before = self.out.len();
             self.run_cmd(qi, cmd, queue, frames, phondata, on_marker);
-            let filled = self.since_reset > 0 && self.since_reset % KLATT_BUFFER_SAMPLES == 0;
+            let filled = self.since_reset > 0 && self.since_reset.is_multiple_of(KLATT_BUFFER_SAMPLES);
             self.ended_full = filled && self.out.len() > before;
         }
     }
