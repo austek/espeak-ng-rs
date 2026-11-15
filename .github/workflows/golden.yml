@@ -103,6 +103,7 @@ jobs:
           --test ssml_prosody_audio
           --test abbreviation_clause_pause
           --test ssml_audio_icon
+          --test audio_wave_flag_across_clauses
           --test strend2_before_clause_end_stress
           --test ssml_break_emphasis
           --test ssml_say_as

@@ -156,6 +156,17 @@ impl<'a> Generator<'a> {
         }
     }
 
+    /// `DoSpect2`'s `static int wave_flag`: a wave still playing at the end of the previous
+    /// clause is cancelled by the first formant sequence of this one.
+    pub fn with_wave_flag(mut self, wave_flag: bool) -> Self {
+        self.wave_flag = wave_flag;
+        self
+    }
+
+    pub fn wave_flag(&self) -> bool {
+        self.wave_flag
+    }
+
     /// The sound icons `EMBED_I` plays, addressed past the end of this table's phoneme data.
     pub fn with_icons(mut self, icons: &[IconClip]) -> Self {
         self.icons = icons.to_vec();

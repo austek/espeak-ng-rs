@@ -181,6 +181,7 @@ pub struct Renderer<'a> {
     base_lang: String,
     active: Option<String>,
     pending_wvoice: Option<WVoice>,
+    wave_flag: bool,
     icon_bytes: Vec<u8>,
     icon_clips: Vec<generate::IconClip>,
     voice: WVoice,
@@ -217,6 +218,7 @@ impl<'a> Renderer<'a> {
             base_lang: params.lang.clone(),
             active: None,
             pending_wvoice: None,
+            wave_flag: false,
             icon_bytes: Vec::new(),
             icon_clips: Vec::new(),
             voice,
@@ -337,10 +339,13 @@ impl<'a> Renderer<'a> {
         let speeds = speeds_along(&c.list, &mut self.wpm_s, &self.voice);
         lengths::calc_lengths(&mut c.list, &self.tr, &|i| speeds[i.min(speeds.len() - 1)]);
         self.dump(&c.list);
-        let mut g = generate::Generator::new(phdata, &self.voice, &self.tr, self.speed, self.wpm_s2).with_icons(&self.icon_clips);
+        let mut g = generate::Generator::new(phdata, &self.voice, &self.tr, self.speed, self.wpm_s2)
+            .with_icons(&self.icon_clips)
+            .with_wave_flag(self.wave_flag);
         g.generate(&mut c.list);
         self.speed = g.speed;
         self.wpm_s2 = g.embedded_s2_value();
+        self.wave_flag = g.wave_flag();
         self.dump_queue(&g.queue, &g.frames);
         let base = self.emitted;
         let (words, sentences) = (&mut self.word_marks, &mut self.sentence_marks);
