@@ -320,6 +320,7 @@ jobs:
           --test embedded_command_empty_word_pause
           --test ssml_say_as_characters_digit_groups
           --test dotted_abbrev_check
+          --test dotted_abbrev_blank_before_dot
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

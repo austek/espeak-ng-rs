@@ -34,7 +34,11 @@ pub(super) fn clause_words(tokens: &[Token], from: usize) -> Vec<(usize, &str)> 
                 continue;
             }
             Token::Word(w) if blank => w.as_str(),
-            Token::Punctuation('.') if blank => ".",
+            Token::Punctuation('.') if blank => {
+                words.push((ix, "."));
+                blank = matches!(tokens.get(ix + 1), Some(Token::Word(_)));
+                continue;
+            }
             Token::ClauseBoundary(_) => break,
             _ => {
                 if !blank {
