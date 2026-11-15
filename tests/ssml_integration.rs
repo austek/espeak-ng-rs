@@ -43,8 +43,11 @@ fn entities_are_decoded() {
 #[test]
 fn say_as_digits_reads_each_digit() {
     let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
-    // C knows `tts:digits`, not bare `digits` (which reads the whole number).
-    assert_markup_eq_plain(&t, r#"<say-as interpret-as="tts:digits">42</say-as>"#, "4 2");
+    // C knows `tts:digits`, not bare `digits` (which reads the whole number).  C
+    // `espeak-ng -q -m -v en --ipa` prints `fˈɔːtˈuː` for `tts:digits` 42: the digit names are
+    // one word.
+    let got = t.text_to_ipa_ssml(r#"<say-as interpret-as="tts:digits">42</say-as>"#).expect("ssml ipa");
+    assert_eq!(got, "fˈɔːtˈuː");
     assert_markup_eq_plain(&t, r#"<say-as interpret-as="digits">42</say-as>"#, "42");
 }
 

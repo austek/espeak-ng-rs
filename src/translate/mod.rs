@@ -30,6 +30,7 @@ pub(crate) mod ucd_alpha;
 pub mod ssml;
 pub mod readclause;
 pub mod ssml_driver;
+mod say_as;
 use ssml_driver::{ClauseCarry, TokenizeMode};
 mod accent;
 mod mandarin_sandhi;
@@ -1181,6 +1182,11 @@ pub enum Token {
     /// amplitude change that takes effect **from this point on**, not for the
     /// whole utterance.
     Embedded(EmbeddedCmd),
+    /// A word C speaks letter by letter under `<say-as>` (`SpeakIndividualLetters` with
+    /// `spell_word` 2 to 4).  `pause` puts four pause units before it unless it opens the clause.
+    Spelled { text: String, mode: u8, pause: bool },
+    /// Digits C speaks one by one (`SAYAS_DIGITS1`).
+    Digits(String),
 }
 
 /// Parsed number token.
@@ -7752,6 +7758,98 @@ fn accents_say_first(lang: &str) -> bool {
     matches!(primary_bcp47_subtag(lang), "af" | "hr" | "bs" | "sr" | "sv")
 }
 
+/// Marks where a letter's name starts in a spelled word until `SetSpellingStress` turns it
+/// into a pause (C writes `0xff` there).
+const LETTER_START: u8 = 0xff;
+
+/// C `SetSpellingStress` for a spelled word that carries [`LETTER_START`] marks (`control` 2
+/// to 4): primary stresses are reduced, every mark but the first becomes a pause, and a
+/// last pause ends the word.
+fn spelling_stress_with_pauses(letters: &[u8], control: u8, n_chars: usize, spelling_stress: bool) -> Vec<u8> {
+    use crate::phoneme::{PHON_PAUSE_NOLINK, PHON_PAUSE_VSHORT, PHON_STRESS_3, PHON_SWITCH};
+    let after_switch = |ix: usize| ix > 0 && letters[ix - 1] == PHON_SWITCH;
+    let n_stress = (0..letters.len()).filter(|&ix| letters[ix] == PHON_STRESS_P && !after_switch(ix)).count();
+    let (mut out, mut count): (Vec<u8>, usize) = (Vec::with_capacity(letters.len() + 4), 0);
+    for (ix, &c) in letters.iter().enumerate() {
+        let prev = out.last().copied();
+        let kept = if c == PHON_STRESS_P && n_chars > 1 && prev != Some(PHON_SWITCH) {
+            count += 1;
+            let reduce = if spelling_stress {
+                count > 1
+            } else {
+                count != n_stress && (count % 3 != 0 || count + 1 == n_stress)
+            };
+            Some(if reduce { PHON_STRESS_3 } else { c })
+        } else if c == LETTER_START {
+            let skipped = control < 2 || ix == 0;
+            (!skipped).then_some(if count % 3 == 0 || control > 2 { PHON_PAUSE_NOLINK } else { PHON_PAUSE_VSHORT })
+        } else {
+            Some(c)
+        };
+        out.extend(kept);
+    }
+    out.push(PHON_PAUSE_NOLINK);
+    out
+}
+
+/// A character's name for `<say-as>` spelling: the private-use form of an ASCII character
+/// (`<say-as interpret-as="tts:key">`) stands for the character itself.
+fn spelled_character(c: char) -> char {
+    match u32::from(c) {
+        u @ 0xe000..=0xe0ff => char::from_u32(u & 0xff).unwrap_or(c),
+        _ => c,
+    }
+}
+
+/// C `SpeakIndividualLetters` for `spell_word` 2 to 4 (`<say-as>` characters, glyphs and
+/// single characters): the name of every character, however it is written.  Glyphs and single
+/// characters (`mode > 2`) announce a capital letter.
+fn spell_individual_letters(
+    text: &str,
+    mode: u8,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+) -> Option<Vec<u8>> {
+    let chars: Vec<char> = text.chars().map(spelled_character).collect();
+    let capital = word_to_phonemes_pos("_cap", dict, phdata, stress_opts, options, PosExpect::default()).phonemes;
+    let mut buf: Vec<u8> = Vec::new();
+    for (ix, &c) in chars.iter().enumerate() {
+        let name = character_name(c, ix + 1 < chars.len(), dict, phdata, stress_opts, options)?;
+        buf.push(LETTER_START);
+        if mode > 2 && c.is_uppercase() {
+            buf.extend(capital.iter().copied().filter(|&b| b != 0));
+        }
+        let name = if ix == 0 { &name[..] } else { without_leading_break(&name, stress_opts) };
+        buf.extend(name.iter().copied().filter(|&b| b != 0));
+    }
+    Some(spelling_stress_with_pauses(&buf, mode, chars.len(), stress_opts.spelling_stress))
+}
+
+/// The name of one spelled character: `_x`, then the character as a word, then the name of a
+/// superscript.  `None` when the language has none.
+fn character_name(
+    c: char,
+    more: bool,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+) -> Option<Vec<u8>> {
+    let lower = c.to_lowercase().to_string();
+    let expect = letter_expect(more);
+    let key = if u32::from(c) <= 32 || c.is_whitespace() { format!("_#{}", u32::from(c)) } else { format!("_{lower}") };
+    let mut wr = word_to_phonemes_pos(&key, dict, phdata, stress_opts, options, expect);
+    if wr.phonemes.iter().all(|&b| b == 0) || wr.dict_flags == 0 {
+        wr = letter_word_phonemes(&lower, dict, phdata, stress_opts, options, expect);
+    }
+    if wr.phonemes.iter().all(|&b| b == 0) {
+        wr.phonemes = superscript_name(c, dict, phdata, stress_opts, options);
+    }
+    (!wr.phonemes.iter().all(|&b| b == 0)).then_some(wr.phonemes)
+}
+
 /// Spell a word as its letters' *names*, run together as one word — C's
 /// `SpeakIndividualLetters` with `spell_word == 1`.
 ///
@@ -9238,6 +9336,32 @@ pub(crate) fn build_translate_entries(
                     found_in_list: wr.found_in_list,
                 });
             }
+            Token::Spelled { text, mode, .. } => {
+                let phonemes = spell_individual_letters(text, *mode, dict, phdata, stress_opts, options);
+                entries.push(TranslateEntry {
+                    phonemes: phonemes.unwrap_or_default(),
+                    dict_flags: 0,
+                    kind: TranslateEntryKind::Word,
+                    word_lower: Some(text.to_lowercase()),
+                    word_group: None,
+                    found_in_list: false,
+                });
+            }
+            Token::Digits(digits) => {
+                let grammar = NumberGrammar { c_numbers: 0, ..options.number_grammar.clone() };
+                let speak = |symbol: &str| symbol_phonemes(symbol, dict, options);
+                let number = NumberToken::Cardinal(digits.clone());
+                let wr = translate_number_token(&number, dict, phdata, stress_opts, &grammar, &speak)
+                    .unwrap_or_else(|| word_to_phonemes(digits, dict, phdata, stress_opts, options));
+                entries.push(TranslateEntry {
+                    phonemes: wr.phonemes,
+                    dict_flags: wr.dict_flags,
+                    kind: TranslateEntryKind::Word,
+                    word_lower: Some(digits.clone()),
+                    word_group: None,
+                    found_in_list: wr.found_in_list,
+                });
+            }
             Token::InlinePhonemes(content) => {
                 entries.push(TranslateEntry {
                     phonemes:   parse_inline_phonemes(content, phdata),
@@ -10331,7 +10455,7 @@ impl Translator {
         allow_switch: bool,
         track: Option<&mut Vec<TokenCodes>>,
         mode: TokenizeMode,
-        carry: Option<&mut ClauseCarry>,
+        mut carry: Option<&mut ClauseCarry>,
     ) -> Result<Vec<PhonemeCode>> {
         let lang = &self.options.lang;
         // An unknown voice is a *voice* error, not an unimplemented feature:
@@ -10355,7 +10479,14 @@ impl Translator {
         let text = normalize_apostrophes(text);
         let text = schwa_for_article_apostrophe(&text, lang);
         let number_grammar = with_dict_ordinal_suffixes(&self.options.number_grammar, &text, dict);
-        let mut tokens = split_overlong_clauses(mode.apply(tokenize_opts(&text, &number_grammar)));
+        let say_as_start = carry.as_deref().map_or(0, |c| c.say_as.mode);
+        let raw = match carry.as_deref_mut() {
+            Some(c) if matches!(mode, TokenizeMode::Clause { .. }) => {
+                say_as::tokenize_clause(&text, &number_grammar, &mut c.say_as)
+            }
+            _ => tokenize_opts(&text, &number_grammar),
+        };
+        let mut tokens = split_overlong_clauses(mode.apply(raw));
         tokens = merge_full_stop_into_tag_boundary(tokens);
         split_unrecognised_ordinals(&mut tokens, dict, &number_grammar);
         merge_digit_follow(&mut tokens, dict);
@@ -10370,6 +10501,9 @@ impl Translator {
         apply_dimensions(&mut tokens, lang);
         apply_space_grouping(&mut tokens, &self.options.number_grammar);
         apply_exponents(&mut tokens, lang);
+        if matches!(mode, TokenizeMode::Clause { .. }) {
+            tokens = say_as::individual_digit_tokens(tokens, say_as_start);
+        }
         split_script_runs(&mut tokens, dict, &self.options);
         let spelled = split_abandoned_words(&mut tokens, dict, &self.options, phdata);
         let english: std::cell::OnceCell<Option<(Translator, Dictionary)>> =
@@ -10619,6 +10753,8 @@ impl Translator {
                 // empty entry, so emitting it is a harmless no-op.
                 Token::Word(_)
                 | Token::Number(_)
+                | Token::Spelled { .. }
+                | Token::Digits(_)
                 | Token::InlinePhonemes(_)
                 | Token::DigitColon { .. }
                 | Token::Operator(_)
@@ -10812,11 +10948,20 @@ impl Translator {
                     // which is where `hab'aRi_! za` gets its break.
                     if !entry.phonemes.is_empty() {
                         use crate::dictionary::{FLAG_PAUSE1, FLAG_PREPAUSE};
-                        let mut pre_pause = 0;
-                        prepause_timeout = prepause_timeout.saturating_sub(1);
                         let is_word = |t: &Token| {
-                            matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_))
+                            matches!(
+                                t,
+                                Token::Word(_)
+                                    | Token::Number(_)
+                                    | Token::InlinePhonemes(_)
+                                    | Token::Spelled { .. }
+                                    | Token::Digits(_)
+                            )
                         };
+                        let spelled_after_a_word = matches!(token, Token::Spelled { pause: true, .. })
+                            && tokens[..token_ix].iter().any(is_word);
+                        let mut pre_pause = if spelled_after_a_word { 4 } else { 0 };
+                        prepause_timeout = prepause_timeout.saturating_sub(1);
                         let after = tokens[token_ix + 1..]
                             .iter()
                             .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
@@ -11225,7 +11370,7 @@ pub(crate) struct TokenCodes {
 /// text (a separator or an embedded command).
 fn token_surface(token: &Token, grammar: &NumberGrammar) -> String {
     match token {
-        Token::Word(w) => w.clone(),
+        Token::Word(w) | Token::Digits(w) | Token::Spelled { text: w, .. } => w.clone(),
         // `NumberToken::surface` writes a decimal point; the source may have
         // used the language's own separator (`de "3,14"`).
         Token::Number(NumberToken::Decimal { integer, fractional, .. }) => {

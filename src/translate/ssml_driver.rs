@@ -38,6 +38,7 @@ const INTONATION_NONE: u32 = 4;
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ClauseCarry {
     pub emphasis: i32,
+    pub say_as: super::say_as::SayAs,
 }
 
 fn single_clause(mut tokens: Vec<Token>) -> Vec<Token> {
@@ -54,49 +55,7 @@ fn single_clause(mut tokens: Vec<Token>) -> Vec<Token> {
     if closing.is_none() {
         tokens.push(Token::ClauseBoundary(super::ssml::SSML_BREAK));
     }
-    spell_sayas(tokens)
-}
-
-/// `\x01<mode>Y` .. `\x01Y` (C `option_sayas`): every say-as mode the tag port emits spells
-/// its text one character at a time.
-fn spell_sayas(tokens: Vec<Token>) -> Vec<Token> {
-    let mut spelling = false;
-    let mut out = Vec::with_capacity(tokens.len());
-    for t in tokens {
-        match &t {
-            Token::Embedded(cmd) if cmd.letter == 'Y' => spelling = cmd.relative >= 0 && cmd.value > 0,
-            Token::Word(w) if spelling => out.extend(spelled(w)),
-            Token::Number(n) if spelling => out.extend(spelled_digits(&n.surface())),
-            _ => {}
-        }
-        let replaced = spelling && matches!(t, Token::Word(_) | Token::Number(_));
-        if !replaced {
-            out.push(t);
-        }
-    }
-    out
-}
-
-/// A dotted word is one the translator spells letter by letter.
-fn spelled(word: &str) -> Vec<Token> {
-    let letters: Vec<String> = word.chars().map(|c| format!("{c}.")).collect();
-    vec![Token::Word(letters.concat())]
-}
-
-/// Each digit a number of its own, with no word gap between them.
-fn spelled_digits(digits: &str) -> Vec<Token> {
-    let mut out = Vec::new();
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 {
-            out.push(Token::WordJoin);
-        }
-        let token = match c.is_ascii_digit() {
-            true => Token::Number(super::NumberToken::Cardinal(c.to_string())),
-            false => Token::Word(format!("{c}.")),
-        };
-        out.push(token);
-    }
-    out
+    tokens
 }
 
 /// Speech settings the SSML parameter stack starts from (C `param_stack[0]`).

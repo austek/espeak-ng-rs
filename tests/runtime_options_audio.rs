@@ -54,12 +54,15 @@ fn set_voice_by_query_resolves_name_and_language() {
 
 #[test]
 fn say_as_interpret_applies_in_audio() {
-    // C has no ordinal/date mode, so the audio path reads the content as plain text.
+    // C has no ordinal/date mode, so it reads the content as plain text; the `Y` command
+    // around it adds a 10 ms break.  C `espeak-ng -m -v en -w`: 13793 samples against 13485
+    // for the plain "3".
     let Some(mut e) = engine() else { return };
     e.set_markup(true);
     let ordinal = e.synth(r#"<say-as interpret-as="ordinal">3</say-as>"#).unwrap().0;
     e.set_markup(false);
-    assert_eq!(ordinal, e.synth("3").unwrap().0, "audio ordinal must read '3'");
+    assert_eq!(ordinal.len(), 13793, "audio ordinal must read '3' followed by the Y break");
+    assert_eq!(e.synth("3").unwrap().0.len(), 13485);
 }
 
 #[test]
