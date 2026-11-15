@@ -5,7 +5,7 @@
 use super::readclause::ssml_tag::{SsmlEnv, SsmlState, N_SPEECH_PARAM, P_CAPITALS, P_PUNCTUATION, P_RATE, P_SSML_BREAK_MUL};
 use super::readclause::voice_stack::{BaseVoice, EntryCatalog};
 use super::readclause::{CharMap, ClauseReader, ReaderLang, ReaderOptions, SourceClause, SsmlTags, Terminator};
-use super::{CodeMarker, PhonemeCode, Result, Token, Translator};
+use super::{PhonemeCode, Result, Token, Translator};
 use crate::synthesize::cgen::phlist::ClauseCodes;
 use crate::voices::{list_voices, select_voice_by_name, VoiceEntry};
 
@@ -116,18 +116,14 @@ impl SsmlDocument<'_> {
     }
 
     fn synth_clause(&self, clause: &TranslatedClause) -> ClauseCodes {
-        let lang = &self.translator(clause.voice).options.lang;
         let spoken: Vec<PhonemeCode> = clause
             .codes
             .iter()
             .filter(|c| !(c.code == 0 && c.is_boundary && c.marker.is_none()))
             .cloned()
             .collect();
-        let says_something = spoken.iter().any(|c| c.marker.is_some() || (c.code != 0 && c.code != crate::phoneme::PHON_END_WORD));
-        let switch = (*lang != self.base.options.lang && says_something)
-            .then(|| PhonemeCode { marker: Some(CodeMarker::LangSwitch(lang.clone())), ..Default::default() });
         ClauseCodes {
-            codes: switch.into_iter().chain(spoken).collect(),
+            codes: spoken,
             terminator: clause.terminator,
             eof: clause.eof,
             voice_after: clause.voice_after.clone(),

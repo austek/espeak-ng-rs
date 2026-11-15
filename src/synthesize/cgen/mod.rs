@@ -144,6 +144,14 @@ pub fn wvoice(voice: &VoiceParams) -> WVoice {
     v
 }
 
+/// The translator options and generator voice a voice's files give.
+fn load_voice(data_dir: &Path, params: &VoiceParams, tunes: &[Tune]) -> (LangSynth, WVoice) {
+    match voicefile::load(&params.voice_files, tunes) {
+        Some(l) => (with_dictionary_flags(l.tr, data_dir, &params.lang), l.voice),
+        None => (lang_synth(data_dir, params, tunes), wvoice(params)),
+    }
+}
+
 fn speeds_along(list: &[Ph], wpm: &mut i32, voice: &WVoice) -> Vec<Speed> {
     let mut sp = Speed::default();
     sp.set(3, *wpm, voice);
@@ -168,6 +176,10 @@ fn speeds_along(list: &[Ph], wpm: &mut i32, voice: &WVoice) -> Vec<Speed> {
 /// Renders clause after clause, keeping the C engine's state between them.
 pub struct Renderer<'a> {
     phdata: &'a PhonemeData,
+    data_dir: std::path::PathBuf,
+    base_lang: String,
+    active: Option<String>,
+    pending_wvoice: Option<WVoice>,
     voice: WVoice,
     tr: LangSynth,
     tunes: Vec<Tune>,
@@ -186,10 +198,7 @@ pub struct Renderer<'a> {
 impl<'a> Renderer<'a> {
     pub fn new(phdata: &'a PhonemeData, data_dir: &Path, params: &VoiceParams) -> Self {
         let tunes = parse_tunes(&phdata.intonations);
-        let (tr, voice) = match voicefile::load(&params.voice_files, &tunes) {
-            Some(l) => (with_dictionary_flags(l.tr, data_dir, &params.lang), l.voice),
-            None => (lang_synth(data_dir, params, &tunes), wvoice(params)),
-        };
+        let (tr, voice) = load_voice(data_dir, params, &tunes);
         let mut ev: [i32; N_EMBEDDED_VALUES] = EMBEDDED_DEFAULT;
         let rate = params.user_rate_wpm as i32;
         ev[EMBED_S] = rate;
@@ -201,6 +210,10 @@ impl<'a> Renderer<'a> {
         let wavegen = Wavegen::new(voice.clone(), ev, params.rand_seed);
         Renderer {
             phdata,
+            data_dir: data_dir.to_path_buf(),
+            base_lang: params.lang.clone(),
+            active: None,
+            pending_wvoice: None,
             voice,
             tr,
             tunes,
@@ -247,8 +260,45 @@ impl<'a> Renderer<'a> {
         if last && (empty || self.no_final_pause) { 10 } else { pause }
     }
 
-    /// Hook for the voice a clause switches to once generated (C `DoVoiceChange`).
-    pub fn change_voice(&mut self, _voice: &VoiceParams) {}
+    /// `SpeakNextClause` for a clause that ends in a voice change (`LoadVoiceVariant`,
+    /// `DoVoiceChange`): the next voice is loaded before the clause reaches the generator and
+    /// queued behind it, so the wavegen switches before the echo tail plays out. The next clause
+    /// uses the new tables and formants; the embedded rate, pitch and volume stay.
+    pub fn clause_then_voice(&mut self, clause: &ClauseCodes, start_sentence: bool, next: &VoiceParams) -> Vec<i16> {
+        let loaded = load_voice(&self.data_dir, next, &self.tunes);
+        self.wavegen.set_global_roughness(loaded.1.roughness);
+        self.pending_wvoice = Some(loaded.1.clone());
+        let pcm = self.clause(clause, start_sentence);
+        self.install_voice(next, loaded);
+        pcm
+    }
+
+    fn install_voice(&mut self, params: &VoiceParams, (tr, voice): (LangSynth, WVoice)) {
+        let sets_speed = voice.speed_percent != WVoice::default().speed_percent;
+        self.select_table(&params.lang);
+        self.tr = tr;
+        self.voice = voice;
+        if sets_speed {
+            self.speed.set(3, self.wpm_s, &self.voice);
+        }
+    }
+
+    /// `SelectPhonemeTable(voice->phoneme_tab_ix)`: the table of `lang` serves the clauses
+    /// that follow; the base language keeps the table the renderer was given.
+    fn select_table(&mut self, lang: &str) {
+        if lang == self.base_lang {
+            self.active = None;
+            return;
+        }
+        if !self.switched.contains_key(lang) {
+            let Ok(mut pd) = PhonemeData::load(&self.data_dir) else { return };
+            if crate::translate::select_phoneme_table(&mut pd, &self.data_dir, lang).is_err() {
+                return;
+            }
+            self.switched.insert(lang.to_string(), pd);
+        }
+        self.active = Some(lang.to_string());
+    }
 
     pub fn clause(&mut self, clause: &ClauseCodes, start_sentence: bool) -> Vec<i16> {
         let codes = &clause.codes;
@@ -262,12 +312,13 @@ impl<'a> Renderer<'a> {
             post_pause = self.break_pause(ms, exact);
             clause_type = 4;
         }
-        let mut c = phlist::build_list(codes, self.phdata, &self.switched, post_pause, start_sentence, self.tr.stress_flags);
-        pitches::calc_pitches(&mut c.list, &self.tr, &self.tunes, clause_type, self.phdata);
+        let phdata = active_table(self.phdata, &self.switched, self.active.as_deref());
+        let mut c = phlist::build_list(codes, phdata, &self.switched, post_pause, start_sentence, self.tr.stress_flags);
+        pitches::calc_pitches(&mut c.list, &self.tr, &self.tunes, clause_type, phdata);
         let speeds = speeds_along(&c.list, &mut self.wpm_s, &self.voice);
         lengths::calc_lengths(&mut c.list, &self.tr, &|i| speeds[i.min(speeds.len() - 1)]);
         self.dump(&c.list);
-        let mut g = generate::Generator::new(self.phdata, &self.voice, &self.tr, self.speed, self.wpm_s2);
+        let mut g = generate::Generator::new(phdata, &self.voice, &self.tr, self.speed, self.wpm_s2);
         g.generate(&mut c.list);
         if !c.embedded_after.is_empty() {
             g.do_embedded(&c.embedded_after);
@@ -282,7 +333,10 @@ impl<'a> Renderer<'a> {
             MARKER_SENTENCE => sentences.push(base + pos),
             _ => {}
         };
-        self.wavegen.run(&g.queue, &g.frames, &self.phdata.phondata, &mut on_marker);
+        self.wavegen.run(&g.queue, &g.frames, &phdata.phondata, &mut on_marker);
+        if let Some(next) = self.pending_wvoice.take() {
+            self.wavegen.change_voice(next);
+        }
         self.wavegen.finish();
         let pcm = std::mem::take(&mut self.wavegen.out);
         self.emitted += pcm.len();
@@ -329,6 +383,14 @@ impl<'a> Renderer<'a> {
     }
 }
 
+fn active_table<'t>(
+    base: &'t PhonemeData,
+    tables: &'t std::collections::HashMap<String, PhonemeData>,
+    active: Option<&str>,
+) -> &'t PhonemeData {
+    active.and_then(|lang| tables.get(lang)).unwrap_or(base)
+}
+
 /// The phoneme tables of the languages `phonSWITCH` markers name; a switched
 /// word's phonemes are that table's, as C's `ph` pointers are.
 fn switched_tables(codes: &[PhonemeCode], data_dir: &Path, own: &str) -> std::collections::HashMap<String, PhonemeData> {
@@ -354,6 +416,7 @@ pub fn render_clauses(
     phdata: &PhonemeData,
     data_dir: &Path,
     params: &VoiceParams,
+    voices: &std::collections::HashMap<String, VoiceParams>,
     sink: &mut dyn FnMut(&[i16]),
 ) -> (Vec<usize>, Vec<usize>) {
     let mut r = Renderer::new(phdata, data_dir, params);
@@ -361,7 +424,10 @@ pub fn render_clauses(
     r.switched = switched_tables(&all, data_dir, &params.lang);
     let mut start_sentence = true;
     for c in clauses {
-        let pcm = r.clause(c, start_sentence);
+        let pcm = match c.voice_after.as_ref().and_then(|id| voices.get(id)) {
+            Some(next) => r.clause_then_voice(c, start_sentence, next),
+            None => r.clause(c, start_sentence),
+        };
         start_sentence = c.terminator.is_sentence();
         sink(&pcm);
     }

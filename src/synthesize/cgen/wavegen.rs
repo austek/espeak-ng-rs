@@ -154,6 +154,7 @@ struct WData {
 /// The generator state that C keeps in `wavegen.c` statics.
 pub struct Wavegen {
     voice: WVoice,
+    global_roughness: i32,
     pub embedded_value: [i32; N_EMBEDDED_VALUES],
     general_amplitude: i32,
     consonant_amp: i32,
@@ -236,6 +237,7 @@ impl Wavegen {
             amplitude_fmt: 100,
         };
         let mut w = Wavegen {
+            global_roughness: voice.roughness,
             voice,
             embedded_value,
             general_amplitude: 60,
@@ -299,6 +301,18 @@ impl Wavegen {
         let f = self.embedded_value[EMBED_F].clamp(0, 4) as usize;
         self.general_amplitude = amp * AMP_EMPHASIS[f] / 16;
         self.general_amplitude
+    }
+
+    /// `WavegenSetVoice`: the generator switches to `voice` and keeps its embedded values.
+    pub fn change_voice(&mut self, voice: WVoice) {
+        self.voice = voice;
+        self.set_voice();
+    }
+
+    /// C reads `voice->roughness` (the voice `LoadVoice` last loaded) rather than `wvoice`'s,
+    /// so a clause ended by a voice change is generated with the next voice's roughness.
+    pub fn set_global_roughness(&mut self, roughness: i32) {
+        self.global_roughness = roughness;
     }
 
     fn set_voice(&mut self) {
@@ -598,7 +612,7 @@ impl Wavegen {
     }
 
     fn apply_roughness(&mut self) {
-        let r = self.voice.roughness;
+        let r = self.global_roughness;
         if !(0..8).contains(&r) {
             return;
         }

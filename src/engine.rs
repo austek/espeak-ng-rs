@@ -766,7 +766,13 @@ impl EspeakNg {
         };
         let doc = translator.translate_ssml(text, settings)?;
         let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
-        synth.synthesize_clauses(&doc.clause_codes(), &phdata)
+        let voices: std::collections::HashMap<String, VoiceParams> = doc
+            .clauses
+            .iter()
+            .filter_map(|c| c.voice_after.as_deref())
+            .filter_map(|id| self.voice_params_for_id(id).map(|p| (id.to_string(), p)))
+            .collect();
+        synth.synthesize_clauses_with_voices(&doc.clause_codes(), &phdata, &voices)
     }
 
     /// Synthesize a plain (icon-free) text run through the normal pipeline.
@@ -1088,7 +1094,7 @@ impl EspeakNg {
         })
     }
 
-    fn voice_file_texts(&self, entry: Option<&crate::voices::VoiceEntry>) -> Vec<String> {
+    fn voice_file_texts(&self, spec: &VoiceSpec, entry: Option<&crate::voices::VoiceEntry>) -> Vec<String> {
         let read = |p: std::path::PathBuf| std::fs::read(p).ok().map(|b| String::from_utf8_lossy(&b).into_owned());
         let base = entry.and_then(|e| {
             ["voices", "lang"]
@@ -1096,23 +1102,43 @@ impl EspeakNg {
                 .find_map(|d| read(self.data_dir.join(d).join(&e.file)))
                 .or_else(|| read(std::path::PathBuf::from(&e.file)))
         });
-        let variant = self.voice_spec.variant.as_deref().and_then(|v| {
+        let variant = spec.variant.as_deref().and_then(|v| {
             read(self.data_dir.join("voices").join("!v").join(crate::voices::variant_file_name(v)))
         });
         base.map(|b| std::iter::once(b).chain(variant).collect()).unwrap_or_default()
     }
 
     fn make_voice_params_levels(&self, rate: u32, pitch: u32, volume: u32) -> VoiceParams {
-        let entry = self.base_voice_entry();
-        let variant = self
-            .voice_spec
+        self.voice_params_for(&self.voice_spec, self.base_voice_entry(), self.voice_pitch, rate, pitch, volume)
+    }
+
+    /// The parameters of the voice an SSML `<voice>` selected by `id` (a voice file name,
+    /// optionally with a `+variant`), at this engine's rate, pitch and volume.
+    fn voice_params_for_id(&self, id: &str) -> Option<VoiceParams> {
+        let (file, variant) = crate::translate::split_voice_variant(id);
+        let entry = crate::voices::list_catalog(&self.data_dir).into_iter().find(|v| v.file == file)?;
+        let mut spec = VoiceSpec::by_name(&entry.language);
+        spec.variant = variant.map(str::to_string);
+        Some(self.voice_params_for(&spec, Some(entry), None, self.rate, self.pitch, self.volume))
+    }
+
+    fn voice_params_for(
+        &self,
+        spec: &VoiceSpec,
+        entry: Option<crate::voices::VoiceEntry>,
+        file_pitch: Option<(i32, i32)>,
+        rate: u32,
+        pitch: u32,
+        volume: u32,
+    ) -> VoiceParams {
+        let variant = spec
             .variant
             .as_deref()
             .and_then(|v| crate::voices::load_variant(&self.data_dir, v));
         let speed = variant.as_ref().and_then(|v| v.speed).or(entry.as_ref().and_then(|e| e.speed));
         let scaled_rate = speed.filter(|&s| s > 0).map_or(rate, |s| (rate as i64 * s as i64 / 100) as u32);
         let stress_lengths = stress_lengths_with_adds(
-            crate::synthesize::cgen::voice::LangSynth::for_lang(self.voice_spec.effective_lang()).stress_lengths,
+            crate::synthesize::cgen::voice::LangSynth::for_lang(spec.effective_lang()).stress_lengths,
             entry.as_ref(),
             variant.as_ref().map_or(&[][..], |v| &v.stress_add),
         );
@@ -1149,8 +1175,8 @@ impl EspeakNg {
 
         // A voice file may declare its own `pitch <base> <range>`.
         let (voice_pitch1, voice_pitch2) =
-            match self.voice_pitch.or_else(|| {
-                crate::voices::voice_pitch(&self.data_dir, self.voice_spec.effective_lang())
+            match file_pitch.or_else(|| {
+                crate::voices::voice_pitch(&self.data_dir, spec.effective_lang())
             }) {
                 Some((p1, p2)) => (p1 as f64, p2 as f64),
                 None => (DEFAULT_PITCH1, DEFAULT_PITCH2),
@@ -1176,7 +1202,7 @@ impl EspeakNg {
         let mut stress_amps = [0i32; 8];
         let mut tone_adjust =
             crate::synthesize::wavegen::set_tone_adjust(&crate::synthesize::wavegen::DEFAULT_TONE_POINTS);
-        if let Some(var) = &self.voice_spec.variant {
+        if let Some(var) = &spec.variant {
             if let Some(vp) = crate::voices::load_variant(&self.data_dir, var) {
                 pitch_hz = variant_scaled_pitch(pitch_hz, &vp);
                 if let Some((p1, _)) = vp.pitch {
@@ -1224,7 +1250,7 @@ impl EspeakNg {
             // (upstream #1466: read the language configuration from data).
             intonation_group: crate::voices::voice_intonation(
                 &self.data_dir,
-                self.voice_spec.effective_lang(),
+                spec.effective_lang(),
             )
             .map(usize::from)
             .unwrap_or(1),
@@ -1236,17 +1262,16 @@ impl EspeakNg {
             echo_amp,
             flutter,
             stress_amps,
-            lang: self.voice_spec.effective_lang().to_string(),
-            voice_pitch: self
-                .voice_spec
+            lang: spec.effective_lang().to_string(),
+            voice_pitch: spec
                 .variant
                 .as_ref()
                 .and_then(|var| crate::voices::load_variant(&self.data_dir, var))
                 .and_then(|vp| vp.pitch)
-                .or(self.voice_pitch)
-                .or_else(|| crate::voices::voice_pitch(&self.data_dir, self.voice_spec.effective_lang())),
+                .or(file_pitch)
+                .or_else(|| crate::voices::voice_pitch(&self.data_dir, spec.effective_lang())),
             data_dir: Some(self.data_dir.clone()),
-            voice_files: self.voice_file_texts(entry.as_ref()),
+            voice_files: self.voice_file_texts(spec, entry.as_ref()),
             ..VoiceParams::default()
         }
     }
