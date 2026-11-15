@@ -1217,7 +1217,8 @@ impl NumberToken {
     fn separated(digits: String, grammar: &NumberGrammar) -> Self {
         let exact = digits.get(1..).is_some_and(|tail| tail.bytes().all(|b| b == b'0'));
         let splits_at_thousands = grammar.break_numbers == BREAK_THOUSANDS;
-        if digits.len() == MAX_UNSPLIT_DIGITS && !exact && splits_at_thousands {
+        let zero_led = digits.starts_with('0');
+        if splits_at_thousands && (zero_led || (digits.len() == MAX_UNSPLIT_DIGITS && !exact)) {
             NumberToken::Grouped(digits)
         } else {
             NumberToken::Cardinal(digits)
@@ -4488,6 +4489,11 @@ fn push_cardinal_groups(
 /// A thousands-separated number as C reads it: one word per group.
 fn grouped_pronunciation(digits: &str, dict: &Dictionary, grammar: &NumberGrammar) -> Pronunciation {
     let mut result = Pronunciation::default();
+    let first_group = digits.len() - 3 * ((digits.len() - 1) / 3);
+    let zeros = digits.bytes().take(first_group - 1).take_while(|&b| b == b'0').count();
+    for _ in 0..zeros {
+        result.append_lookup_suffix(&lookup_num_phonemes(dict, "_0"));
+    }
     push_groups(&mut result, digits, dict, grammar, usize::MAX, true);
     result
 }
@@ -4513,10 +4519,15 @@ fn push_groups(
     split: bool,
 ) -> bool {
     let mut spoken = false;
-    for group in split_scale_groups(digits, grammar).into_iter().take(count) {
+    for (index, group) in split_scale_groups(digits, grammar).into_iter().take(count).enumerate() {
         let exact = scale_group_is_exact(digits, group);
         let before = result.bytes.len();
-        append_cardinal_group(result, group, dict, grammar, exact, spoken);
+        let zero_opening = split && index == 0 && group.value == 0 && digits.starts_with('0');
+        match group.scale.filter(|_| zero_opening) {
+            Some(scale) => append_zero_scale_group(result, scale, dict),
+            None => append_cardinal_group(result, group, dict, grammar, exact, spoken),
+        }
+        spoken |= zero_opening;
         // C ends each group word that is not exact with PHON_PAUSE_NOLINK, which stops regressive voicing across groups.
         if split && !exact {
             // An all-zero group is still a word of its own: empty, then the pause.
@@ -4532,6 +4543,15 @@ fn push_groups(
         spoken |= group.value != 0;
     }
     spoken
+}
+
+/// A zero opening group written with a separator (`0.007`): C's `LookupNum3`
+/// speaks "zero" and `LookupThousands` adds the plain scale word.
+fn append_zero_scale_group(dst: &mut Pronunciation, scale: u8, dict: &Dictionary) {
+    dst.start_word();
+    dst.push_lookup_word(&lookup_num_phonemes(dict, "_0"));
+    dst.push_lookup_word(&lookup_num_phonemes(dict, &format!("_0M{scale}")));
+    dst.missing_thousands -= 1;
 }
 
 fn push_individual_digits(result: &mut Pronunciation, digits: &str, dict: &Dictionary) {
