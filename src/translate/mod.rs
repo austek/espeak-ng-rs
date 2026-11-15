@@ -2064,6 +2064,9 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
 
     while let Some(c) = chars.next() {
         let previous = before.replace(c);
+        if clause_punctuation_class(c).is_some() {
+            while chars.next_if(|&n| clause_punctuation_class(n).is_some()).is_some() {}
+        }
         if c == CTRL_EMBEDDED {
             // `\x01[±]<value><letter>` — keep it as a token so the change applies
             // from here on rather than to the whole utterance.
@@ -2177,8 +2180,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // full stop is always followed by whitespace or end of text.  (An
             // English "3.14" never reaches here — its '.' is the decimal
             // separator, consumed by the number tokenizer above.)
-            let glued = chars.clone().next().is_some_and(|n| dot_stays_before(n, chars.clone().skip(1)))
-                || (c == '.' && apostrophe_s_follows(chars.clone()));
+            let glued = chars.peek().is_some_and(|&n| dot_stays_before(n)) || apostrophe_s_follows(chars.clone());
             if c == '.' && glued {
                 tokens.push(Token::Punctuation('.'));
                 continue;
@@ -6838,20 +6840,11 @@ fn carry_embedded_in_silent_words(
     bracket_carries
 }
 
-/// Whether a '.' followed by `after` stays inside the clause, as C's
-/// `ReadClause` decides: a letter or hyphen follows, or blanks without a newline and then a
-/// lower-case letter.
 /// A '.' directly followed by `next` never ends the clause: C only checks for a clause end
 /// when a blank, bracket, `?` or embedded command follows (readclause.c:817).  Another dot and
 /// a hyphen are handled by their own rules.
-fn dot_stays_before<I>(next: char, rest: I) -> bool
-where
-    I: Iterator<Item = char> + Clone,
-{
-    match next {
-        ',' | ';' | ':' | '!' | '?' => !ascii_clause_end_follows('.', rest.skip_while(|c| matches!(c, ',' | ';' | ':' | '!' | '?'))),
-        _ => next.is_alphanumeric() || !(readclause::ctype::is_blank(next) || is_bracket(next) || matches!(next, '.' | '-') || next == CTRL_EMBEDDED),
-    }
+fn dot_stays_before(next: char) -> bool {
+    next.is_alphanumeric() || !(readclause::ctype::is_blank(next) || is_bracket(next) || matches!(next, '.' | '-') || next == CTRL_EMBEDDED)
 }
 
 /// C keeps a '.' inside the clause when blanks without a newline and then `'s` follow
