@@ -88,6 +88,9 @@ pub struct LookupCtx {
     pub at_clause_end: bool,
     /// True if first word of clause (for FLAG_ATSTART)
     pub is_first_word: bool,
+    /// Bit `n` is set when the word `n` places after this one (0 = this word) is
+    /// emphasized; a multi-word entry covering such a word does not match.
+    pub emphasized_words: u32,
 }
 
 pub const CLAUSE_TYPE_SENTENCE: u32 = 0x8000;
@@ -213,6 +216,10 @@ pub fn lookup_dict2_follow(
                 // Multi-word match: flag = 81..90 means skip (flag-80) words.
                 // The remaining bytes in this entry are the following words' text.
                 skipwords = (flag - 80) as usize;
+                let covered = (1u64 << (skipwords + 1)) - 1;
+                if u64::from(ctx.emphasized_words) & covered != 0 {
+                    condition_failed = true;
+                }
                 if !follow.starts_with(&data[p..entry_end]) {
                     condition_failed = true;
                 }

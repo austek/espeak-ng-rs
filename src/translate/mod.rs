@@ -5206,6 +5206,8 @@ pub struct PosExpect {
     /// The lowercased words after this one in its clause, single-spaced with a
     /// trailing space and NUL-padded, for multi-word list entries (`(de een)`).
     pub follow: [u8; 32],
+    /// Which of this word and the ones in `follow` are emphasized, bit 0 being this word.
+    pub emphasized_words: u32,
     /// A hyphen joins this word to the next, so it does not end a word in C's
     /// phoneme list and the word-final changes (devoicing) do not apply.
     pub hyphen_after: bool,
@@ -5658,6 +5660,7 @@ fn word_to_phonemes_inner(
         expect_noun: expect.noun,
         expect_past: expect.past,
         dict_condition: lang_opts.dict_condition,
+        emphasized_words: expect.emphasized_words,
         // A stem left by a removed prefix is looked up as C does with `SUFX_P`,
         // which skips `$only` and `$onlys` entries.
         end_flags: if rule_word_flags & FLAG_PREFIX_REMOVED != 0 { SUFX_P } else { 0 },
@@ -6799,8 +6802,8 @@ where
 /// C reads `e.g.` as the words `e . g .`, which a multi-word list entry
 /// (`(e . g .)`) can match; spell the dotted word out as those words when the
 /// list has such an entry, and otherwise drop a stay-in-clause dot.
-fn expand_dotted_phrases(tokens: &mut Vec<Token>, dict: &Dictionary, lang: &str) {
-    let ctx = LookupCtx { dict_condition: dict.dict_condition, ..Default::default() };
+fn expand_dotted_phrases(tokens: &mut Vec<Token>, dict: &Dictionary, lang: &str, start_emphasis: i32) {
+    let (emphasized, _) = emphasized_tokens(tokens, start_emphasis);
     let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
     for (ix, token) in tokens.iter().enumerate() {
         let Token::Word(word) = token else { out.push(token.clone()); continue };
@@ -6815,6 +6818,13 @@ fn expand_dotted_phrases(tokens: &mut Vec<Token>, dict: &Dictionary, lang: &str)
             follow.push_str(". ");
         }
         let rest = follow_text(tokens, ix + 1, lang);
+        let own_words = 1 + 2 * (pieces.len() - 1) + usize::from(word.ends_with('.'));
+        let own_mask = if emphasized[ix] { (1u32 << own_words.min(31)) - 1 } else { 0 };
+        let ctx = LookupCtx {
+            dict_condition: dict.dict_condition,
+            emphasized_words: own_mask | follow_emphasis(tokens, &emphasized, ix + 1) << own_words.min(31),
+            ..Default::default()
+        };
         follow.push_str(&String::from_utf8_lossy(rest.split(|&b| b == 0).next().unwrap_or(&[])));
         let matched = lookup_with_follow(dict, &pieces[0], &ctx, follow.as_bytes())
             .is_some_and(|r| r.skipwords > 0 && !r.phonemes.is_empty());
@@ -8876,7 +8886,7 @@ fn follow_text(tokens: &[Token], from: usize, lang: &str) -> [u8; 32] {
     let mut text = String::new();
     for t in &tokens[from..] {
         match t {
-            Token::Space | Token::WordJoin => {}
+            Token::Space | Token::WordJoin | Token::Embedded(_) => {}
             Token::Word(w) => {
                 text.push_str(&lowercase_for_lang(w, lang));
                 text.push(' ');
@@ -8891,6 +8901,29 @@ fn follow_text(tokens: &[Token], from: usize, lang: &str) -> [u8; 32] {
     let mut out = [0u8; 32];
     out[..n].copy_from_slice(&text.as_bytes()[..n]);
     out
+}
+
+/// Bit `n` is set when the `n`th word of [`follow_text`] (from `from`) is emphasized.
+fn follow_emphasis(tokens: &[Token], emphasized: &[bool], from: usize) -> u32 {
+    let mut mask = 0u32;
+    let mut words = 0u32;
+    for (ix, t) in tokens.iter().enumerate().skip(from) {
+        match t {
+            Token::Space | Token::WordJoin | Token::Embedded(_) => {}
+            Token::Word(_) if words < 31 => {
+                mask |= u32::from(emphasized.get(ix).copied().unwrap_or(false)) << words;
+                words += 1;
+            }
+            _ => break,
+        }
+    }
+    mask
+}
+
+/// [`follow_emphasis`] with the word at `at` as bit 0.
+fn word_emphasis_mask(tokens: &[Token], emphasized: &[bool], at: usize) -> u32 {
+    let own = u32::from(emphasized.get(at).copied().unwrap_or(false));
+    own | follow_emphasis(tokens, emphasized, at + 1) << 1
 }
 
 /// Whether no word follows the symbol in its clause — the case where C reads
@@ -8912,6 +8945,7 @@ pub(crate) fn build_translate_entries(
     english_word: &dyn Fn(char, bool) -> Option<String>,
     alts: &letters::AltLangs,
     spelled: &[Option<usize>],
+    emphasized: &[bool],
 ) -> Vec<TranslateEntry> {
     crate::dictionary::rules::clear_uncovered_brackets();
     let mut entries: Vec<TranslateEntry> = Vec::with_capacity(tokens.len());
@@ -9096,6 +9130,7 @@ pub(crate) fn build_translate_entries(
                         && letters.clone().all(char::is_uppercase),
                     next_word,
                     follow: follow_text(tokens, token_ix + 1, &options.lang),
+                    emphasized_words: word_emphasis_mask(tokens, emphasized, token_ix),
                     hyphen_after: matches!(tokens.get(token_ix + 1), Some(Token::WordJoin)),
                     hyphen_flags: hyphen_flags_at(tokens, token_ix),
                     prev_tail: word_tail(prev_word.as_deref()),
@@ -10618,7 +10653,8 @@ impl Translator {
         let mut tokens = split_overlong_clauses(mode.apply(raw));        tokens = merge_full_stop_into_tag_boundary(tokens);
         split_unrecognised_ordinals(&mut tokens, dict, &number_grammar);
         merge_digit_follow(&mut tokens, dict);
-        expand_dotted_phrases(&mut tokens, dict, lang);
+        let start_emphasis = carry.as_deref().map_or(0, |c| c.emphasis);
+        expand_dotted_phrases(&mut tokens, dict, lang, start_emphasis);
         tokens = announce_clause_punctuation(tokens, &self.options);
         suppress_abbreviation_periods(&mut tokens);
         join_spaced_letter_dots(&mut tokens);
@@ -10647,6 +10683,7 @@ impl Translator {
                 .and_then(|(en, dict)| en.symbol_switch_word(dict, c, by_name))
         };
         let alts = letters::AltLangs::new(&self.data_dir);
+        let (emphasized, end_emphasis) = emphasized_tokens(&tokens, start_emphasis);
         let mut entries = build_translate_entries(
             &tokens,
             dict,
@@ -10656,10 +10693,9 @@ impl Translator {
             &english_word,
             &alts,
             &spelled,
+            &emphasized,
         );
         let outer_continues = self.options.switched && !self.options.switched_last;
-        let start_emphasis = carry.as_deref().map_or(0, |c| c.emphasis);
-        let (emphasized, end_emphasis) = emphasized_tokens(&tokens, start_emphasis);
         if let Some(c) = carry {
             c.emphasis = end_emphasis;
         }
