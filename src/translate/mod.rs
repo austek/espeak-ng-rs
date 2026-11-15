@@ -6730,13 +6730,18 @@ fn join_spaced_letter_dots(
             continue;
         }
         let spelled = !run.letters.chars().next().is_some_and(hands_over);
-        let word = if spelled {
-            run.letters.chars().map(String::from).collect::<Vec<_>>().join(".")
+        let (word, echoes) = if spelled {
+            (run.letters.chars().map(String::from).collect::<Vec<_>>().join("."), Vec::new())
         } else {
-            run.letters
+            let echoes = if run.last > ix { overwritten_words(&run.letters) } else { Vec::new() };
+            (run.letters, echoes)
         };
         let moved = tokens[ix + 1..=run.last].iter().filter(|t| matches!(t, Token::Embedded(_))).cloned();
-        let replacement: Vec<Token> = [Token::Word(word), Token::Space].into_iter().chain(moved).collect();
+        let replacement: Vec<Token> = [Token::Word(word), Token::Space]
+            .into_iter()
+            .chain(moved)
+            .chain(echoes.into_iter().flat_map(|w| [Token::Word(w), Token::Space]))
+            .collect();
         let after = ix + replacement.len();
         tokens.splice(ix..=run.last, replacement);
         if run.possessive {
@@ -6744,6 +6749,21 @@ fn join_spaced_letter_dots(
         }
         ix += 1;
     }
+}
+
+/// The words C's second pass reads when another voice takes over a joined run: the letters
+/// replace the first word in the clause buffer, the words that `CheckDottedAbbrev` would have
+/// skipped keep their start offsets (`l . l . l`, three blanks and a dot per letter), and each
+/// reads what the joined letters leave from that offset on.
+fn overwritten_words(letters: &str) -> Vec<String> {
+    let widths: Vec<usize> = letters.chars().map(char::len_utf8).collect();
+    let mut start = 0;
+    let mut offsets = Vec::new();
+    for width in widths.iter().take(widths.len().saturating_sub(1)) {
+        offsets.extend([start + width + 1, start + width + 3]);
+        start += width + 3;
+    }
+    offsets.into_iter().filter_map(|at| letters.get(at..)).filter(|rest| !rest.is_empty()).map(String::from).collect()
 }
 
 /// The `'s` behind a joined acronym (`u.s.a.'s`) is a word of its own, as C leaves it once the
