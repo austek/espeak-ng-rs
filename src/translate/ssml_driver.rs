@@ -333,11 +333,14 @@ impl ReaderLang for ClauseLang<'_> {
         (!phonemes.is_empty()).then(|| self.0.phoneme_mode_text(&phonemes)).flatten()
     }
 
-    fn lookup_char_name(&self, c: u32, _only: bool) -> String {
-        char::from_u32(c)
-            .and_then(|c| self.0.char_name_phonemes(c))
-            .and_then(|ph| self.0.phoneme_mode_text(&ph))
-            .unwrap_or_default()
+    /// C `LookupCharName`: with `only`, the character's own list entry and nothing else.
+    fn lookup_char_name(&self, c: u32, only: bool) -> String {
+        let Some(c) = char::from_u32(c) else { return String::new() };
+        let named = match only {
+            true => self.lookup_special(&c.to_string()),
+            false => self.0.char_name_phonemes(c).and_then(|ph| self.0.phoneme_mode_text(&ph)),
+        };
+        named.unwrap_or_default()
     }
 }
 

@@ -80,6 +80,13 @@ fn closing_sentence_keeps_its_language() {
     check(&[("<s xml:lang=\"de\">hallo</s> hello", "\nhˈaloː\nhˈɛloː\n", "\nh'alo:\nh'Elo:\n")]);
 }
 
+/// An ellipsis speaks its name only when the character itself has a list entry
+/// (C `LookupCharName(..., only=true)`); English has none.
+#[test]
+fn ellipsis_name_comes_only_from_its_own_entry() {
+    check(&[("<speak>wait...</speak>", "wˈeɪt\n\n\n", "w'eIt\n\n\n")]);
+}
+
 /// A full stop the reader keeps in the clause is silent when a space follows it (C
 /// `TranslateClause` removes a dot after a word).
 #[test]
