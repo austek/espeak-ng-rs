@@ -10911,6 +10911,7 @@ impl Translator {
                     //   ≥3 → raise the pitch for this word by that many Hz
                     //       (3 means C's default 20), restored afterwards.
                     let mut capital_pitch = 0;
+                    let mut pause_opens_clause = false;
                     if let Token::Word(w) = token {
                         if w.chars().next().is_some_and(char::is_uppercase) {
                             if !cap_codes.is_empty() {
@@ -11045,6 +11046,7 @@ impl Translator {
                             if clause_start && sep {
                                 codes.remove(at + n);
                             }
+                            pause_opens_clause = clause_start;
                             from_dict.resize(codes.len(), false);
                         }
                     }
@@ -11060,7 +11062,8 @@ impl Translator {
                         .iter()
                         .rfind(|t| !matches!(t, Token::Operator(_) | Token::Punctuation('-')))
                         .is_some_and(|t| matches!(t, Token::Punctuation(p) if is_bracket(*p)));
-                    let after_clause_start_pauses = opened_by_bracket && only_pauses_since_clause_start(&codes);
+                    let after_clause_start_pauses =
+                        pause_opens_clause || (opened_by_bracket && only_pauses_since_clause_start(&codes));
                     let leading_breaks = plain.iter().take_while(|&&b| b == crate::phoneme::PHON_END_WORD).count();
                     for &b in &plain[if after_clause_start_pauses { leading_breaks } else { 0 }..] {
                         // `phonX1` is a marker, not a sound: C reads it as

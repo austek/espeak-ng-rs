@@ -90,6 +90,11 @@ fn emphasis_phonemes_follow_c() {
         ("say <emphasis>no</emphasis>", "sˌeɪ nˈəʊ\n", "s,eI_! n'oU\n"),
         ("<emphasis><s>hello</s></emphasis>", "\nhəlˈəʊ\n\n", "\n_!h@l'oU\n\n"),
         ("<emphasis>big dog</emphasis> runs", "bˈɪɡ dˈɒɡ ɹˈʌnz\n", "_!b'Ig_! d'0g r'Vnz\n"),
+        (
+            "<emphasis>1</emphasis> or <emphasis>2</emphasis>",
+            "wˈɒn ɔː tˈuː\n",
+            "_!w'0n O@_! t'u:\n",
+        ),
     ]);
 }
 
