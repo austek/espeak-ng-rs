@@ -11163,6 +11163,10 @@ impl Translator {
                     });
                     // `translate_to_codes_inner` with switching disabled: a
                     // switched word may not switch again.
+                    let cased_word = match &tokens[token_ix] {
+                        Token::Word(w) if w.to_lowercase() == word => w.as_str(),
+                        _ => word,
+                    };
                     let sw = match char_name {
                         Some(c) => switch_cache.get(&target).and_then(|tr| {
                             char_name_cache
@@ -11180,7 +11184,7 @@ impl Translator {
                         }),
                         None => switch_cache
                             .get(&target)
-                            .and_then(|tr| tr.translate_to_codes_inner(word, false).ok()),
+                            .and_then(|tr| tr.translate_to_codes_inner(cased_word, false).ok()),
                     };
                     // A switch whose target says nothing leaves no markers:
                     // they would print as an empty `(en)(ru)` pair.
