@@ -680,21 +680,19 @@ impl EspeakNg {
     pub fn synth(&self, text: &str) -> Result<(PcmBuffer, u32)> {
         let rate = self.sample_rate();
 
-        // Fast path: no sound icons and no markup → single utterance, unchanged.
-        if self.soundicons.is_empty() && !self.markup {
-            return Ok((self.apply_post_fx(self.synth_text(text)?), rate));
+        // Fast path: no punctuation sound icons → single utterance; markup `<audio>` clips
+        // are played by the generator.
+        if self.soundicons.is_empty() {
+            let pcm = if self.markup { self.synth_markup(text)? } else { self.synth_text(text)? };
+            return Ok((self.apply_post_fx(pcm), rate));
         }
 
-        // Split into speakable runs and sound-icon events, then render each:
+        // Split into speakable runs and punctuation sound-icon events, then render each:
         // text runs go through the normal pipeline; icons are spliced in with a
         // 10 ms lead-in pause (mirroring C's `DoPause(10)` before `EMBED_I`).
         let mut table = self.soundicons.clone();
         let base = self.soundicon_base_dir();
-        let pieces = crate::soundicon::split_pieces(text, &mut table, &base, self.markup);
-        let has_icon = pieces.iter().any(|p| matches!(p, crate::soundicon::Piece::Icon(_)));
-        if self.markup && !has_icon {
-            return Ok((self.apply_post_fx(self.synth_markup(text)?), rate));
-        }
+        let pieces = crate::soundicon::split_pieces(text, &mut table, &base);
         let pause = rate as usize / 100;
 
         let mut out: PcmBuffer = Vec::new();
@@ -703,22 +701,8 @@ impl EspeakNg {
             let is_last = pi + 1 == n_pieces;
             match piece {
                 crate::soundicon::Piece::Text(t) => {
-                    // In markup mode the run still holds SSML tags (all but
-                    // `<audio>`, which was already extracted); process them to
-                    // plain speech text so they are not spoken literally — strips
-                    // tags, decodes entities, applies `<say-as>` spelling/`<sub>`
-                    // and the interpret modes (ordinal/date/time).
-                    let t = if self.markup {
-                        crate::translate::ssml_to_speech_text_opts(
-                            &t,
-                            self.voice_spec.effective_lang(),
-                            self.ssml_break,
-                        )
-                    } else {
-                        t
-                    };
                     if !t.trim().is_empty() {
-                        let mut s = self.synth_text(&t)?;
+                        let mut s = if self.markup { self.synth_markup(&t)? } else { self.synth_text(&t)? };
                         // Each text run carries its own end-of-utterance trailing
                         // silence; drop it for non-final runs so splicing icons in
                         // doesn't accumulate long internal gaps.
@@ -764,7 +748,11 @@ impl EspeakNg {
             rate_wpm: self.rate as i32,
             break_mul: self.ssml_break as i32,
         };
-        let doc = translator.translate_ssml(text, settings)?;
+        let table = std::cell::RefCell::new(self.soundicons.clone());
+        let base = self.soundicon_base_dir();
+        let load = |path: &str| table.borrow_mut().load_file(path, &base).ok().map(|ix| ix as i32);
+        let doc = translator.translate_ssml_with_sounds(text, settings, &load)?;
+        let icons: Vec<Vec<i16>> = (0..table.borrow().len()).map(|ix| table.borrow().samples(ix).to_vec()).collect();
         let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
         let voices: std::collections::HashMap<String, VoiceParams> = doc
             .clauses
@@ -772,7 +760,7 @@ impl EspeakNg {
             .filter_map(|c| c.voice_after.as_deref())
             .filter_map(|id| self.voice_params_for_id(id).map(|p| (id.to_string(), p)))
             .collect();
-        synth.synthesize_clauses_with_voices(&doc.clause_codes(), &phdata, &voices)
+        synth.synthesize_clauses_with_voices(&doc.clause_codes(), &phdata, &voices, &icons)
     }
 
     /// Synthesize a plain (icon-free) text run through the normal pipeline.

@@ -188,19 +188,10 @@ pub enum Piece {
 
 /// Split `text` into speakable runs and sound-icon events.
 ///
-/// * When `markup` is set, `<audio src="…">fallback</audio>` (and the
-///   self-closing form) is recognised: the file is loaded via
-///   [`SoundIconTable::load_file`] and becomes an [`Piece::Icon`]; if it fails to
-///   load, the fallback text between the tags is kept and spoken.  A bare
-///   `</audio>` is dropped.
-/// * Any character with a registered punctuation icon becomes an
-///   [`Piece::Icon`] (the character itself is consumed).
-pub fn split_pieces(
-    text: &str,
-    table: &mut SoundIconTable,
-    base_dir: &Path,
-    markup: bool,
-) -> Vec<Piece> {
+/// Any character with a registered punctuation icon becomes a [`Piece::Icon`] (the character
+/// itself is consumed).  SSML `<audio>` is not split here: the clause reader loads the clip
+/// and the generator plays it (`EMBED_I`).
+pub fn split_pieces(text: &str, table: &mut SoundIconTable, base_dir: &Path) -> Vec<Piece> {
     let chars: Vec<char> = text.chars().collect();
     let mut pieces: Vec<Piece> = Vec::new();
     let mut cur = String::new();
@@ -215,37 +206,6 @@ pub fn split_pieces(
     }
 
     while i < chars.len() {
-        // ---- SSML <audio src="..."> ------------------------------------
-        if markup && chars[i] == '<' && starts_with_ci(&chars, i + 1, "audio") {
-            if let Some((src, after_open, self_closing)) = parse_audio_open(&chars, i) {
-                match table.load_file(&src, base_dir) {
-                    Ok(idx) => {
-                        flush!();
-                        pieces.push(Piece::Icon(idx));
-                        // Skip the fallback content and the closing tag.
-                        i = if self_closing {
-                            after_open
-                        } else {
-                            skip_to_close(&chars, after_open, "audio")
-                        };
-                        continue;
-                    }
-                    Err(_) => {
-                        // Load failed → keep the fallback text (drop the tags).
-                        i = after_open;
-                        continue;
-                    }
-                }
-            }
-        }
-        // ---- closing </audio> (e.g. after a failed load) ---------------
-        if markup && chars[i] == '<' && starts_with_ci(&chars, i + 1, "/audio") {
-            if let Some(close) = find_char(&chars, i, '>') {
-                i = close + 1;
-                continue;
-            }
-        }
-        // ---- punctuation sound icon ------------------------------------
         if let Some(idx) = table.lookup_punct(chars[i], base_dir) {
             flush!();
             pieces.push(Piece::Icon(idx));
@@ -257,87 +217,6 @@ pub fn split_pieces(
     }
     flush!();
     pieces
-}
-
-/// Parse an opening `<audio …>` tag starting at `start` (`<`).  Returns
-/// `(src, index_after_tag, self_closing)` or `None` if malformed / no `src`.
-fn parse_audio_open(chars: &[char], start: usize) -> Option<(String, usize, bool)> {
-    let close = find_char(chars, start, '>')?;
-    let tag: String = chars[start..=close].iter().collect();
-    let inner = tag.trim_start_matches('<').trim_end_matches('>');
-    let self_closing = inner.trim_end().ends_with('/');
-    let src = get_attr(inner, "src")?;
-    if src.is_empty() {
-        return None;
-    }
-    Some((src, close + 1, self_closing))
-}
-
-/// Skip from `from` to just past the matching `</tag>`; returns `chars.len()` if
-/// no close is found.
-fn skip_to_close(chars: &[char], from: usize, tag: &str) -> usize {
-    let mut i = from;
-    while i < chars.len() {
-        if chars[i] == '<' && starts_with_ci(chars, i + 1, &format!("/{tag}")) {
-            if let Some(close) = find_char(chars, i, '>') {
-                return close + 1;
-            }
-        }
-        i += 1;
-    }
-    chars.len()
-}
-
-/// Case-insensitive check that `chars[at..]` begins with `pat`.
-fn starts_with_ci(chars: &[char], at: usize, pat: &str) -> bool {
-    let p: Vec<char> = pat.chars().collect();
-    if at + p.len() > chars.len() {
-        return false;
-    }
-    chars[at..at + p.len()]
-        .iter()
-        .zip(&p)
-        .all(|(a, b)| a.eq_ignore_ascii_case(b))
-}
-
-fn find_char(chars: &[char], from: usize, target: char) -> Option<usize> {
-    (from..chars.len()).find(|&i| chars[i] == target)
-}
-
-/// Extract `key="value"` / `key='value'` from a tag's inner text.
-fn get_attr(inner: &str, key: &str) -> Option<String> {
-    let bytes: Vec<char> = inner.chars().collect();
-    let key_l = key.to_ascii_lowercase();
-    let mut i = 0;
-    while i + key_l.len() < bytes.len() {
-        // Match `key` as a whole word followed by optional space then `=`.
-        if starts_with_ci(&bytes, i, &key_l)
-            && (i == 0 || bytes[i - 1].is_whitespace())
-        {
-            let mut j = i + key_l.len();
-            while j < bytes.len() && bytes[j].is_whitespace() {
-                j += 1;
-            }
-            if j < bytes.len() && bytes[j] == '=' {
-                j += 1;
-                while j < bytes.len() && bytes[j].is_whitespace() {
-                    j += 1;
-                }
-                if j < bytes.len() && (bytes[j] == '"' || bytes[j] == '\'') {
-                    let quote = bytes[j];
-                    j += 1;
-                    let mut val = String::new();
-                    while j < bytes.len() && bytes[j] != quote {
-                        val.push(bytes[j]);
-                        j += 1;
-                    }
-                    return Some(val);
-                }
-            }
-        }
-        i += 1;
-    }
-    None
 }
 
 // ---------------------------------------------------------------------------
@@ -545,57 +424,12 @@ mod tests {
         let mut table = SoundIconTable::new(22_050);
         let idx = table.register_punct('#', &path, &dir).unwrap();
 
-        let pieces = split_pieces("a#b", &mut table, &dir, false);
+        let pieces = split_pieces("a#b", &mut table, &dir);
         assert_eq!(
             pieces,
             vec![Piece::Text("a".into()), Piece::Icon(idx), Piece::Text("b".into())]
         );
         let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn split_ssml_audio() {
-        let dir = std::env::temp_dir();
-        let path = dir.join("espeak_rs_test_audio.wav");
-        std::fs::write(&path, make_wav(&[100i16; 30], 22_050, 1)).unwrap();
-
-        let mut table = SoundIconTable::new(22_050);
-        let src = path.to_string_lossy().to_string();
-        let text = format!("before <audio src=\"{src}\">fallback</audio> after");
-        let pieces = split_pieces(&text, &mut table, &dir, true);
-
-        assert_eq!(pieces.len(), 3);
-        assert!(matches!(&pieces[0], Piece::Text(t) if t.contains("before")));
-        assert!(matches!(pieces[1], Piece::Icon(_)));
-        assert!(matches!(&pieces[2], Piece::Text(t) if t.contains("after")));
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn split_ssml_audio_missing_keeps_fallback() {
-        let dir = std::env::temp_dir();
-        let mut table = SoundIconTable::new(22_050);
-        let text = "x <audio src=\"/nonexistent/nope.wav\">fallback text</audio> y";
-        let pieces = split_pieces(text, &mut table, &dir, true);
-        // No icon; the fallback text survives.
-        assert!(pieces.iter().all(|p| matches!(p, Piece::Text(_))));
-        let joined: String = pieces
-            .iter()
-            .map(|p| match p {
-                Piece::Text(t) => t.clone(),
-                Piece::Icon(_) => String::new(),
-            })
-            .collect();
-        assert!(joined.contains("fallback text"), "joined={joined:?}");
-        assert!(!joined.contains("<audio"), "tags leaked: {joined:?}");
-    }
-
-    #[test]
-    fn get_attr_variants() {
-        assert_eq!(get_attr("audio src=\"a.wav\"", "src"), Some("a.wav".into()));
-        assert_eq!(get_attr("audio src='b.wav' foo='1'", "src"), Some("b.wav".into()));
-        assert_eq!(get_attr("audio  src = \"c.wav\"", "src"), Some("c.wav".into()));
-        assert_eq!(get_attr("audio data-src='x'", "src"), None);
     }
 
     #[test]

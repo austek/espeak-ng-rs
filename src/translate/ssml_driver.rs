@@ -140,17 +140,27 @@ impl SsmlDocument<'_> {
 impl Translator {
     /// Read and translate a markup text clause by clause.
     pub fn translate_ssml(&self, text: &str, settings: SsmlSettings) -> Result<SsmlDocument<'_>> {
+        self.translate_ssml_with_sounds(text, settings, &|_| None)
+    }
+
+    /// As [`translate_ssml`](Self::translate_ssml); `load_sound` is `LoadSoundFile2`: the
+    /// sound-icon index of an `<audio src>` file, or `None` when it cannot be loaded.
+    pub fn translate_ssml_with_sounds(
+        &self,
+        text: &str,
+        settings: SsmlSettings,
+        load_sound: &dyn Fn(&str) -> Option<i32>,
+    ) -> Result<SsmlDocument<'_>> {
         let voices = list_voices(&self.data_dir);
         let all_voices = list_catalog(&self.data_dir);
         let catalog = EntryCatalog(&all_voices);
         let pause_factors = |wpm: i32| pause_factors(wpm);
-        let no_sound = |_: &str| None;
         let env = SsmlEnv {
             voices: &catalog,
             tone_language: crate::dictionary::rules::tone_language(&self.options.lang),
             n_outbuf: ReaderOptions::default().n_buf,
             pause_factors: &pause_factors,
-            load_sound: &no_sound,
+            load_sound,
             uri_callback: None,
         };
         let mut state = SsmlState::new(self.speech_defaults(settings), self.base_voice(&voices), "");

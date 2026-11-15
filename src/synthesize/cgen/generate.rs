@@ -15,6 +15,8 @@ use crate::phoneme::{
 use crate::synthesize::bytecode::{self, Neighbours};
 use crate::synthesize::phondata::{SpectFrame, SpectSeq, FRAME_T2_SIZE, FRAME_T_SIZE, FRFLAG_KLATT};
 
+const EMBED_I: usize = 7;
+const ICON_AMP: i32 = 0x15;
 const FRFLAG_VOWEL_CENTRE: u16 = 0x02;
 const FRFLAG_LEN_MOD: u16 = 0x04;
 const FRFLAG_BREAK_LF: u16 = 0x08;
@@ -113,6 +115,16 @@ pub struct Generator<'a> {
     wave_flag: bool,
     seq_len_adjust: i32,
     embedded_s2: i32,
+    icons: Vec<IconClip>,
+    icon_base: usize,
+}
+
+/// A sound icon's 16-bit samples as `Wcmd::Wave` addresses them: a byte offset past the end of
+/// the phoneme data, and a length in samples.
+#[derive(Clone, Copy, Debug)]
+pub struct IconClip {
+    pub offset: usize,
+    pub len: i32,
 }
 
 impl<'a> Generator<'a> {
@@ -139,7 +151,15 @@ impl<'a> Generator<'a> {
             wave_flag: false,
             seq_len_adjust: 0,
             embedded_s2,
+            icons: Vec::new(),
+            icon_base: phdata.phondata.len(),
         }
+    }
+
+    /// The sound icons `EMBED_I` plays, addressed past the end of this table's phoneme data.
+    pub fn with_icons(mut self, icons: &[IconClip]) -> Self {
+        self.icons = icons.to_vec();
+        self
     }
 
     pub fn embedded_s2_value(&self) -> i32 {
@@ -924,6 +944,10 @@ impl<'a> Generator<'a> {
                 continue;
             }
             let Some(code) = super::embed_code(c.letter) else { continue };
+            if code == EMBED_I {
+                self.play_icon(c.value);
+                continue;
+            }
             if code == super::wavegen::EMBED_S {
                 self.embedded_s2 = super::apply_embedded(self.embedded_s2, sign, c.value, 2000);
                 self.speed.set(2, self.embedded_s2, self.voice);
@@ -931,6 +955,15 @@ impl<'a> Generator<'a> {
             }
             self.do_pause(10, 0);
             self.push(Wcmd::Embedded { cmd: code as i32 + sign, value: c.value.max(0) });
+        }
+    }
+
+    /// `DoEmbedded`'s `EMBED_I`: a break, then the clip as 16-bit data at amplitude 21.
+    fn play_icon(&mut self, value: i32) {
+        let clip = usize::try_from(value).ok().and_then(|ix| self.icons.get(ix)).copied().filter(|c| c.len > 0);
+        if let Some(c) = clip {
+            self.do_pause(10, 0);
+            self.push(Wcmd::Wave { len: c.len, addr: self.icon_base + c.offset, scale: 0, amp: ICON_AMP });
         }
     }
 

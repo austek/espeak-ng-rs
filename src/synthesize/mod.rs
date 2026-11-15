@@ -451,23 +451,25 @@ impl Synthesizer {
         clauses: &[cgen::phlist::ClauseCodes],
         phdata: &crate::phoneme::PhonemeData,
     ) -> Result<PcmBuffer> {
-        self.synthesize_clauses_with_voices(clauses, phdata, &std::collections::HashMap::new())
+        self.synthesize_clauses_with_voices(clauses, phdata, &std::collections::HashMap::new(), &[])
     }
 
     /// As [`synthesize_clauses`](Self::synthesize_clauses); a clause's `voice_after` id names
-    /// the entry of `voices` the following clauses are generated with.
+    /// the entry of `voices` the following clauses are generated with, and an `I` command
+    /// plays the entry of `icons` (16-bit samples at the engine rate) it numbers.
     pub fn synthesize_clauses_with_voices(
         &self,
         clauses: &[cgen::phlist::ClauseCodes],
         phdata: &crate::phoneme::PhonemeData,
         voices: &std::collections::HashMap<String, VoiceParams>,
+        icons: &[Vec<i16>],
     ) -> Result<PcmBuffer> {
         let Some(dir) = self.voice.data_dir.clone() else {
             let codes: Vec<_> = clauses.iter().flat_map(|c| c.codes.iter().cloned()).collect();
             return self.synthesize_codes(&codes, phdata);
         };
         let mut out = Vec::new();
-        cgen::render_clauses(clauses, phdata, &dir, &self.voice, voices, &mut |pcm| out.extend_from_slice(pcm));
+        cgen::render_clauses(clauses, phdata, &dir, &self.voice, voices, icons, &mut |pcm| out.extend_from_slice(pcm));
         Ok(out)
     }
 

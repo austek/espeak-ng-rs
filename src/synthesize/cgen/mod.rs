@@ -61,6 +61,7 @@ pub fn embed_code(letter: char) -> Option<usize> {
         'R' => 4,
         'H' => 5,
         'T' => 6,
+        'I' => 7,
         'Y' => 9,
         'B' => 12,
         'F' => 13,
@@ -180,6 +181,8 @@ pub struct Renderer<'a> {
     base_lang: String,
     active: Option<String>,
     pending_wvoice: Option<WVoice>,
+    icon_bytes: Vec<u8>,
+    icon_clips: Vec<generate::IconClip>,
     voice: WVoice,
     tr: LangSynth,
     tunes: Vec<Tune>,
@@ -214,6 +217,8 @@ impl<'a> Renderer<'a> {
             base_lang: params.lang.clone(),
             active: None,
             pending_wvoice: None,
+            icon_bytes: Vec::new(),
+            icon_clips: Vec::new(),
             voice,
             tr,
             tunes,
@@ -258,6 +263,20 @@ impl<'a> Renderer<'a> {
             pause
         };
         if last && (empty || self.no_final_pause) { 10 } else { pause }
+    }
+
+    /// The sound-icon table (`soundicon_tab`): 16-bit clips `EMBED_I` plays by index.
+    pub fn set_icons(&mut self, clips: &[Vec<i16>]) {
+        self.icon_bytes = clips.iter().flatten().flat_map(|s| s.to_le_bytes()).collect();
+        let mut offset = 0;
+        self.icon_clips = clips
+            .iter()
+            .map(|c| {
+                let clip = generate::IconClip { offset, len: c.len() as i32 };
+                offset += c.len() * 2;
+                clip
+            })
+            .collect();
     }
 
     /// `SpeakNextClause` for a clause that ends in a voice change (`LoadVoiceVariant`,
@@ -318,7 +337,7 @@ impl<'a> Renderer<'a> {
         let speeds = speeds_along(&c.list, &mut self.wpm_s, &self.voice);
         lengths::calc_lengths(&mut c.list, &self.tr, &|i| speeds[i.min(speeds.len() - 1)]);
         self.dump(&c.list);
-        let mut g = generate::Generator::new(phdata, &self.voice, &self.tr, self.speed, self.wpm_s2);
+        let mut g = generate::Generator::new(phdata, &self.voice, &self.tr, self.speed, self.wpm_s2).with_icons(&self.icon_clips);
         g.generate(&mut c.list);
         self.speed = g.speed;
         self.wpm_s2 = g.embedded_s2_value();
@@ -330,7 +349,14 @@ impl<'a> Renderer<'a> {
             MARKER_SENTENCE => sentences.push(base + pos),
             _ => {}
         };
-        self.wavegen.run(&g.queue, &g.frames, &phdata.phondata, &mut on_marker);
+        let with_icons: Vec<u8>;
+        let wave_data: &[u8] = if self.icon_bytes.is_empty() {
+            &phdata.phondata
+        } else {
+            with_icons = [phdata.phondata.as_slice(), self.icon_bytes.as_slice()].concat();
+            &with_icons
+        };
+        self.wavegen.run(&g.queue, &g.frames, wave_data, &mut on_marker);
         if let Some(next) = self.pending_wvoice.take() {
             self.wavegen.change_voice(next);
         }
@@ -414,9 +440,11 @@ pub fn render_clauses(
     data_dir: &Path,
     params: &VoiceParams,
     voices: &std::collections::HashMap<String, VoiceParams>,
+    icons: &[Vec<i16>],
     sink: &mut dyn FnMut(&[i16]),
 ) -> (Vec<usize>, Vec<usize>) {
     let mut r = Renderer::new(phdata, data_dir, params);
+    r.set_icons(icons);
     let all: Vec<PhonemeCode> = clauses.iter().flat_map(|c| c.codes.iter().cloned()).collect();
     r.switched = switched_tables(&all, data_dir, &params.lang);
     let mut start_sentence = true;
