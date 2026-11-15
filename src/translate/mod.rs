@@ -8079,12 +8079,15 @@ fn spell_individual_letters(
     let mut buf: Vec<u8> = Vec::new();
     for (ix, &c) in chars.iter().enumerate() {
         let name = character_name(c, ix + 1 < chars.len(), dict, phdata, stress_opts, options)?;
-        buf.push(LETTER_START);
-        if mode > 2 && c.is_uppercase() {
-            buf.extend(capital.iter().copied().filter(|&b| b != 0));
-        }
+        let announce = mode > 2 && c.is_uppercase();
         let name = if ix == 0 { &name[..] } else { without_leading_break(&name, stress_opts) };
-        buf.extend(name.iter().copied().filter(|&b| b != 0));
+        let chunk: Vec<u8> = std::iter::once(LETTER_START)
+            .chain(capital.iter().copied().filter(|&b| announce && b != 0))
+            .chain(name.iter().copied().filter(|&b| b != 0))
+            .collect();
+        if fits_word_buffer(buf.len(), chunk.len()) {
+            buf.extend(chunk);
+        }
     }
     Some(spelling_stress_with_pauses(&buf, mode, chars.len(), stress_opts.spelling_stress))
 }
@@ -8112,6 +8115,13 @@ fn character_name(
     (!wr.phonemes.iter().all(|&b| b == 0)).then_some(wr.phonemes)
 }
 
+/// C `TranslateLetter` appends a letter's marker and phonemes only while the word buffer stays
+/// under `N_WORD_PHONEMES`; a letter that does not fit is dropped and a later, shorter one may
+/// still fit.
+fn fits_word_buffer(used: usize, chunk: usize) -> bool {
+    used + chunk < crate::dictionary::N_WORD_PHONEMES
+}
+
 /// Spell a word as its letters' *names*, run together as one word — C's
 /// `SpeakIndividualLetters` with `spell_word == 1`.
 ///
@@ -8126,6 +8136,7 @@ fn spell_word_letters(
     options: &LangOptions,
 ) -> Option<Vec<u8>> {
     let mut out: Vec<u8> = Vec::new();
+    let mut kept = 0;
     let replaced = dict.apply_replacements(word);
     let chars: Vec<char> = replaced.as_deref().unwrap_or(word).chars().collect();
     for (ix, &c) in chars.iter().enumerate() {
@@ -8149,7 +8160,11 @@ fn spell_word_letters(
         } else {
             without_leading_break(&wr.phonemes, stress_opts)
         };
-        out.extend(name.iter().copied().filter(|&b| b != 0));
+        let name: Vec<u8> = name.iter().copied().filter(|&b| b != 0).collect();
+        if fits_word_buffer(out.len() + kept, 1 + name.len()) {
+            out.extend(name);
+            kept += 1;
+        }
     }
     if out.is_empty() {
         return None;
