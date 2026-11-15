@@ -31,6 +31,7 @@ pub mod ssml;
 pub mod readclause;
 pub mod ssml_driver;
 mod say_as;
+mod dotted_abbrev;
 use ssml_driver::{ClauseCarry, TokenizeMode};
 mod accent;
 mod mandarin_sandhi;
@@ -6701,36 +6702,65 @@ fn is_dotted_letters(word: &str) -> bool {
     word.contains('.') && word.split('.').all(is_single_letter_word)
 }
 
-fn is_lone_letter(word: &str) -> bool {
-    word.rsplit('.').next().is_some_and(|last| last.chars().count() == 1 && last.chars().all(char::is_alphabetic))
-}
-
-/// C's `LookupDictList` closes up single letters set apart by blanks and dots (`a . b` is
-/// `a.b`); embedded commands between them move behind the joined word.
-fn join_spaced_letter_dots(tokens: &mut Vec<Token>) {
-    let blank = |t: &Token| matches!(t, Token::Space | Token::Embedded(_));
+/// C `CheckDottedAbbrev`: runs of one-letter words set apart by blanks and dots are joined
+/// unless a multi-word list entry takes them first.  Letters that C spells keep their dots
+/// (`a.b`), which the word translation reads as the sign to spell them; letters the language
+/// hands to another voice join as a plain word, which that voice reads.  Embedded commands
+/// between the words move behind the joined word.
+fn join_spaced_letter_dots(
+    tokens: &mut Vec<Token>,
+    lists_phrase: &dyn Fn(&[Token], usize) -> Option<usize>,
+    hands_over: &dyn Fn(char) -> bool,
+) {
     let mut ix = 0;
     while ix < tokens.len() {
-        let rest = &tokens[ix..];
-        let dot_ix = 1 + rest.iter().skip(1).take_while(|t| blank(t)).count();
-        let after = rest.iter().skip(dot_ix + 1).take_while(|t| blank(t)).count();
-        let end = dot_ix + 1 + after;
-        let joined = match (rest.first(), rest.get(dot_ix), rest.get(end)) {
-            (Some(Token::Word(a)), Some(Token::Punctuation('.')), Some(Token::Word(b)))
-                if is_lone_letter(a) && is_lone_letter(b) && !b.contains('.') =>
-            {
-                Some(format!("{a}.{b}"))
+        let run = match &tokens[ix] {
+            Token::Word(w) if is_single_letter_word(w) || is_dotted_letters(w) => {
+                dotted_abbrev::check(tokens, ix).filter(|run| run.last > ix)
             }
             _ => None,
         };
-        let Some(word) = joined else {
+        let Some(run) = run else {
             ix += 1;
             continue;
         };
-        let moved = rest[1..end].iter().filter(|t| matches!(t, Token::Embedded(_))).cloned();
+        if let Some(phrase_end) = lists_phrase(tokens, ix) {
+            ix = phrase_end + 1;
+            continue;
+        }
+        let spelled = !run.letters.chars().next().is_some_and(hands_over);
+        let word = if spelled {
+            run.letters.chars().map(String::from).collect::<Vec<_>>().join(".")
+        } else {
+            run.letters
+        };
+        let moved = tokens[ix + 1..=run.last].iter().filter(|t| matches!(t, Token::Embedded(_))).cloned();
         let replacement: Vec<Token> = [Token::Word(word), Token::Space].into_iter().chain(moved).collect();
-        tokens.splice(ix..=ix + end, replacement);
+        tokens.splice(ix..=run.last, replacement);
+        ix += 1;
     }
+}
+
+/// Whether a multi-word list entry takes the words that follow the one at `ix`, dots counted
+/// as words.
+fn list_takes_phrase(
+    tokens: &[Token],
+    ix: usize,
+    dict: &Dictionary,
+    lang: &str,
+    start_emphasis: i32,
+) -> Option<usize> {
+    let words = dotted_abbrev::clause_words(tokens, ix);
+    let (emphasized, _) = emphasized_tokens(tokens, start_emphasis);
+    let mask = words.iter().take(31).enumerate().fold(0u32, |m, (n, &(at, _))| {
+        m | u32::from(emphasized.get(at).copied().unwrap_or(false)) << n
+    });
+    let follow: String = words.iter().skip(1).map(|&(_, w)| format!("{} ", lowercase_for_lang(w, lang))).collect();
+    let ctx = LookupCtx { dict_condition: dict.dict_condition, emphasized_words: mask, ..Default::default() };
+    let first = words.first().map(|&(_, w)| lowercase_for_lang(w, lang)).unwrap_or_default();
+    lookup_with_follow(dict, &first, &ctx, follow.as_bytes())
+        .filter(|r| r.skipwords > 0 && !r.phonemes.is_empty())
+        .and_then(|r| words.get(r.skipwords).or(words.last()).map(|&(at, _)| at))
 }
 
 /// C gives a word with no phonemes a very short pause when an embedded command is attached to
@@ -7520,6 +7550,8 @@ fn split_abandoned_words(
     let abandoned = |word: &str| {
         (!word.is_ascii() || options.letter_bits_offset == 0)
             && word.chars().count() > 1
+            && !(is_dotted_letters(word)
+                && word.chars().find_map(char_script).is_some_and(|sc| native_scripts(&options.lang).contains(&sc)))
             && !dict_lists_word(word, dict, options)
             && {
                 let lower = lowercase_for_lang(word, &options.lang);
@@ -9014,6 +9046,7 @@ fn follow_text(tokens: &[Token], from: usize, lang: &str) -> [u8; 32] {
                 text.push_str(&lowercase_for_lang(w, lang));
                 text.push(' ');
             }
+            Token::Punctuation('.') => text.push_str(". "),
             _ => break,
         }
         if text.len() >= 31 {
@@ -9033,7 +9066,7 @@ fn follow_emphasis(tokens: &[Token], emphasized: &[bool], from: usize) -> u32 {
     for (ix, t) in tokens.iter().enumerate().skip(from) {
         match t {
             Token::Space | Token::WordJoin | Token::Embedded(_) => {}
-            Token::Word(_) if words < 31 => {
+            Token::Word(_) | Token::Punctuation('.') if words < 31 => {
                 mask |= u32::from(emphasized.get(ix).copied().unwrap_or(false)) << words;
                 words += 1;
             }
@@ -9169,7 +9202,9 @@ pub(crate) fn build_translate_entries(
     let mut dot_removed_at: Option<usize> = None;
     let mut swallowed = vec![false; tokens.len()];
     for (token_ix, token) in tokens.iter().enumerate() {
-        swallowed[token_ix] = (matches!(token, Token::Word(_)) && skip_words > 0)
+        swallowed[token_ix] = (matches!(token, Token::Word(_) | Token::Punctuation('.'))
+            && skip_words > 0
+            && dot_removed_at != Some(token_ix))
             || (matches!(token, Token::Punctuation('.')) && point_after_number(tokens, token_ix));
         match token {
             Token::Punctuation('.') if dot_removed_at == Some(token_ix) => {
@@ -9184,7 +9219,7 @@ pub(crate) fn build_translate_entries(
             }
             // Later passes pair entries with word tokens one to one, so a word
             // the entry swallowed keeps an empty entry of its own.
-            Token::Word(_) if skip_words > 0 => {
+            Token::Word(_) | Token::Punctuation('.') if skip_words > 0 => {
                 skip_words -= 1;
                 entries.push(TranslateEntry {
                     phonemes: Vec::new(),
@@ -9445,7 +9480,7 @@ pub(crate) fn build_translate_entries(
                         wr.dict_flags = 0;
                         spelled_by_letters = true;
                     }
-                } else if !wr.found_in_list && lower.contains('.') {
+                } else if lower.contains('.') && (!wr.found_in_list || (skip_words == 0 && is_dotted_letters(&lower) && !dict_lists_word(word, dict, options))) {
                     // Single letters joined by dots (`e.g`, `U.S.A`) are one
                     // word that no list names; it is spelled out.
                     if let Some(spelled) = spell_word_letters(
@@ -10798,7 +10833,17 @@ impl Translator {
         expand_dotted_phrases(&mut tokens, dict, lang, start_emphasis);
         tokens = announce_clause_punctuation(tokens, &self.options);
         suppress_abbreviation_periods(&mut tokens);
-        join_spaced_letter_dots(&mut tokens);
+        let alts = letters::AltLangs::new(&self.data_dir);
+        let first_letter_hands_over = |c: char| {
+            let voice = letters::Ctx { dict, phdata, stress: stress_opts, options: &self.options };
+            let env = letters::LetterEnv { voice, tr: voice, alts: &alts };
+            matches!(letters::translate_letter(&env, c), letters::LetterOut::HandOver(_))
+        };
+        join_spaced_letter_dots(
+            &mut tokens,
+            &|tokens, ix| list_takes_phrase(tokens, ix, dict, lang, start_emphasis),
+            &first_letter_hands_over,
+        );
         if number_grammar.c_numbers != 0 {
             apply_time_reading(&mut tokens);
         }
@@ -10823,7 +10868,6 @@ impl Translator {
                 .as_ref()
                 .and_then(|(en, dict)| en.symbol_switch_word(dict, c, by_name))
         };
-        let alts = letters::AltLangs::new(&self.data_dir);
         let (emphasized, end_emphasis) = emphasized_tokens(&tokens, start_emphasis);
         let (mut entries, swallowed) = build_translate_entries(
             &tokens,
