@@ -38,6 +38,18 @@ fn check(cases: &[Case]) {
 }
 
 #[test]
+fn announced_name_joins_the_word_after_a_hyphen() {
+    check(&[
+        (
+            r#"<tts:style field="punctuation" mode="all">a-b</tts:style>"#,
+            "ɐ hˌaɪfənbˈiː\n",
+            "a# h,aIf@nb'i:\n",
+        ),
+        ("a [[h,aIf@n]]-b", "ɐ hˌaɪfənbˈiː\n", "a# h,aIf@nb'i:\n"),
+    ]);
+}
+
+#[test]
 fn announced_brackets_and_quotes_pause_before_the_next_word() {
     check(&[
         (

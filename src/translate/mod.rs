@@ -2119,6 +2119,11 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 }
             }
             tokens.push(Token::InlinePhonemes(content));
+            let mut ahead = chars.clone();
+            if ahead.next() == Some('-') && ahead.next().is_some_and(char::is_alphabetic) {
+                chars.next();
+                tokens.push(Token::WordJoin);
+            }
         } else if c == grammar.decimal_separator
             && chars.peek().is_some_and(|d| d.is_ascii_digit())
         {
