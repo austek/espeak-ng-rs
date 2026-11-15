@@ -21,7 +21,16 @@ fn run(lang: &str, flag: &str, text: &str) -> String {
 
 type Case = (&'static str, &'static str, &'static str, &'static str);
 
-const CASES: [Case; 6] = [
+const CASES: [Case; 10] = [
+    ("en", "He said . then left.", "hiː sˈɛd dˈɒt ðˈɛn lˈɛft", "hi: s'Ed d'0t D'En l'Eft"),
+    (
+        "en",
+        "Version 2.5 . is out",
+        "vˈɜːʃən tˈuː pɔɪnt fˈaɪv dˈɒt ɪz ˈaʊt",
+        "v'3:S@n t'u: pOInt f'aIv d'0t Iz 'aUt",
+    ),
+    ("en", "He said .. then left", "hiː sˈɛd dˈɒt ðˈɛn lˈɛft", "hi: s'Ed d'0t D'En l'Eft"),
+    ("es", "Dijo . luego se fue.", "dˈixo pˈunto luˈeɣo se fwˈe", "d'ixo p'unto lu'eQo se fw'e"),
     ("en", "cat <emphasis>.</emphasis> next.", "kˌat dˈɒt nˈɛkst", "k,at_! d'0t n'Ekst"),
     ("en", "<speak>U.S.A<emphasis>.</emphasis> next.</speak>", "jˌuːˌɛsˈeɪ nˈɛkst", "j,u:,Es'eI_! n'Ekst"),
     ("en", "<speak><emphasis>A</emphasis>.</speak>", "ˈeɪ dˈɒt", "_!'eI d'0t"),

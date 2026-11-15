@@ -2170,7 +2170,8 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 tokens.push(Token::Punctuation('.'));
                 continue;
             }
-            if c == '.' && grammar.clause_text && previous.is_none_or(|p| p.is_whitespace() || p == CTRL_EMBEDDED) {
+            let apart = previous.is_none_or(|p| p.is_whitespace() || p == CTRL_EMBEDDED);
+            if c == '.' && apart && (grammar.clause_text || (clause_has_word(&tokens) && dot_stays_in_clause(chars.clone()))) {
                 tokens.push(Token::Punctuation('.'));
                 continue;
             }
@@ -2192,6 +2193,9 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 continue;
             }
             if c == '.' && chars.peek() == Some(&'.') {
+                if apart && clause_has_word(&tokens) {
+                    tokens.push(Token::Punctuation('.'));
+                }
                 tokens.push(Token::Space);
                 continue;
             }
