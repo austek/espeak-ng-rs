@@ -6722,7 +6722,7 @@ fn join_spaced_letter_dots(
     while ix < tokens.len() {
         let run = match &tokens[ix] {
             Token::Word(w) if is_single_letter_word(w) || is_dotted_letters(w) => {
-                dotted_abbrev::check(tokens, ix).filter(|run| run.last > ix || run.possessive)
+                dotted_abbrev::check(tokens, ix)
             }
             _ => None,
         };
@@ -6730,15 +6730,19 @@ fn join_spaced_letter_dots(
             ix += 1;
             continue;
         };
+        let spelled = !run.letters.chars().next().is_some_and(hands_over);
+        if spelled && run.last == ix && !run.possessive {
+            ix += 1;
+            continue;
+        }
         if let Some(phrase_end) = lists_phrase(tokens, ix) {
             ix = phrase_end + 1;
             continue;
         }
-        let spelled = !run.letters.chars().next().is_some_and(hands_over);
         let (word, echoes) = if spelled {
             (run.letters.chars().map(String::from).collect::<Vec<_>>().join("."), Vec::new())
         } else {
-            let echoes = if run.last > ix { overwritten_words(&run.letters) } else { Vec::new() };
+            let echoes = overwritten_words(&run.letters);
             (run.letters, echoes)
         };
         let moved = tokens[ix + 1..=run.last].iter().filter(|t| matches!(t, Token::Embedded(_))).cloned();
