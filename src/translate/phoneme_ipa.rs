@@ -159,7 +159,7 @@ pub fn codes_to_ipa_opts(
     // Indices of the codes that are actual sounds, for neighbour lookups.
     let is_sound =
         |c: &PhonemeCode| {
-            !c.is_boundary && c.code > 8 && c.code != PHON_END_WORD && c.code != PHON_SYLLABIC
+            !c.is_boundary && super::is_sound_code(c.code) && c.code != PHON_END_WORD && c.code != PHON_SYLLABIC
         };
     let real: Vec<usize> = codes
         .iter()

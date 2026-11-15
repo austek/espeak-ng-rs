@@ -107,6 +107,8 @@ jobs:
           --test clause_leading_pause_word_start
           --test strend2_before_clause_end_stress
           --test ssml_break_emphasis
+          --test ssml_emphasis_phoneme_context
+          --test ssml_emphasis_earlier_stress
           --test ssml_say_as
           --test word_before_number_context
           --test clause_start_bracket_before_number

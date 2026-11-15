@@ -11520,7 +11520,7 @@ fn insert_word_gaps(
     let is_sound = |c: &PhonemeCode| {
         c.marker.is_none()
             && !c.is_boundary
-            && c.code > 8
+            && is_sound_code(c.code)
             && c.code != PHON_END_WORD
             && c.code != crate::phoneme::PHON_LENGTHEN
     };
@@ -11594,7 +11594,7 @@ fn insert_switch_start_gaps(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData, 
     let first_sound = |at: usize| {
         (at..codes.len())
             .take_while(|&j| plain(&codes[j]) && (codes[j].code > 8 || codes[j].code < crate::phoneme::PHON_PAUSE))
-            .find(|&j| codes[j].code > 8)
+            .find(|&j| is_sound_code(codes[j].code))
     };
     let opens: Vec<(usize, usize)> = (1..codes.len().saturating_sub(1))
         .filter(|&brk| {
@@ -11635,7 +11635,7 @@ fn apply_voice_replacements(
         return;
     }
     let is_sound = |c: &PhonemeCode| {
-        c.marker.is_none() && !c.is_boundary && c.code > 8 && c.code != crate::phoneme::PHON_END_WORD
+        c.marker.is_none() && !c.is_boundary && is_sound_code(c.code) && c.code != crate::phoneme::PHON_END_WORD
     };
     let real: Vec<usize> = codes
         .iter()
@@ -11908,6 +11908,12 @@ fn set_regressive_voicing(
             stop_propagation = false;
         }
     }
+}
+
+/// Whether `code` is a phoneme rather than a control or stress code.  C keeps stress marks
+/// out of the phoneme list, so the tonic mark an emphasized word carries is no neighbour.
+pub(crate) fn is_sound_code(code: u8) -> bool {
+    code > 8 && code != PHON_STRESS_TONIC
 }
 
 /// Which of the phonemes in `real` start a word.
@@ -12268,7 +12274,7 @@ fn double_lengthened_consonants(
     phdata: &PhonemeData,
 ) {
     use crate::phoneme::{PH_FRICATIVE, PH_LIQUID, PH_NASAL, PH_PAUSE, PH_VFRICATIVE};
-    let is_sound = |c: &PhonemeCode| !c.is_boundary && c.marker.is_none() && c.code > 8;
+    let is_sound = |c: &PhonemeCode| !c.is_boundary && c.marker.is_none() && is_sound_code(c.code);
     let is_word_break = |c: &PhonemeCode| c.is_boundary || c.code == crate::phoneme::PHON_END_WORD;
     let mut clause_start = 0;
     for i in 1..codes.len() {
@@ -12313,7 +12319,7 @@ fn apply_list_editing_instructions(
     // neighbours of a phoneme never include one (`i:` still sees the next vowel).
     let is_sound = |c: &PhonemeCode| {
         !c.is_boundary
-            && c.code > 8
+            && is_sound_code(c.code)
             && c.code != crate::phoneme::PHON_END_WORD
             && c.code != crate::phoneme::PHON_LENGTHEN
     };
@@ -12553,7 +12559,7 @@ fn resolve_virtual_phonemes_in_codes(
         .enumerate()
         .filter(|(_, c)| {
             !c.is_boundary
-                && c.code > 8
+                && is_sound_code(c.code)
                 && c.code != crate::phoneme::PHON_END_WORD
                 && c.code != crate::phoneme::PHON_LENGTHEN
                 && !is_tone_phoneme(c.code, phdata)
