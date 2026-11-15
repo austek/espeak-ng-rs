@@ -11366,7 +11366,8 @@ impl Translator {
                             && (!spoken_before_clause[token_ix] || plural_possessive_quote(&tokens, token_ix));
                         let spoken_before = spoken_before_clause[token_ix];
                         let pause_dash = *c == '-' && spaced_dash(&tokens, token_ix) && spoken_before;
-                        if (is_bracket(*c) || pause_dash)
+                        let spoken_bracket = *c == readclause::ANNOUNCED_BRACKET;
+                        if (is_bracket(*c) || spoken_bracket || pause_dash)
                             && !clause_initial_quote
                             && entry.phonemes.is_empty()
                             && word_follows
@@ -11418,7 +11419,7 @@ impl Translator {
                             }
                             let pauses = if pause_open {
                                 0
-                            } else if punct_covers(&self.options, *c) {
+                            } else if spoken_bracket || punct_covers(&self.options, *c) {
                                 announced / 2
                             } else {
                                 plain / 2

@@ -19,6 +19,10 @@ pub use iface::{CharMap, DefaultLang, NoTags, ReaderFlags, ReaderLang, ReaderOpt
 pub use reader::ClauseReader;
 pub use terminator::Terminator;
 
+/// What `ReadClause` leaves for a bracket whose name it has already announced
+/// (`0xe000 + '('`); the translator turns it into the announced-bracket pause.
+pub const ANNOUNCED_BRACKET: char = '\u{e028}';
+
 /// One clause as C `ReadClause` leaves it in `source[]`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceClause {
