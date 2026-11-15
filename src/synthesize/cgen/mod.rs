@@ -320,9 +320,6 @@ impl<'a> Renderer<'a> {
         self.dump(&c.list);
         let mut g = generate::Generator::new(phdata, &self.voice, &self.tr, self.speed, self.wpm_s2);
         g.generate(&mut c.list);
-        if !c.embedded_after.is_empty() {
-            g.do_embedded(&c.embedded_after);
-        }
         self.speed = g.speed;
         self.wpm_s2 = g.embedded_s2_value();
         self.dump_queue(&g.queue, &g.frames);

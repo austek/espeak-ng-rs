@@ -86,7 +86,6 @@ impl Ph {
 pub struct Clause {
     pub list: Vec<Ph>,
     pub clause_char: Option<char>,
-    pub embedded_after: Vec<EmbeddedCmd>,
 }
 
 fn tab(phdata: &PhonemeData, code: u8) -> PhonemeTab {
@@ -282,11 +281,12 @@ pub fn build_list(
         list.push(p);
     }
     finish_list(&mut list, phdata, post_pause);
+    attach_trailing_embedded(&mut list, pending);
     gaps.into_iter().for_each(|(i, length)| list[i].length = length);
     set_word_stress(&mut list);
     bare.iter().for_each(|&i| list[i].wordstress = 0);
     diminish_unstressed(&mut list, stress_flags);
-    Clause { list, clause_char: None, embedded_after: pending }
+    Clause { list, clause_char: None }
 }
 
 /// Where the phoneme being added stands to a phoneme a program inserted
@@ -334,6 +334,14 @@ fn finish_list(list: &mut Vec<Ph>, phdata: &PhonemeData, post_pause: i32) {
     let mut last = Ph::new(tab(phdata, PHON_PAUSE_SHORT), 0, 0);
     last.typ = PH_PAUSE;
     list.push(last);
+}
+
+/// `TranslateClause`'s `phoneme_list[n_phoneme_list-2].synthflags = SFLAG_EMBEDDED`: commands
+/// after the last word run before the clause pause.
+fn attach_trailing_embedded(list: &mut [Ph], pending: Vec<EmbeddedCmd>) {
+    let Some(ix) = list.len().checked_sub(2).filter(|_| !pending.is_empty()) else { return };
+    list[ix].synthflags = SFLAG_EMBEDDED;
+    list[ix].embedded = pending;
 }
 
 fn set_word_stress(list: &mut [Ph]) {
