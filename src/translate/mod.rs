@@ -10493,8 +10493,7 @@ impl Translator {
             }
             _ => tokenize_opts(&text, &number_grammar),
         };
-        let mut tokens = split_overlong_clauses(mode.apply(raw));
-        tokens = merge_full_stop_into_tag_boundary(tokens);
+        let mut tokens = split_overlong_clauses(mode.apply(raw));        tokens = merge_full_stop_into_tag_boundary(tokens);
         split_unrecognised_ordinals(&mut tokens, dict, &number_grammar);
         merge_digit_follow(&mut tokens, dict);
         expand_dotted_phrases(&mut tokens, dict, lang);
@@ -11057,7 +11056,13 @@ impl Translator {
                     } else {
                         consume_word_break_syllabic(&entry.phonemes, phdata)
                     };
-                    for &b in &plain {
+                    let opened_by_bracket = tokens[..token_ix]
+                        .iter()
+                        .rfind(|t| !matches!(t, Token::Operator(_) | Token::Punctuation('-')))
+                        .is_some_and(|t| matches!(t, Token::Punctuation(p) if is_bracket(*p)));
+                    let after_clause_start_pauses = opened_by_bracket && only_pauses_since_clause_start(&codes);
+                    let leading_breaks = plain.iter().take_while(|&&b| b == crate::phoneme::PHON_END_WORD).count();
+                    for &b in &plain[if after_clause_start_pauses { leading_breaks } else { 0 }..] {
                         // `phonX1` is a marker, not a sound: C reads it as
                         // "double the next word's initial consonant"
                         // (`FLAG_DOUBLING`) and does *not* put it in the phoneme
