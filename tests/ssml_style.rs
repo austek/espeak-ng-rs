@@ -38,6 +38,22 @@ fn check(cases: &[Case]) {
 }
 
 #[test]
+fn hyphen_after_a_speed_change_pauses_like_a_spaced_dash() {
+    check(&[
+        (
+            r#"<tts:style field="punctuation" mode="all">a -- b</tts:style>"#,
+            "ɐ hˌaɪfən hˌaɪfən bˈiː\n",
+            "a# h,aIf@n h,aIf@n_:_: b'i:\n",
+        ),
+        (
+            r#"<tts:style field="punctuation" mode="all">a --- b</tts:style>"#,
+            "ɐ hˌaɪfən hˌaɪfən hˌaɪfən bˈiː\n",
+            "a# h,aIf@n h,aIf@n h,aIf@n_:_: b'i:\n",
+        ),
+    ]);
+}
+
+#[test]
 fn announced_name_joins_the_word_after_a_hyphen() {
     check(&[
         (
