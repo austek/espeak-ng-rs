@@ -6625,6 +6625,24 @@ fn is_dotted_letters(word: &str) -> bool {
     word.contains('.') && word.split('.').all(is_single_letter_word)
 }
 
+/// C gives a word with no phonemes a very short pause when an embedded command is attached to
+/// it (translate.c:649); the pause already in an emphasized word's phonemes serves instead.
+fn carry_embedded_in_silent_dots(tokens: &[Token], entries: &mut [TranslateEntry], emphasized: &[bool]) {
+    let carries = |ix: usize| {
+        tokens[..ix]
+            .iter()
+            .rev()
+            .find(|t| !matches!(t, Token::Space | Token::WordJoin))
+            .is_some_and(|t| matches!(t, Token::Embedded(_)))
+    };
+    for (ix, entry) in entries.iter_mut().enumerate() {
+        let silent_dot = matches!(tokens.get(ix), Some(Token::Punctuation('.'))) && entry.phonemes.is_empty();
+        if silent_dot && !emphasized.get(ix).copied().unwrap_or(false) && carries(ix) {
+            entry.phonemes = vec![crate::phoneme::PHON_PAUSE_VSHORT];
+        }
+    }
+}
+
 /// Whether a '.' followed by `after` stays inside the clause, as C's
 /// `ReadClause` decides: a letter or hyphen follows, or blanks and then a
 /// lower-case letter.
@@ -10613,6 +10631,7 @@ impl Translator {
             c.emphasis = end_emphasis;
         }
         promote_translate_entries(&mut entries, &emphasized, phdata, lang, outer_continues);
+        carry_embedded_in_silent_dots(&tokens, &mut entries, &emphasized);
         if primary_bcp47_subtag(lang) == "en" {
             apply_en_or_linking_r(&mut entries, phdata);
         }
@@ -11059,7 +11078,7 @@ impl Translator {
                                 .iter()
                                 .rev()
                                 .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
-                                .filter(|t| is_word(t))
+                                .filter(|t| is_word(t) || matches!(t, Token::Punctuation('.')))
                                 .take(2)
                                 .count();
                             if before >= 2 && after >= 1 && prepause_timeout == 0 {

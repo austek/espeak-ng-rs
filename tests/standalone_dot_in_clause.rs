@@ -21,7 +21,14 @@ fn run(lang: &str, flag: &str, text: &str) -> String {
 
 type Case = (&'static str, &'static str, &'static str, &'static str);
 
-const CASES: [Case; 10] = [
+const CASES: [Case; 17] = [
+    ("en", "<speak>C<mark name=\"x\"/>. and D</speak>", "sˈiː dˈɒt and dˈiː", "s'i: d'0t_:_: and d'i:"),
+    ("en", "3.5 . and 4.5", "θɹˈiː pɔɪnt fˈaɪv dˈɒt and fˈɔː pɔɪnt fˈaɪv","Tr'i: pOInt f'aIv d'0t_:_: and f'o@ pOInt f'aIv"),
+    ("en", "<speak>N.A.S.A<mark name=\"m\"/>. is here</speak>", "ˌɛnˌeɪˌɛsˈeɪ  ɪz hˈiə",",En,eI,Es'eI _| Iz h'i@3"),
+    ("fr", "<speak>Bonjour<mark name=\"m\"/>. monde</speak>", "bɔ̃ʒˈuʁ  mˈɔ̃d","bO~Z'ur _| m'O~d"),
+    ("fr", "<speak><emphasis>A</emphasis>. et B</speak>", "ˈa  e bˈe","_!'a _| e b'e"),
+    ("it", "<speak>A<mark name=\"m\"/>. poi</speak>", "ˈaː  pˈɔi","'a: _| p'Oi"),
+    ("ru", "<speak>А<mark name=\"m\"/>. потом</speak>", "ˈɑ  pˈotʌm","'A _| p'otVm"),
     ("en", "He said . then left.", "hiː sˈɛd dˈɒt ðˈɛn lˈɛft", "hi: s'Ed d'0t D'En l'Eft"),
     (
         "en",
