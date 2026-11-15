@@ -2193,7 +2193,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 continue;
             }
             if c == '.' && chars.peek() == Some(&'.') {
-                if apart && clause_has_word(&tokens) {
+                if apart && clause_has_word(&tokens) && dot_stays_in_clause(chars.clone().skip(1)) {
                     tokens.push(Token::Punctuation('.'));
                 }
                 tokens.push(Token::Space);
