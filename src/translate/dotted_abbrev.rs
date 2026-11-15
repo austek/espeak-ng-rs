@@ -6,7 +6,7 @@
 use super::Token;
 
 /// C copies the letters into `word_buf[80]` and gives up on a run that does not fit.
-const MAX_LETTER_BYTES: usize = 79;
+const MAX_LETTER_BYTES: usize = 80;
 const MAX_LOOKAHEAD: usize = 2 * MAX_LETTER_BYTES + 4;
 
 /// The initials of a run, and the index of the last token the run takes in.
@@ -61,8 +61,27 @@ fn is_letter(word: &str) -> bool {
     chars.next().is_some_and(char::is_alphabetic) && chars.next().is_none()
 }
 
+enum Scan {
+    Run(Run),
+    Short,
+    Overflow,
+}
+
 /// Whether the word at `from` starts a run of at least two dotted initials.
 pub(super) fn check(tokens: &[Token], from: usize) -> Option<Run> {
+    match scan(tokens, from) {
+        Scan::Run(run) => Some(run),
+        Scan::Short | Scan::Overflow => None,
+    }
+}
+
+/// Whether the run of initials at `from` is too long for C's word buffer, so that C leaves the
+/// first letter to the word lookup instead of spelling it.
+pub(super) fn overflows(tokens: &[Token], from: usize) -> bool {
+    matches!(scan(tokens, from), Scan::Overflow)
+}
+
+fn scan(tokens: &[Token], from: usize) -> Scan {
     let words = clause_words(tokens, from);
     let mut letters = String::new();
     let mut count = 0;
@@ -79,7 +98,7 @@ pub(super) fn check(tokens: &[Token], from: usize) -> Option<Run> {
             break;
         }
         if letters.len() + word.len() > MAX_LETTER_BYTES {
-            return None;
+            return Scan::Overflow;
         }
         letters.push_str(word);
         count += 1;
@@ -89,5 +108,9 @@ pub(super) fn check(tokens: &[Token], from: usize) -> Option<Run> {
         }
         at += 2;
     }
-    (count > 1).then_some(Run { letters, last })
+    if count > 1 {
+        Scan::Run(Run { letters, last })
+    } else {
+        Scan::Short
+    }
 }

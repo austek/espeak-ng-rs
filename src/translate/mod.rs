@@ -9472,7 +9472,7 @@ pub(crate) fn build_translate_entries(
                     && clause_upper[token_ix] <= clause_lower[token_ix])
                     .then(|| spell_word_letters(&lower, dict, phdata, stress_opts, options))
                     .flatten();
-                if skip_words == 0 && dot_follows && is_single_letter_word(&lower) {
+                if skip_words == 0 && dot_follows && is_single_letter_word(&lower) && !dotted_abbrev::overflows(tokens, token_ix) {
                     // C's `CheckDottedAbbrev`: a lone letter before a dot word is spelled.
                     if let Some(spelled) = spell_word_letters(&lower, dict, phdata, stress_opts, options) {
                         wr.phonemes = spelled;
