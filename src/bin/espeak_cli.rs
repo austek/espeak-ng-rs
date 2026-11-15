@@ -868,35 +868,15 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
     translator.options.ipa_tie = cli.tie;
     translator.options.ipa_separator = cli.sep;
 
+    if cli.markup {
+        return emit(cli, &markup_phoneme_lines(cli, &translator, text)?);
+    }
     let line = if cli.ipa {
-        let ipa = if cli.markup {
-            translator.text_to_ipa_ssml(text)
-        } else {
-            translator.text_to_ipa_clauses(text)
-        }
-        .map_err(|e| {
-            std::io::Error::other(format!("{e}"))
-        })?;
-        ipa
+        translator.text_to_ipa_clauses(text).map_err(|e| std::io::Error::other(format!("{e}")))?
     } else {
-        // `-x` with `-m`: the codes path takes plain text, so process SSML first
-        // (strip tags, decode entities, apply say-as) — matching `--ipa -m`.
-        // (Cross-`<voice>` language switching in `-x` is not yet wired.)
-        let src = if cli.markup {
-            espeak_ng::translate::ssml_to_speech_text_opts(
-                text,
-                translator.options.lang.as_str(),
-                cli.ssml_break.unwrap_or(100),
-            )
-        } else {
-            text.to_string()
-        };
-        let codes = if cli.markup {
-            translator.translate_to_codes(&src)
-        } else {
-            translator.translate_to_clause_codes(&src)
-        }
-        .map_err(|e| std::io::Error::other(format!("{e}")))?;
+        let codes = translator
+            .translate_to_clause_codes(text)
+            .map_err(|e| std::io::Error::other(format!("{e}")))?;
         let mut phdata = PhonemeData::load(&data_dir).map_err(|e| {
             std::io::Error::other(format!("{e}"))
         })?;
@@ -912,49 +892,20 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
         format_x(&codes, &phdata, cli.sep, cli.tie, &data_dir, translator.options.lang.as_str())
     };
 
-    let closing = if cli.markup && ends_with_clause_tag(text) { "\n" } else { "" };
-    emit(cli, &format!("{line}\n{closing}"))
+    emit(cli, &format!("{line}\n"))
 }
 
-/// C's `ProcessSsmlTag` returns a clause terminator for these tags.  When one
-/// is the last thing in the text, `ReadClause` is called once more and the empty
-/// clause it returns prints a line of its own.
-fn ends_with_clause_tag(text: &str) -> bool {
-    let trimmed = text.trim_end();
-    let Some(body) = trimmed.strip_suffix('>') else { return false };
-    let Some(open) = body.rfind('<') else { return false };
-    let inner = &body[open + 1..];
-    let starts_tag = inner.chars().next().is_some_and(|c| c == '/' || c.is_alphabetic());
-    starts_tag && tag_ends_clause(inner.strip_suffix('/').unwrap_or(inner))
-}
-
-fn tag_ends_clause(inner: &str) -> bool {
-    let (closing, rest) = match inner.strip_prefix('/') {
-        Some(r) => (true, r),
-        None => (false, inner),
+/// C `SpeakNextClause` prints `"%s\n"` for every clause the reader returns.
+fn markup_phoneme_lines(cli: &Cli, translator: &Translator, text: &str) -> std::io::Result<String> {
+    let ioerr = |e: espeak_ng::Error| std::io::Error::other(format!("{e}"));
+    let settings = espeak_ng::translate::ssml_driver::SsmlSettings {
+        rate_wpm: cli.rate.map_or(175, |r| r as i32),
+        break_mul: cli.ssml_break.map_or(100, |b| b as i32),
     };
-    let name_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
-    let name = rest[..name_end].to_ascii_lowercase();
-    let attrs = &rest[name_end..];
-    let block = matches!(
-        name.as_str(),
-        "s" | "p" | "h1" | "h2" | "h3" | "h4" | "hr" | "br" | "li" | "dd" | "img" | "td"
-    );
-    match name.as_str() {
-        "speak" => closing,
-        "break" => !closing && break_returns_terminator(attrs),
-        _ => block,
-    }
+    let doc = translator.translate_ssml(text, settings).map_err(ioerr)?;
+    let lines = if cli.ipa { doc.ipa_lines(false) } else { doc.mnemonic_lines(cli.sep, cli.tie) }.map_err(ioerr)?;
+    Ok(lines.iter().map(|l| format!("{l}\n")).collect())
 }
-
-fn break_returns_terminator(attrs: &str) -> bool {
-    let strong = ["medium", "strong", "x-strong"]
-        .iter()
-        .any(|s| attrs.contains(&format!("strength=\"{s}\"")));
-    let has_strength = attrs.contains("strength=");
-    !has_strength || strong || attrs.contains("time=")
-}
-
 
 fn format_x(
     codes: &[PhonemeCode],

@@ -29,6 +29,8 @@ pub mod compat;
 pub(crate) mod ucd_alpha;
 pub mod ssml;
 pub mod readclause;
+pub mod ssml_driver;
+use ssml_driver::TokenizeMode;
 mod accent;
 mod mandarin_sandhi;
 pub(crate) mod letters;
@@ -208,20 +210,6 @@ pub fn select_phoneme_table(
     }
     // Re-run the base selection to surface a clear error if nothing matched.
     phdata.select_table_by_name(base).map(|_| ())
-}
-
-/// Resolve an SSML `<voice>` selector (a language tag *or* a human-readable
-/// voice name) to a language tag backed by data, or `None` if it can't be
-/// matched (so the caller falls back to the document language rather than
-/// erroring).  Mirrors the CLI `-v` resolution.
-fn resolve_voice_lang(selector: &str, data_dir: &Path) -> Option<String> {
-    if resolve_dict_stem(data_dir, selector).is_some() {
-        return Some(selector.to_string());
-    }
-    let voices = crate::voices::list_voices(data_dir);
-    let query = crate::voices::VoiceQuery { name: Some(selector.to_string()), ..Default::default() };
-    crate::voices::find_voice(&voices, &query)
-        .and_then(|v| resolve_dict_stem(data_dir, &v.language))
 }
 
 use crate::error::{Error, Result};
@@ -10186,61 +10174,13 @@ impl Translator {
         markup: bool,
         allow_switch: bool,
     ) -> Result<String> {
-        // SSML markup mode: parse tags/entities into language-tagged segments.
-        let stripped;
-        let text = if markup {
-            let segments = ssml::process_markup(text);
-            // `<voice xml:lang=…>` spans translate their content in another
-            // language, each as its own clause.  Delegate per segment.
-            if segments.iter().any(|s| s.lang.is_some()) {
-                let mut voice_cache: std::collections::HashMap<String, Translator> =
-                    std::collections::HashMap::new();
-                let sep = if flatten_clauses { " " } else { "\n" };
-                let mut parts: Vec<String> = Vec::new();
-                for seg in &segments {
-                    if seg.text.trim().is_empty() {
-                        continue;
-                    }
-                    // Choose the translator: base (self) or the voice language.
-                    // The `<voice>` selector may be a language tag or a voice
-                    // *name* ("French (France)"); resolve it, falling back to the
-                    // base voice if it doesn't match (never error).
-                    let resolved = seg
-                        .lang
-                        .as_deref()
-                        .filter(|l| *l != self.options.lang)
-                        .and_then(|l| resolve_voice_lang(l, &self.data_dir))
-                        .filter(|lang| *lang != self.options.lang);
-                    let translator: &Translator = match resolved {
-                        Some(lang) => {
-                            if !voice_cache.contains_key(&lang) {
-                                if let Ok(tr) = Translator::new(&lang, Some(&self.data_dir)) {
-                                    voice_cache.insert(lang.clone(), tr);
-                                }
-                            }
-                            voice_cache.get(&lang).unwrap_or(self)
-                        }
-                        None => self,
-                    };
-                    let seg_text =
-                        interpret_segment_text(&seg.text, seg.interpret, &translator.options.lang);
-                    let ipa = translator.text_to_ipa_with_options(
-                        &seg_text, preserve_punctuation, flatten_clauses, false, allow_switch,
-                    )?;
-                    if !ipa.trim().is_empty() {
-                        parts.push(ipa);
-                    }
-                }
-                return Ok(parts.join(sep));
-            }
-            stripped = segments
-                .into_iter()
-                .map(|s| interpret_segment_text(&s.text, s.interpret, &self.options.lang))
-                .collect::<String>();
-            stripped.as_str()
-        } else {
-            text
-        };
+        if markup {
+            let doc = self.translate_ssml(text, ssml_driver::SsmlSettings::default())?;
+            let lines = doc.ipa_lines(preserve_punctuation)?;
+            let sep = if flatten_clauses { " " } else { "\n" };
+            let spoken: Vec<&str> = lines.iter().map(String::as_str).filter(|l| !l.trim().is_empty()).collect();
+            return Ok(spoken.join(sep));
+        }
         // The clause's finished phoneme-code list *is* the IPA source: C's
         // `GetTranslatedPhonemeString(espeakPHONEMES_IPA)` walks exactly the
         // list `-x` prints, so the two can't disagree about which phonemes a
@@ -10361,6 +10301,22 @@ impl Translator {
         allow_switch: bool,
         track: Option<&mut Vec<TokenCodes>>,
     ) -> Result<Vec<PhonemeCode>> {
+        self.translate_codes_in_mode(text, allow_switch, track, TokenizeMode::Plain)
+    }
+
+    /// One clause as the SSML clause reader ended it (C `TranslateClause` on `source[]`):
+    /// punctuation the reader kept is text, and the clause closes with one boundary.
+    pub(crate) fn translate_clause(&self, text: &str) -> Result<Vec<PhonemeCode>> {
+        self.translate_codes_in_mode(text, true, None, TokenizeMode::Clause)
+    }
+
+    fn translate_codes_in_mode(
+        &self,
+        text: &str,
+        allow_switch: bool,
+        track: Option<&mut Vec<TokenCodes>>,
+        mode: TokenizeMode,
+    ) -> Result<Vec<PhonemeCode>> {
         let lang = &self.options.lang;
         // An unknown voice is a *voice* error, not an unimplemented feature:
         // `-v alex` used to report "not yet implemented: … dict not found",
@@ -10383,7 +10339,7 @@ impl Translator {
         let text = normalize_apostrophes(text);
         let text = schwa_for_article_apostrophe(&text, lang);
         let number_grammar = with_dict_ordinal_suffixes(&self.options.number_grammar, &text, dict);
-        let mut tokens = split_overlong_clauses(tokenize_opts(&text, &number_grammar));
+        let mut tokens = split_overlong_clauses(mode.apply(tokenize_opts(&text, &number_grammar)));
         tokens = merge_full_stop_into_tag_boundary(tokens);
         split_unrecognised_ordinals(&mut tokens, dict, &number_grammar);
         merge_digit_follow(&mut tokens, dict);
