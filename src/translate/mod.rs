@@ -4408,7 +4408,9 @@ fn fraction_number_bytes(digits: &str, dict: &Dictionary, grammar: &NumberGramma
     let numeric = digits.parse::<u64>().ok()?;
     let number = cardinal_pronunciation(&numeric.to_string(), dict, grammar)?;
     let mut out = Vec::new();
-    if numeric < 100 {
+    let one = lookup_num_phonemes(dict, &num_key(1));
+    let omitted_one = (1000..2000).contains(&numeric) && !number.bytes.starts_with(trim_lookup(&one));
+    if numeric < 100 || omitted_one {
         out.push(PHON_END_WORD);
     }
     out.extend_from_slice(&number.bytes[..number.trimmed_len()]);
