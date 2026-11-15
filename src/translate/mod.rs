@@ -3658,7 +3658,7 @@ const MAX_UNSPLIT_DIGITS: usize = 4;
 
 /// Three-digit groups, most significant first; scale `k` is 10^(3k). `digits` must be ASCII digits.
 fn split_scale_groups(digits: &str, grammar: &NumberGrammar) -> Vec<ScaleGroup> {
-    let chunks: Vec<&str> = if digits.len() > MAX_UNSPLIT_DIGITS {
+    let chunks: Vec<&str> = if digits.len() > MAX_UNSPLIT_DIGITS || grammar.break_numbers == BREAK_MYRIADS {
         digit_groups(digits, grammar)
     } else {
         digits.as_bytes().rchunks(3).rev().map(|c| std::str::from_utf8(c).unwrap_or("")).collect()
@@ -4024,6 +4024,29 @@ fn num3_phonemes_before_scale(
 /// Like [`num3_phonemes`], but with `feminine` gender for a trailing 1/2 unit
 /// (Slavic thousands agreement), and with `combining` the unit under twenty
 /// takes its `_<n>a` form because a scale word follows.
+/// A group of up to four digits (`NUM2_MYRIADS`, Korean): C's `LookupNum3` speaks
+/// its thousands digit with the scale-0 thousand word, then the rest as a
+/// three-digit number.
+fn myriad_group_phonemes(
+    dict: &Dictionary,
+    value: u32,
+    grammar: &NumberGrammar,
+    feminine: bool,
+    combining: Option<u8>,
+) -> Pronunciation {
+    let thousands = value / 1000;
+    let mut out = Pronunciation::default();
+    let dedicated = lookup_num_phonemes(dict, &format!("_{thousands}M0"));
+    if dedicated.is_empty() {
+        out.push_pronunciation(&num3_phonemes_g(dict, thousands, false, grammar, false, None));
+        out.push_lookup_word(&lookup_num_phonemes(dict, "_0M0"));
+    } else {
+        out.push_lookup_word(&dedicated);
+    }
+    out.push_pronunciation(&num3_phonemes_g(dict, value % 1000, true, grammar, feminine, combining));
+    out
+}
+
 fn num3_phonemes_g(
     dict: &Dictionary,
     value: u32,
@@ -4032,6 +4055,9 @@ fn num3_phonemes_g(
     feminine: bool,
     combining: Option<u8>,
 ) -> Pronunciation {
+    if value >= 1000 && grammar.break_numbers == BREAK_MYRIADS {
+        return myriad_group_phonemes(dict, value, grammar, feminine, combining);
+    }
     let thousandplex = combining.unwrap_or(0);
     let combining = combining.is_some();
     let hundreds = value / 100;
