@@ -6320,6 +6320,8 @@ pub(crate) struct TranslateEntry {
     /// The letters of one abandoned word share this id (the index of the first),
     /// so that clause-final stress sees them as the word they came from.
     pub(crate) word_group: Option<usize>,
+    /// C's `spell_word` route (`SpeakIndividualLetters`) returned before the emphasis stress change.
+    pub(crate) spelled: bool,
 }
 
 /// Parse the content of a `[[ … ]]` inline-phoneme span into phoneme codes.
@@ -8927,7 +8929,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: 0,
                     kind: TranslateEntryKind::Other,
                     word_lower: None,
-                    word_group: None,
+                    word_group: None, spelled: false,
                     found_in_list: false,
                 });
             }
@@ -8942,6 +8944,7 @@ pub(crate) fn build_translate_entries(
                     kind: TranslateEntryKind::Word,
                     word_lower: None,
                     word_group: spelled.get(token_ix).copied().flatten(),
+                    spelled: false,
                 });
             }
             Token::Word(word) => {
@@ -9011,6 +9014,7 @@ pub(crate) fn build_translate_entries(
                 };
                 let mut wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
                 let mut spelled_with_switch = false;
+                let mut spelled_by_letters = false;
                 // The indicator of an ordinal that was read as a number (`3.º`)
                 // is already spoken in the number.
                 let ordinal_indicator = token_ix > 0
@@ -9059,6 +9063,7 @@ pub(crate) fn build_translate_entries(
                             kind,
                             word_lower: Some(c.to_string()),
                             word_group: spelled.get(token_ix).copied().flatten(),
+                            spelled: false,
                             found_in_list: false,
                         });
                         continue;
@@ -9078,7 +9083,7 @@ pub(crate) fn build_translate_entries(
                         dict_flags: 0,
                         kind: TranslateEntryKind::Stream,
                         word_lower: Some(word.clone()),
-                        word_group: None,
+                        word_group: None, spelled: false,
                         found_in_list: false,
                     });
                     prev_word = None;
@@ -9126,7 +9131,7 @@ pub(crate) fn build_translate_entries(
                             dict_flags: 0,
                             kind: if silent { TranslateEntryKind::Word } else { TranslateEntryKind::Stream },
                             word_lower: Some(word.clone()),
-                            word_group: None,
+                            word_group: None, spelled: false,
                             found_in_list: false,
                         });
                         prev_word = None;
@@ -9161,12 +9166,21 @@ pub(crate) fn build_translate_entries(
                 // specified.  Speak as individual letters") — English `usa` is
                 // `j,u:,Es'eI`.
                 let dot_follows = matches!(tokens.get(token_ix + 1), Some(Token::Punctuation('.')));
+                let mut short_caps_spelling = (expect.all_upper
+                    && !wr.found_in_list
+                    && (2..4).contains(&word.chars().count())
+                    && word.chars().next().is_some_and(char::is_alphabetic)
+                    && clause_lower[token_ix] > 3
+                    && clause_upper[token_ix] <= clause_lower[token_ix])
+                    .then(|| spell_word_letters(&lower, dict, phdata, stress_opts, options))
+                    .flatten();
                 if skip_words == 0 && dot_follows && is_single_letter_word(&lower) {
                     // C's `CheckDottedAbbrev`: a lone letter before a dot word is spelled.
                     if let Some(spelled) = spell_word_letters(&lower, dict, phdata, stress_opts, options) {
                         wr.phonemes = spelled;
                         wr.found_in_list = false;
                         wr.dict_flags = 0;
+                        spelled_by_letters = true;
                     }
                 } else if !wr.found_in_list && lower.contains('.') {
                     // Single letters joined by dots (`e.g`, `U.S.A`) are one
@@ -9175,6 +9189,7 @@ pub(crate) fn build_translate_entries(
                         &lower.replace('.', ""), dict, phdata, stress_opts, options,
                     ) {
                         wr.phonemes = spelled;
+                        spelled_by_letters = true;
                     }
                 } else if !wr.found_in_list
                     && wr.dict_flags & crate::dictionary::FLAG_ABBREV != 0
@@ -9183,12 +9198,21 @@ pub(crate) fn build_translate_entries(
                         spell_word_letters(&lower, dict, phdata, stress_opts, options)
                     {
                         wr.phonemes = spelled;
+                        spelled_by_letters = true;
                     }
                 }
                 // An English word that is a valid Roman numeral and that the
                 // dictionary does not list (`vi`, `xii`) is read as one.
                 else if let Some(roman) = roman {
                     wr.phonemes = roman;
+                }
+                // A *short* all-capitals word the dictionary doesn't pronounce, in a
+                // predominantly lower-case clause, is read as an abbreviation; C tests
+                // this before the rules, so it wins over the unpronounceable-word spelling.
+                else if let Some(spelled) = short_caps_spelling.take() {
+                    wr.phonemes = spelled;
+                    wr.found_in_list = false;
+                    spelled_by_letters = true;
                 }
                 // A word the dictionary doesn't pronounce and whose first vowel
                 // is too far in — "BBC" has none at all — is spelled letter by
@@ -9237,23 +9261,6 @@ pub(crate) fn build_translate_entries(
                         wr.phonemes = ph;
                     }
                 }
-                // …and a *short* all-capitals word the dictionary doesn't
-                // pronounce, in a predominantly lower-case clause, is read as an
-                // abbreviation too.
-                else if expect.all_upper
-                    && !wr.found_in_list
-                    && (2..4).contains(&word.chars().count())
-                    && word.chars().next().is_some_and(char::is_alphabetic)
-                    && clause_lower[token_ix] > 3
-                    && clause_upper[token_ix] <= clause_lower[token_ix]
-                {
-                    if let Some(spelled) =
-                        spell_word_letters(&lower, dict, phdata, stress_opts, options)
-                    {
-                        wr.phonemes = spelled;
-                        wr.found_in_list = false;
-                    }
-                }
                 prev_word = Some(lower.clone());
                 entries.push(TranslateEntry {
                     phonemes:   wr.phonemes,
@@ -9262,6 +9269,7 @@ pub(crate) fn build_translate_entries(
                     kind:       if spelled_with_switch { TranslateEntryKind::Stream } else { TranslateEntryKind::Word },
                     word_lower: Some(lower),
                     word_group: spelled.get(token_ix).copied().flatten(),
+                    spelled: spelled_by_letters,
                 });
             }
             Token::Number(token) => {
@@ -9297,7 +9305,7 @@ pub(crate) fn build_translate_entries(
                             dict_flags: last_flags,
                             kind:       TranslateEntryKind::Word,
                             word_lower: Some(word),
-                        word_group: None,
+                        word_group: None, spelled: false,
                             found_in_list: false,
                         });
                         continue;
@@ -9312,7 +9320,7 @@ pub(crate) fn build_translate_entries(
                         found_in_list: false,
                         kind:       TranslateEntryKind::Word,
                         word_lower: Some(token.surface().to_string().to_lowercase()),
-                        word_group: None,
+                        word_group: None, spelled: false,
                     });
                     continue;
                 }
@@ -9337,7 +9345,8 @@ pub(crate) fn build_translate_entries(
                     found_in_list: wr.found_in_list,
                     kind:       TranslateEntryKind::Word,
                     word_lower: Some(token.surface().to_string().to_lowercase()),
-                        word_group: None
+                        word_group: None,
+                    spelled: false,
                 });
             }
             Token::DigitColon { before, after } => {
@@ -9347,7 +9356,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: wr.dict_flags,
                     kind: TranslateEntryKind::Word,
                     word_lower: Some(":".to_string()),
-                    word_group: None,
+                    word_group: None, spelled: false,
                     found_in_list: wr.found_in_list,
                 });
             }
@@ -9358,7 +9367,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: 0,
                     kind: TranslateEntryKind::Word,
                     word_lower: Some(text.to_lowercase()),
-                    word_group: None,
+                    word_group: None, spelled: false,
                     found_in_list: false,
                 });
             }
@@ -9373,7 +9382,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: wr.dict_flags,
                     kind: TranslateEntryKind::Word,
                     word_lower: Some(digits.clone()),
-                    word_group: None,
+                    word_group: None, spelled: false,
                     found_in_list: wr.found_in_list,
                 });
             }
@@ -9383,7 +9392,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: 0,
                     kind:       TranslateEntryKind::Word,
                     word_lower: None,
-                        word_group: None,
+                        word_group: None, spelled: false,
                     found_in_list: false,
                 });
             }
@@ -9397,7 +9406,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: if matches!(*punct, '.' | ssml::SSML_BREAK) { abbreviation_flags(&entries) } else { 0 },
                     kind:       TranslateEntryKind::ClauseBoundary,
                     word_lower: None,
-                    word_group: None,
+                    word_group: None, spelled: false,
                     found_in_list: false,
                 });
             }
@@ -9409,7 +9418,7 @@ pub(crate) fn build_translate_entries(
                 entries.push(TranslateEntry {
                     phonemes: Vec::new(), dict_flags: 0,
                     kind: TranslateEntryKind::Other, word_lower: None,
-                    word_group: None,
+                    word_group: None, spelled: false,
                     found_in_list: false,
                 });
             }
@@ -9427,7 +9436,7 @@ pub(crate) fn build_translate_entries(
                 entries.push(TranslateEntry {
                     phonemes, dict_flags: 0,
                     kind: TranslateEntryKind::Word, word_lower: Some(c.to_string()),
-                    word_group: None,
+                    word_group: None, spelled: false,
                     found_in_list,
                 });
             }
@@ -9480,7 +9489,7 @@ pub(crate) fn build_translate_entries(
                     entries.push(TranslateEntry {
                         phonemes, dict_flags: 0,
                         kind: TranslateEntryKind::Other, word_lower: None,
-                        word_group: None,
+                        word_group: None, spelled: false,
                         found_in_list: false,
                     });
                 } else {
@@ -9500,7 +9509,7 @@ pub(crate) fn build_translate_entries(
                             _ if dict_names_symbol(dict, *c, options.dict_condition) => c.to_string(),
                             _ => format!("_{c}"),
                         }),
-                        word_group: None,
+                        word_group: None, spelled: false,
                         // Phonemes from the dictionary are a *translation
                         // given*, so the stress-conditioned changes don't apply
                         // (`pl @` is `m'awpa` where the typed word "małpa",
@@ -9519,7 +9528,7 @@ pub(crate) fn build_translate_entries(
                 entries.push(TranslateEntry {
                     phonemes: Vec::new(), dict_flags: 0,
                     kind: TranslateEntryKind::Other, word_lower: None,
-                    word_group: None,
+                    word_group: None, spelled: false,
                     found_in_list: false,
                 });
             }
@@ -9533,7 +9542,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: 0,
                     kind: TranslateEntryKind::Word,
                     word_lower: Some(c.to_string()),
-                    word_group: None,
+                    word_group: None, spelled: false,
                     found_in_list: false,
                 });
             }
@@ -9547,7 +9556,7 @@ pub(crate) fn build_translate_entries(
                     dict_flags: 0,
                     kind:       if silent_name { TranslateEntryKind::Silent } else { TranslateEntryKind::Other },
                     word_lower: None,
-                        word_group: None,
+                        word_group: None, spelled: false,
                     found_in_list: false,
                 });
             }
@@ -9769,7 +9778,9 @@ pub(crate) fn promote_translate_entries(
                 continue;
             }
             if emphasized.get(i).copied().unwrap_or(false) {
-                emphasize_word(&mut entries[i].phonemes, phdata);
+                if !entries[i].spelled {
+                    emphasize_word(&mut entries[i].phonemes, phdata);
+                }
                 continue;
             }
             let dict_flags = entries[i].dict_flags;
