@@ -7779,9 +7779,17 @@ fn letter_word_phonemes(
             && !r.flags2.contains(crate::dictionary::FLAG_ACCENT)
             && r.phonemes.first().is_some_and(|&b| b != 0 && b != crate::phoneme::PHON_SWITCH)
     };
-    let listed = lookup_with_follow(dict, lower, &symbol_ctx, &[]).filter(&usable);
-    let Some(r) = listed else {
-        return word_to_phonemes_pos(lower, dict, phdata, stress_opts, options, expect);
+    let entry = lookup_with_follow(dict, lower, &symbol_ctx, &[]);
+    let flags_only = entry.as_ref().is_some_and(|r| {
+        r.flags1.0 != 0
+            && r.phonemes.first().is_none_or(|&b| b == 0)
+            && !r.flags2.contains(crate::dictionary::FLAG_ACCENT)
+    });
+    let Some(r) = entry.filter(&usable) else {
+        // C `LookupLetter` reads the rules' result with no dictionary flags: a `$u` entry with no
+        // phonemes of its own (es `u`) must not unstress the letter's name.
+        let word = if flags_only { format!("_{lower}") } else { lower.to_string() };
+        return word_to_phonemes_pos(&word, dict, phdata, stress_opts, options, expect);
     };
     let mut phonemes: Vec<u8> = r.phonemes.iter().copied().take_while(|&b| b != 0).collect();
     phonemes.push(0);
