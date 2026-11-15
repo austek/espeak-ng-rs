@@ -233,6 +233,24 @@ impl Ctx<'_> {
     fn entry(&self, key: &str) -> Option<Vec<u8>> {
         raw_list_entry(key, self.dict, self.phdata, self.stress, self.options).map(|(ph, _)| ph)
     }
+
+    /// C `Lookup(tr, "_cap")`: the list entry only, empty for a language that has none.
+    fn capital(&self) -> Vec<u8> {
+        self.entry("_cap").unwrap_or_default()
+    }
+
+    /// `langopts.accents & 2`: say "capital" after the letter name.
+    fn capital_after_letter(&self) -> bool {
+        matches!(primary_bcp47_subtag(self.lang()), "fr" | "ga" | "gd" | "id" | "ms" | "it" | "pt" | "sq")
+    }
+}
+
+/// `TranslateLetter`'s "capital" for a letter name spoken by `tr`, ahead of the name or behind
+/// it by `accents & 2`.
+pub(super) fn with_capital(tr: Ctx, announce: bool, name: &[u8]) -> Vec<u8> {
+    let capital = if announce { tr.capital() } else { Vec::new() };
+    let parts = if tr.capital_after_letter() { [name, &capital] } else { [&capital, name] };
+    parts.concat()
 }
 
 /// The closing switch a stream left in the code list, which a stream that
@@ -538,17 +556,41 @@ pub(super) fn spell_in_switched(
     target: &str,
     letter: char,
 ) -> Option<Vec<Item>> {
+    spell_in_switched_with(voice, alts, target, letter, false)
+}
+
+/// [`spell_in_switched`], announcing a capital letter in `target`.
+pub(super) fn spell_in_switched_with(
+    voice: Ctx,
+    alts: &AltLangs,
+    target: &str,
+    letter: char,
+    announce: bool,
+) -> Option<Vec<Item>> {
+    let (tr, items) = spell_in_target(voice, alts, target, letter, announce)?;
+    Some(if items.is_empty() { items } else { wrap_switched(items, &tr.options.lang, voice) })
+}
+
+/// A letter spoken by the language its script names (`target`, or the one that hands it on),
+/// with no switch around it; the language comes back with the phonemes.
+pub(super) fn spell_in_target(
+    voice: Ctx,
+    alts: &AltLangs,
+    target: &str,
+    letter: char,
+    announce: bool,
+) -> Option<(Rc<LangCtx>, Vec<Item>)> {
     let mut target = target.to_string();
     for attempt in 0..2 {
         let tr = alts.get(&target)?;
         let env = LetterEnv { voice, tr: tr.ctx(), alts };
-        match translate_letter(&env, letter) {
+        match translate_letter_with(&env, letter, announce) {
             LetterOut::Items(items) => {
                 let items = run_programs(items, tr.ctx(), alts);
-                return Some(wrap_switched(items, &tr.options.lang, voice));
+                return Some((tr, items));
             }
             LetterOut::HandOver(name) if attempt == 0 => target = switch_language(&name),
-            LetterOut::HandOver(_) => return Some(Vec::new()),
+            LetterOut::HandOver(_) => return Some((tr, Vec::new())),
         }
     }
     None
@@ -570,6 +612,13 @@ fn wrap_switched(mut items: Vec<Item>, target: &str, voice: Ctx) -> Vec<Item> {
 
 /// C's `TranslateLetter` for one letter, spoken by `env.tr` for `env.voice`.
 pub(super) fn translate_letter(env: &LetterEnv, letter: char) -> LetterOut {
+    translate_letter_with(env, letter, false)
+}
+
+/// [`translate_letter`], announcing a capital letter in `env.tr` when `announce` is set
+/// (`TranslateLetter` control bit 1).
+pub(super) fn translate_letter_with(env: &LetterEnv, letter: char, announce: bool) -> LetterOut {
+    let capitals = announce && letter.is_uppercase();
     let lower = lowercase_for_lang(&letter.to_string(), env.tr.lang()).chars().next();
     let (letter, mut name) = named_by_tr(env, lower.unwrap_or(letter));
     if name.first() == Some(&PHON_SWITCH) {
@@ -589,6 +638,13 @@ pub(super) fn translate_letter(env: &LetterEnv, letter: char) -> LetterOut {
     if spoken.is_empty() {
         spoken = unnamed(env, alphabet, letter);
     }
-    items.append(&mut spoken);
+    let capital = bytes_as_items(&if capitals { env.tr.capital() } else { Vec::new() });
+    if env.tr.capital_after_letter() {
+        items.append(&mut spoken);
+        items.extend(capital);
+    } else {
+        items.extend(capital);
+        items.append(&mut spoken);
+    }
     LetterOut::Items(items)
 }

@@ -151,6 +151,9 @@ pub fn is_alpha_c(c: u32) -> bool {
 /// letter in a non-Latin voice, else the language the letter's alphabet nominates
 /// (`alt_alphabet`, or `AL_WORDS`).
 fn script_switch(dict: &Dictionary, wc: u32) -> Option<&'static str> {
+    if SPELLING_CHARACTERS.with(std::cell::Cell::get) {
+        return None;
+    }
     let offset = dict.voice_letter_bits_offset;
     if offset > 0 && wc <= 0x241 && char::from_u32(wc)?.is_alphabetic() {
         return Some("en");
@@ -1042,6 +1045,16 @@ thread_local! {
     static UNCOVERED_BRACKET_WORDS: std::cell::RefCell<std::collections::HashSet<String>> =
         std::cell::RefCell::new(std::collections::HashSet::new());
     static RECORDING: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    static SPELLING_CHARACTERS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Runs `f` as C runs a `<say-as>` that spells characters (`option_sayas & 0x10`): a letter
+/// with no rule is not handed to another language by script.
+pub fn while_spelling_characters<T>(f: impl FnOnce() -> T) -> T {
+    let prev = SPELLING_CHARACTERS.with(|s| s.replace(true));
+    let out = f();
+    SPELLING_CHARACTERS.with(|s| s.set(prev));
+    out
 }
 
 fn record_uncovered_bracket(word_buf: &[u8], word_start: usize) {

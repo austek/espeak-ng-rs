@@ -7883,28 +7883,75 @@ fn unnamed_letter_phonemes(
     }
 }
 
-/// What `TranslateLetter` says for a letter another voice names: the name spoken in that voice,
-/// between a switch to it and a switch back, NUL-terminated.
-fn handed_over_letter_phonemes(
+/// What `TranslateLetter` says for a letter the voice cannot name itself: the name spoken in
+/// the language of its script between a switch to it and a switch back, NUL-terminated.
+fn foreign_letter_phonemes(
     c: char,
-    dict: &Dictionary,
-    phdata: &PhonemeData,
-    stress_opts: &StressOpts,
-    options: &LangOptions,
+    voice: letters::Ctx,
+    alts: &letters::AltLangs,
+    announce: bool,
+) -> Option<Vec<u8>> {
+    let env = letters::LetterEnv { voice, tr: voice, alts };
+    match letters::translate_letter_with(&env, c, announce) {
+        letters::LetterOut::Items(items) if !items.is_empty() => Some([letters::encode(&items), vec![0]].concat()),
+        _ => None,
+    }
+}
+
+/// C `SpeakIndividualLetters` gives up on a character the voice hands to another language, and
+/// `TranslateWord2` retranslates every character as a word of its own (`FLAG_SPELLWORD`): the
+/// words in the other language share one switch.
+fn spell_characters_as_words(
+    chars: &[char],
+    mode: u8,
+    voice: letters::Ctx,
     alts: &letters::AltLangs,
 ) -> Option<Vec<u8>> {
-    let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
-    let items = match letters::translate_letter(&letters::LetterEnv { voice, tr: voice, alts }, c) {
-        letters::LetterOut::Items(items) => items,
+    let words = chars
+        .iter()
+        .map(|&c| spelled_character_word(c, mode, voice, alts))
+        .collect::<Option<Vec<_>>>()?;
+    Some(letters::encode(&join_language_runs(words, &voice.options.lang)))
+}
+
+/// One character spelled as a word by the language that names it: that language and the
+/// phonemes, ended as `SetSpellingStress` ends a one-letter word.
+fn spelled_character_word(
+    c: char,
+    mode: u8,
+    voice: letters::Ctx,
+    alts: &letters::AltLangs,
+) -> Option<(String, Vec<u8>)> {
+    let announce = mode > 2 && c.is_uppercase();
+    let env = letters::LetterEnv { voice, tr: voice, alts };
+    let (lang, spelling_stress, items) = match letters::translate_letter_with(&env, c, announce) {
+        letters::LetterOut::Items(items) => (voice.options.lang.clone(), voice.stress.spelling_stress, items),
         letters::LetterOut::HandOver(name) => {
-            let mut items = letters::spell_in_switched(voice, alts, &letters::switch_language(&name), c)?;
-            if items.first() != Some(&letters::Item::Ph(crate::phoneme::PHON_PAUSE)) {
-                items.insert(0, letters::Item::Ph(crate::phoneme::PHON_PAUSE));
-            }
-            items
+            let (tr, items) = letters::spell_in_target(voice, alts, &letters::switch_language(&name), c, announce)?;
+            (tr.options.lang.clone(), tr.stress_opts.spelling_stress, items)
         }
     };
-    (!items.is_empty()).then(|| [letters::encode(&items), vec![0]].concat())
+    let marked = [vec![LETTER_START], letters::encode(&items)].concat();
+    Some((lang, spelling_stress_with_pauses(&marked, mode, 1, spelling_stress)))
+}
+
+fn join_language_runs(words: Vec<(String, Vec<u8>)>, home: &str) -> Vec<letters::Item> {
+    let mut items = Vec::new();
+    let mut current = home.to_string();
+    for (ix, (lang, bytes)) in words.into_iter().enumerate() {
+        if ix > 0 {
+            items.push(letters::Item::Ph(PHON_END_WORD));
+        }
+        if lang != current {
+            items.push(letters::Item::Switch(lang.clone()));
+            current = lang;
+        }
+        items.extend(letters::decode(&bytes));
+    }
+    if current != home {
+        items.push(letters::Item::Switch(home.to_string()));
+    }
+    items
 }
 
 /// Offsets of the primary stresses in a phoneme string, skipping the table name
@@ -8178,17 +8225,37 @@ fn spell_individual_letters(
     options: &LangOptions,
     alts: &letters::AltLangs,
 ) -> Option<Vec<u8>> {
+    crate::dictionary::rules::while_spelling_characters(|| {
+        spell_characters(text, mode, dict, phdata, stress_opts, options, alts)
+    })
+}
+
+fn spell_characters(
+    text: &str,
+    mode: u8,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+    alts: &letters::AltLangs,
+) -> Option<Vec<u8>> {
     let chars: Vec<char> = text.chars().map(spelled_character).collect();
-    let capital = word_to_phonemes_pos("_cap", dict, phdata, stress_opts, options, PosExpect::default()).phonemes;
+    let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
+    let env = letters::LetterEnv { voice, tr: voice, alts };
+    if chars.iter().any(|&c| matches!(letters::translate_letter(&env, c), letters::LetterOut::HandOver(_))) {
+        return spell_characters_as_words(&chars, mode, voice, alts);
+    }
     let mut buf: Vec<u8> = Vec::new();
     for (ix, &c) in chars.iter().enumerate() {
-        let named = character_name(c, ix + 1 < chars.len(), dict, phdata, stress_opts, options)
-            .filter(|name| name.first() != Some(&crate::phoneme::PHON_SWITCH));
-        let name = named.or_else(|| handed_over_letter_phonemes(c, dict, phdata, stress_opts, options, alts))?;
         let announce = mode > 2 && c.is_uppercase();
-        let name = if ix == 0 { &name[..] } else { without_leading_break(&name, stress_opts) };
+        let named = character_name(c, ix + 1 < chars.len(), dict, phdata, stress_opts, options)
+            .filter(|name| name.first() != Some(&crate::phoneme::PHON_SWITCH))
+            .map(|name| {
+                let name = if ix == 0 { &name[..] } else { without_leading_break(&name, stress_opts) };
+                letters::with_capital(voice, announce, name)
+            });
+        let name = named.or_else(|| foreign_letter_phonemes(c, voice, alts, announce))?;
         let chunk: Vec<u8> = std::iter::once(LETTER_START)
-            .chain(capital.iter().copied().filter(|&b| announce && b != 0))
             .chain(name.iter().copied().filter(|&b| b != 0))
             .collect();
         if fits_word_buffer(buf.len(), chunk.len()) {
