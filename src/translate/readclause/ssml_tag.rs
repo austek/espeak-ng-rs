@@ -56,7 +56,7 @@ pub const SSML_IGNORE_TEXT: u32 = 14;
 pub const HTML_BREAK: u32 = 15;
 pub const HTML_NOSPACE: u32 = 16;
 
-const TAGS: [(&str, u32); 31] = [
+const TAGS: [(&str, u32); 32] = [
     ("speak", SSML_SPEAK), ("voice", SSML_VOICE), ("prosody", SSML_PROSODY), ("say-as", SSML_SAYAS),
     ("mark", SSML_MARK), ("s", SSML_SENTENCE), ("p", SSML_PARAGRAPH), ("phoneme", SSML_PHONEME),
     ("sub", SSML_SUB), ("tts:style", SSML_STYLE), ("audio", SSML_AUDIO), ("emphasis", SSML_EMPHASIS),
@@ -65,6 +65,7 @@ const TAGS: [(&str, u32); 31] = [
     ("h2", SSML_PARAGRAPH), ("h3", SSML_PARAGRAPH), ("h4", SSML_PARAGRAPH), ("hr", SSML_PARAGRAPH),
     ("script", SSML_IGNORE_TEXT), ("style", SSML_IGNORE_TEXT), ("font", HTML_NOSPACE),
     ("b", HTML_NOSPACE), ("i", HTML_NOSPACE), ("strong", HTML_NOSPACE), ("em", HTML_NOSPACE),
+    ("code", HTML_NOSPACE),
 ];
 
 /// `ignore_if_self_closing`, indexed by tag type (`code` shares `HTML_NOSPACE`).
