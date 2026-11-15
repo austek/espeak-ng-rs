@@ -17,7 +17,11 @@ fn run(lang: &str, flag: &str, text: &str) -> String {
 
 type Case = (&'static str, &'static str, &'static str, &'static str);
 
-const CASES: [Case; 5] = [
+const CASES: [Case; 9] = [
+    ("en", "<speak>cat <mark name=\"m\"/>_ dog</speak>", "kˈat dˈɒɡ", "k'at d'0g"),
+    ("de", "<speak>Hund <mark name=\"m\"/>_ Katze</speak>", "hˈʊnt kˈatsə", "h'Unt k'ats@"),
+    ("fr", "<speak>chat <mark name=\"m\"/>_ chien</speak>", "ʃˈa ʃjˈɛ̃", "S'a Sj'E~"),
+    ("en", "<speak>cat <mark name=\"m\"/>__ dog</speak>", "kˈat dˈɒɡ", "k'at d'0g"),
     ("en", "<speak>cat <mark name=\"m\"/>( dog</speak>", "kˈat  dˈɒɡ", "k'at _|_:_: d'0g"),
     ("en", "<speak>cat <mark name=\"m\"/>\" dog</speak>", "kˈat  dˈɒɡ", "k'at _|_:_: d'0g"),
     ("en", "<speak>cat <mark name=\"m\"/>' dog</speak>", "kˈat dˈɒɡ", "k'at_:_: d'0g"),

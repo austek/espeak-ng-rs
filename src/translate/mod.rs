@@ -6797,6 +6797,12 @@ fn list_takes_phrase(
         .and_then(|r| words.get(r.skipwords).or(words.last()).map(|&(at, _)| at))
 }
 
+/// Characters C's TranslateClause replaces with a blank before words form: the hyphen
+/// (translate.c:1497), the quote (translate.c:1521) and `breaks[]` (translate.c:114).
+fn turned_into_blank(c: char) -> bool {
+    matches!(c, '-' | '\'' | '_')
+}
+
 /// C gives a word with no phonemes a very short pause when an embedded command is attached to
 /// it (translate.c:649); the pause already in an emphasized word's phonemes serves instead.
 /// A bracket keeps its empty entry, whose pause the renderer builds, and is reported in the
@@ -6817,7 +6823,7 @@ fn carry_embedded_in_silent_words(
     };
     for (ix, entry) in entries.iter_mut().enumerate() {
         let is_word = matches!(tokens.get(ix), Some(Token::Word(_) | Token::Operator(_)))
-            || matches!(tokens.get(ix), Some(Token::Punctuation(c)) if !matches!(c, '-' | '\''));
+            || matches!(tokens.get(ix), Some(Token::Punctuation(c)) if !turned_into_blank(*c));
         let silent_word = is_word && entry.phonemes.is_empty() && !swallowed.get(ix).copied().unwrap_or(false);
         if silent_word && !emphasized.get(ix).copied().unwrap_or(false) && carries(ix) {
             if matches!(tokens.get(ix), Some(Token::Punctuation(c)) if is_bracket(*c)) {
