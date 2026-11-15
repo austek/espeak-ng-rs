@@ -37,6 +37,43 @@ fn check(cases: &[Case]) {
     assert!(bad.is_empty(), "differs from C:\n{}", bad.join("\n"));
 }
 
+fn samples(text: &str) -> usize {
+    let dir = std::env::temp_dir().join(format!("ssml_style_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let path = dir.join(format!("{:x}.wav", text.bytes().map(usize::from).sum::<usize>() * 31 + text.len()));
+    let status = Command::new(env!("CARGO_BIN_EXE_espeak_cli"))
+        .args(["-m", "-v", "en", "-w"])
+        .arg(&path)
+        .arg(text)
+        .status()
+        .expect("run");
+    assert!(status.success());
+    let bytes = std::fs::read(&path).expect("wav").len();
+    let _ = std::fs::remove_file(&path);
+    bytes.saturating_sub(44) / 2
+}
+
+#[test]
+fn style_modes_match_c() {
+    check(&[
+        (
+            r#"<tts:style field="punctuation" mode="all">a, b.</tts:style>"#,
+            "ˈeɪ\nkˈɒmə\nbˈiː\ndˈɒt\n\n",
+            "'eI\nk'0m@\nb'i:\nd'0t\n\n",
+        ),
+        (
+            r#"<tts:style field="capital_letters" mode="spelling">Hello</tts:style>"#,
+            "kˌapətəl həlˈəʊ\n",
+            "k,ap@-t@L h@l'oU\n",
+        ),
+        (r#"<tts:style field="punctuation" mode="none">a, b.</tts:style>"#, "ˈeɪ\nbˈiː\n", "'eI\nb'i:\n"),
+    ]);
+    if have_data() {
+        assert_eq!(samples(r#"<tts:style field="punctuation" mode="all">a, b.</tts:style>"#), 32859);
+        assert_eq!(samples(r#"<tts:style field="capital_letters" mode="spelling">Hello</tts:style>"#), 25279);
+    }
+}
+
 #[test]
 fn hyphen_after_a_speed_change_pauses_like_a_spaced_dash() {
     check(&[
