@@ -4017,7 +4017,8 @@ fn num3_phonemes_before_scale(
     grammar: &NumberGrammar,
     scale: u8,
 ) -> Pronunciation {
-    num3_phonemes_g(dict, value, false, grammar, false, Some(scale))
+    let feminine = scale <= 3 && grammar.c_numbers2 & (1 << scale) != 0;
+    num3_phonemes_g(dict, value, false, grammar, feminine, Some(scale))
 }
 
 /// Like [`num3_phonemes`], but with `feminine` gender for a trailing 1/2 unit
