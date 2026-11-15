@@ -2179,7 +2179,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 tokens.push(Token::Punctuation('.'));
                 continue;
             }
-            let apart = previous.is_none_or(|p| p.is_whitespace() || p == CTRL_EMBEDDED);
+            let apart = previous.is_none_or(|p| p.is_whitespace() || p == CTRL_EMBEDDED || p == '-' || is_bracket(p));
             if c == '.' && apart && (grammar.clause_text || (clause_has_word(&tokens) && dot_stays_in_clause(chars.clone(), grammar.lowercase_sentence))) {
                 tokens.push(Token::Punctuation('.'));
                 continue;

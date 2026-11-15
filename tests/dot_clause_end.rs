@@ -47,6 +47,17 @@ const SYMBOL_AFTER_DOT_CASES: &[Case] = &[
     ("en", "He said .? Then left", "hiː sˈɛd\nðˈɛn lˈɛft", "hi: s'Ed\nD'En l'Eft"),
 ];
 
+const DOT_AFTER_MARK_CASES: &[Case] = &[
+    ("en", "He said -. then left", "hiː sˈɛd dˈɒt ðˈɛn lˈɛft", "hi: s'Ed d'0t D'En l'Eft"),
+    ("es", "Dijo -. luego se fue", "dˈixo pˈunto luˈeɣo se fwˈe", "d'ixo p'unto lu'eQo se fw'e"),
+    // `-x` is not compared for the bracket cases: C puts the bracket pause after "dot", this
+    // port before it.
+    ("en", "He said (. then left", "hiː sˈɛd dˈɒt ðˈɛn lˈɛft", ""),
+    ("es", "Dijo (. luego se fue", "dˈixo pˈunto luˈeɣo se fwˈe", ""),
+    ("en", "He said ). then left", "hiː sˈɛd dˈɒt ðˈɛn lˈɛft", ""),
+    ("en", "Item (5). then left", "ˈaɪtəm fˈaɪv dˈɒt ðˈɛn lˈɛft", ""),
+];
+
 const LOWERCASE_SENTENCE_CASES: &[Case] = &[
     ("ka", "მან თქვა . მერე წავიდა.", "mˈan tʰkʰvˈa\nmˈere tsˈavida", "m'an t#k#v'a\nm'ere ts'avida"),
     ("ka", "მან თქვა. მერე წავიდა.", "mˈan tʰkʰvˈa\nmˈere tsˈavida", "m'an t#k#v'a\nm'ere ts'avida"),
@@ -64,6 +75,7 @@ fn check(cases: &[Case]) {
     let bad: Vec<String> = cases
         .iter()
         .flat_map(|&(l, t, i, x)| [(l, "--ipa", i, t), (l, "-x", x, t)])
+        .filter(|&(_, _, want, _)| !want.is_empty())
         .filter_map(|(l, f, want, t)| {
             let got = run(l, f, t);
             (got != want).then(|| format!("{l} {f} {t:?}: got {got:?}, C {want:?}"))
@@ -80,6 +92,11 @@ fn a_spaced_dot_before_a_clause_ending_dot_is_not_read() {
 #[test]
 fn a_dot_followed_by_a_symbol_without_a_blank_stays_in_the_clause() {
     check(SYMBOL_AFTER_DOT_CASES);
+}
+
+#[test]
+fn a_dot_after_a_hyphen_or_bracket_is_read() {
+    check(DOT_AFTER_MARK_CASES);
 }
 
 #[test]
