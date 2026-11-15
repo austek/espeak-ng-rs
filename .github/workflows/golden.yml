@@ -330,6 +330,7 @@ jobs:
           --test dot_clause_mark_run
           --test dot_before_hyphen
           --test dot_after_command_before_hyphen
+          --test dot_hyphen_between_letters
           --test ssml_say_as_characters_handed_over
           --test ssml_say_as_characters_capital
           --test ssml_say_as_characters_tone_digits

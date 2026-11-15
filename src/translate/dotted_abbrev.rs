@@ -35,9 +35,14 @@ pub(super) fn clause_words(tokens: &[Token], from: usize) -> Vec<(usize, &str)> 
                 continue;
             }
             Token::Word(w) if blank => w.as_str(),
-            Token::Punctuation('.') if blank => {
+            Token::Punctuation('.') if blank || follows_word(tokens, ix) => {
                 words.push((ix, "."));
-                blank = matches!(tokens.get(ix + 1), Some(Token::Word(_))) || apostrophe_s_after(tokens, ix);
+                blank = matches!(tokens.get(ix + 1), Some(Token::Word(_)))
+                    || matches!(tokens.get(ix + 1..ix + 3), Some([Token::WordJoin, Token::Word(_)]))
+                    || apostrophe_s_after(tokens, ix);
+                continue;
+            }
+            Token::WordJoin if blank && matches!(tokens.get(ix.wrapping_sub(1)), Some(Token::Punctuation('.'))) => {
                 continue;
             }
             Token::ClauseBoundary(_) => break,
@@ -55,6 +60,17 @@ pub(super) fn clause_words(tokens: &[Token], from: usize) -> Vec<(usize, &str)> 
         }
     }
     words
+}
+
+/// A dot right behind a word, with at most embedded commands between, that C's clause text
+/// keeps as a word of its own (the dot after a command is not blanked, translate.c:1513).
+fn follows_word(tokens: &[Token], dot: usize) -> bool {
+    tokens[..dot]
+        .iter()
+        .rev()
+        .find(|t| !matches!(t, Token::Embedded(_)))
+        .is_some_and(|t| matches!(t, Token::Word(_)))
+        && matches!(tokens.get(dot + 1..dot + 3), Some([Token::WordJoin, Token::Word(_)]))
 }
 
 fn is_letter(word: &str) -> bool {

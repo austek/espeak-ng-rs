@@ -6709,6 +6709,21 @@ fn empty_clause_pending(tokens: &[Token]) -> bool {
             .any(|t| matches!(t, Token::Word(_) | Token::Number(_)))
 }
 
+/// C turns the hyphen after a kept dot into a blank that joins the next word (translate.c:1497),
+/// so `.-b` is a dot word and a join, not a minus.
+fn join_dot_hyphen(tokens: &mut Vec<Token>) {
+    let hyphens: Vec<usize> = (1..tokens.len().saturating_sub(1))
+        .filter(|&ix| {
+            matches!(tokens[ix - 1], Token::Punctuation('.'))
+                && matches!(tokens[ix], Token::Punctuation('-'))
+                && matches!(&tokens[ix + 1], Token::Word(w) if w.starts_with(char::is_alphabetic))
+        })
+        .collect();
+    for ix in hyphens {
+        tokens[ix] = Token::WordJoin;
+    }
+}
+
 fn is_dotted_letters(word: &str) -> bool {
     word.contains('.') && word.split('.').all(is_single_letter_word)
 }
@@ -11083,6 +11098,7 @@ impl Translator {
             spell_word_letters(&letters, dict, phdata, stress_opts, &self.options)
                 .is_none_or(|ph| ph.contains(&crate::phoneme::PHON_SWITCH))
         };
+        join_dot_hyphen(&mut tokens);
         join_spaced_letter_dots(
             &mut tokens,
             &|tokens, ix| list_takes_phrase(tokens, ix, dict, lang, start_emphasis),
@@ -11487,9 +11503,6 @@ impl Translator {
                     let joined = matches!(
                         token_ix.checked_sub(1).map(|k| &tokens[k]),
                         Some(Token::WordJoin)
-                    ) || matches!(
-                        token_ix.checked_sub(2).map(|k| &tokens[k..token_ix]),
-                        Some([Token::Punctuation('.'), Token::Punctuation('-')])
                     );
                     // Does the open run end in phonemes this word should be
                     // separated from?  A run of nothing but pauses doesn't count:
