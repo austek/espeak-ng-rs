@@ -9176,8 +9176,15 @@ pub(crate) fn build_translate_entries(
                 skip_words = wr.skip_words;
                 let allows_dot = wr.dict_flags
                     & (crate::dictionary::FLAG_ALLOW_DOT | crate::dictionary::FLAG_NEEDS_DOT)
-                    != 0;
-                dot_removed_at = allows_dot.then_some(token_ix + 1);
+                    != 0
+                    || is_dotted_letters(word);
+                dot_removed_at = allows_dot.then(|| {
+                    let blanks = tokens[token_ix + 1..]
+                        .iter()
+                        .take_while(|t| matches!(t, Token::Space | Token::Embedded(_)))
+                        .count();
+                    token_ix + 1 + blanks
+                });
                 let lower = if skip_words == 0 {
                     lower
                 } else {
@@ -11013,7 +11020,8 @@ impl Translator {
                     // `pre_pause`): one `phonPAUSE_NOLINK` for `$brk`, two
                     // `phonPAUSE` for `$pause`.  Swahili's "za" is `$u $brk`,
                     // which is where `hab'aRi_! za` gets its break.
-                    if !entry.phonemes.is_empty() {
+                    let emphasized_dot = option_emphasis >= 3 && matches!(token, Token::Punctuation('.'));
+                    if !entry.phonemes.is_empty() || emphasized_dot {
                         use crate::dictionary::{FLAG_PAUSE1, FLAG_PREPAUSE};
                         let is_word = |t: &Token| {
                             matches!(
@@ -11055,7 +11063,7 @@ impl Translator {
                                 prepause_timeout = 3;
                             }
                         }
-                        if option_emphasis >= 3 && pre_pause < 1 && is_word(token) {
+                        if option_emphasis >= 3 && pre_pause < 1 && (is_word(token) || emphasized_dot) {
                             pre_pause = 1;
                         }
                         if is_word(token) && previous_word_has_open_quote(&tokens, token_ix, &self.options) {

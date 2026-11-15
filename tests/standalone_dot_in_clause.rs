@@ -21,7 +21,9 @@ fn run(lang: &str, flag: &str, text: &str) -> String {
 
 type Case = (&'static str, &'static str, &'static str, &'static str);
 
-const CASES: [Case; 4] = [
+const CASES: [Case; 6] = [
+    ("en", "cat <emphasis>.</emphasis> next.", "kˌat dˈɒt nˈɛkst", "k,at_! d'0t n'Ekst"),
+    ("en", "<speak>U.S.A<emphasis>.</emphasis> next.</speak>", "jˌuːˌɛsˈeɪ nˈɛkst", "j,u:,Es'eI_! n'Ekst"),
     ("en", "<speak><emphasis>A</emphasis>.</speak>", "ˈeɪ dˈɒt", "_!'eI d'0t"),
     ("en", "<speak>A<mark name=\"m\"/>.</speak>", "ˈeɪ dˈɒt", "'eI d'0t"),
     ("en", "<speak><prosody rate=\"slow\">A</prosody>.</speak>", "ˈeɪ dˈɒt", "'eI d'0t"),
