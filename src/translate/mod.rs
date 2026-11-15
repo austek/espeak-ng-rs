@@ -730,19 +730,14 @@ impl NumberGrammar {
                 grammar.group_separator = Some(','); // 1,000 → one thousand
             }
             "es" => {
-                grammar.hundreds.omit_one_prefix = true;
-                grammar.thousands.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
             }
             "fr" => {
-                grammar.hundreds.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
             }
             "it" => {
-                // "cento", not "uno cento" (1000 is already "mille").
-                grammar.hundreds.omit_one_prefix = true;
                 grammar.elide_tens_vowel = true; // "trentuno", "quarantotto"
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
@@ -762,57 +757,39 @@ impl NumberGrammar {
                 grammar.tone_numbers = true;
             }
             // (the reversed-textmode flag for these is set on LangOptions below)
-            // Russian: "сто"/"тысяча", not "один сто"/"один тысяча".
             "ru" | "bg" | "uk" | "be" => {
-                grammar.hundreds.omit_one_prefix = true;
-                grammar.thousands.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
+                if lang != "bg" {
+                    grammar.thousands_variant = SlavicThousands::Ru;
+                }
                 if lang == "ru" {
                     // Decimal fractions are read as fractions with feminine
                     // numerators — "0,25" = "ноль и двадцать пять сотых"
                     // (upstream NUM_DFRACTION_5 | NUM2_FRACTION_FEMININE).
                     grammar.fraction_suffix = true;
                     grammar.fraction_feminine = true;
-                    // Russian scale words decline (gender + case): "одна тысяча",
-                    // "две тысячи", "пять тысяч", "один миллион".  The "one" is
-                    // spoken (unlike bg/uk/be), so undo the omit set above.
-                    grammar.thousands_variant = SlavicThousands::Ru;
-                    grammar.thousands.omit_one_prefix = false;
                 }
             }
-            "mn" => grammar.hundreds.omit_one_prefix = true,
-            // Turkish/Hungarian: "yüz"/"bin", "száz"/"ezer" — no "one" prefix.
             "tr" | "hu" => {
-                grammar.hundreds.omit_one_prefix = true;
-                grammar.thousands.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
                 // Hungarian also always names the fraction ("tizedes"), without
                 // the feminine numerator forms Russian uses.
                 grammar.fraction_suffix = lang == "hu";
             }
-            // Slovak/Croatian/Serbian: "sto" not "jedensto" (1000 already "tisíc"/
-            // "tisuću"/"hiljadu").
             // Croatian/Bosnian/Serbian: the scale word declines — "tisuću" (…1),
             // "tisuće" (…2–4), "tisuća" (5+) — and "thousand" is feminine
             // ("dvije tisuće"); C `NUM2_THOUSANDPLEX_VAR_*` for all three.
             "hr" | "bs" | "sr" => {
-                grammar.hundreds.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
                 grammar.thousands_variant = SlavicThousands::Hr;
             }
             // Slovak: the scale word declines for count 2–4 ("dva milióny"), and
             // "thousand" is feminine for a bare 2 ("dve tisíc").
             "sk" => {
-                grammar.hundreds.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
                 grammar.thousands_variant = SlavicThousands::Sk;
             }
-            // Macedonian: "сто"/"илјада", not "еден сто"/"еден илјада".
-            "mk" => {
-                grammar.hundreds.omit_one_prefix = true;
-                grammar.thousands.omit_one_prefix = true;
-                grammar.decimal_separator = ',';
-            }
+            "mk" => grammar.decimal_separator = ',',
             // Arabic/Persian/Urdu: comma groups thousands (the native `٬` is
             // normalised to `,`; the native `٫` decimal maps to `.`).
             "ar" | "fa" | "ur" => {
@@ -825,8 +802,6 @@ impl NumberGrammar {
                 // ordinals ("eenentwintigste"); Maltese ordinals differ, so it's
                 // Dutch-only.
                 grammar.ordinals.compound_cardinal_suffix = lang == "nl";
-                grammar.hundreds.omit_one_prefix = true;
-                grammar.thousands.omit_one_prefix = true;
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
             }
@@ -857,8 +832,6 @@ impl NumberGrammar {
                 // C `NUM_HUNDRED_AND` — "hundrede OG en", "tusind OG en".
                 // Slovenian is the one of the four without it.
                 grammar.hundreds.use_conjunction_with_remainder = lang != "sl";
-                // C `NUM_OMIT_1_HUNDRED` for all but Danish.
-                grammar.hundreds.omit_one_prefix = lang != "da";
             }
             // Tens-first, dot-ordinal, comma-decimal (Finnish, Estonian,
             // Lithuanian, Norwegian "tjueen", Greenlandic).
@@ -899,27 +872,12 @@ impl NumberGrammar {
                 grammar.group_separator = Some('.');
                 grammar.hundreds.use_conjunction_with_remainder = true;
             }
-            // Armenian: "100" is "harjur", not "mek harjur".
-            "hy" => {
+            "hy" | "az" => {
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
-                grammar.hundreds.omit_one_prefix = true;
             }
-            // Kazakh: "100" is "жүз", not "бір жүз" (but "1000" keeps "бір мың").
-            // Kazakh keeps the period decimal separator ("3,14" is two numbers).
-            "kk" => {
-                grammar.hundreds.omit_one_prefix = true;
-            }
-            // Azerbaijani: "100"/"1000" are "yüz"/"min", not "bir yüz"/"bir min".
-            "az" => {
-                grammar.decimal_separator = ',';
-                grammar.group_separator = Some('.');
-                grammar.hundreds.omit_one_prefix = true;
-                grammar.thousands.omit_one_prefix = true;
-            }
-            // Afrikaans: Germanic units-first tens ("vier-en-dertig"), like Dutch,
-            // but keeps "een honderd" / "een duisend" (no omit-one prefix) and puts
-            // "en" before a single-word remainder ("een honderd en een/twintig").
+            // Afrikaans puts "en" before a single-word remainder ("een honderd en
+            // een/twintig").
             // (Afrikaans reads "3,14" as two numbers — its decimal separator is
             // the period, like English: `af "3.14"` → "drie punt een vier".)
             "af" => {
@@ -946,14 +904,6 @@ impl NumberGrammar {
                 grammar.decimal_separator = ',';
                 grammar.group_separator = Some('.');
             }
-            // Welsh: "100" is "cant", not "un cant" (period decimal, unchanged).
-            "cy" => {
-                grammar.hundreds.omit_one_prefix = true;
-            }
-            // Amharic: "100" is "መቶ", not "አንድ መቶ" (but "1000" keeps "አንድ ሺ").
-            "am" => {
-                grammar.hundreds.omit_one_prefix = true;
-            }
             // Swahili: "na" joins tens and units ("ishirini na moja"), and also
             // hundreds→remainder when the remainder is a single word ("mia moja
             // na moja/kumi/ishirini", but "mia moja thelethini na nne").
@@ -961,16 +911,8 @@ impl NumberGrammar {
                 grammar.hundreds.conjunction_before_simple_remainder = true;
             }
             // Malayalam: "100" is the bare "നൂറ്" (not "ഒരു നൂറ്"); 200+ keep
-            // their dedicated words.  "1000" is the bare "ആയിരം" (no "ഒന്ന്").
-            "ml" => {
-                grammar.hundreds.omit_one_hundred_word = true;
-                grammar.thousands.omit_one_prefix = true;
-            }
-            // Tamil / Sinhala: "1000" is "ஆயிரம்" / "අහස", not "ஒன்று ஆயிரம்" /
-            // "එක අහස" (the "one" is dropped before "thousand").
-            "ta" | "si" => {
-                grammar.thousands.omit_one_prefix = true;
-            }
+            // their dedicated words.
+            "ml" => grammar.hundreds.omit_one_hundred_word = true,
             _ => {}
         }
         // Space (SI/ISO) thousands grouping is unambiguous exactly where the
@@ -1046,7 +988,8 @@ impl NumberGrammar {
             grammar.max_digits = 0;
             grammar.group_separator = None;
         }
-        grammar.hundreds.omit_one_prefix |= grammar.c_numbers & ordinal::NUM_OMIT_1_HUNDRED != 0;
+        grammar.hundreds.omit_one_prefix = grammar.c_numbers & ordinal::NUM_OMIT_1_HUNDRED != 0;
+        grammar.thousands.omit_one_prefix = grammar.c_numbers & ordinal::NUM_OMIT_1_THOUSAND != 0;
         grammar.vigesimal = grammar.c_numbers & ordinal::NUM_VIGESIMAL != 0;
         grammar.thousand_variant_forms = lang == "ml";
         grammar.ordinals.dot_marks_ordinal |= grammar.c_numbers & ordinal::NUM_ORDINAL_DOT != 0;
