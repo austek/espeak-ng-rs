@@ -158,6 +158,7 @@ jobs:
           --test pyash_replaced_digits
           --test english_slash_between_numbers
           --test feminine_count_before_scale
+          --test feminine_variant_forms
           --test ordinal_unknown_suffix
           --test ordinal_composition
           --test ordinal_dot_context

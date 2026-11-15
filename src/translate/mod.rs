@@ -3958,7 +3958,7 @@ fn append_ordinal_scale(
 /// Phonemes for a unit digit, using the feminine form (`_1f`/`_2f`) for 1 and 2
 /// when `feminine` — Slavic scale-word agreement ("одна", "две").
 fn unit_ph(dict: &Dictionary, n: u32, feminine: bool) -> Vec<u8> {
-    if feminine && (n == 1 || n == 2) {
+    if feminine && n > 0 {
         let f = lookup_num_phonemes(dict, &format!("_{n}f"));
         if !f.is_empty() {
             return f;
