@@ -568,6 +568,8 @@ pub struct NumberGrammar {
     /// The text is one clause the clause reader already cut: a dot left in it is text, not a
     /// clause end.
     pub clause_text: bool,
+    /// C's `langopts.lowercase_sentence`: a dot before a lower-case word still ends the clause.
+    pub lowercase_sentence: bool,
     /// Longest run of 5 to 32 digits read as a cardinal; longer runs up to 32
     /// digits are spelled in groups (upstream `langopts.max_digits`).
     pub max_digits: u8,
@@ -921,6 +923,7 @@ impl NumberGrammar {
         // Dutch keeps a word-initial "IJ" digraph intact under the upper→lower
         // split.
         grammar.dutch_ij = lang == "nl";
+        grammar.lowercase_sentence = lang == "xex";
         grammar.fraction_digits_as_number = match primary_bcp47_subtag(lang) {
             // NUM_DFRACTION_2 — up to two digits read as a number.
             "et" | "fi" | "he" | "hr" | "bs" | "sr" | "mk" | "pl" | "pt" | "sk" | "cs"
@@ -1017,6 +1020,7 @@ impl Default for NumberGrammar {
             elide_tens_vowel: false,
             thousands_variant: SlavicThousands::None,
             clause_text: false,
+            lowercase_sentence: false,
             max_digits: 14,
             break_numbers: BREAK_THOUSANDS,
             c_numbers: 1,
@@ -2175,7 +2179,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 continue;
             }
             let apart = previous.is_none_or(|p| p.is_whitespace() || p == CTRL_EMBEDDED);
-            if c == '.' && apart && (grammar.clause_text || (clause_has_word(&tokens) && dot_stays_in_clause(chars.clone()))) {
+            if c == '.' && apart && (grammar.clause_text || (clause_has_word(&tokens) && dot_stays_in_clause(chars.clone(), grammar.lowercase_sentence))) {
                 tokens.push(Token::Punctuation('.'));
                 continue;
             }
@@ -2183,7 +2187,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // dot only after a word that does not itself follow punctuation.
             if c == '.'
                 && matches!(tokens.as_slice(), [.., Token::Punctuation('.'), Token::Word(_)])
-                && dot_stays_in_clause(chars.clone())
+                && dot_stays_in_clause(chars.clone(), grammar.lowercase_sentence)
             {
                 tokens.push(Token::Punctuation('.'));
                 continue;
@@ -2197,7 +2201,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 continue;
             }
             if c == '.' && chars.peek() == Some(&'.') {
-                if apart && clause_has_word(&tokens) && dot_stays_in_clause(chars.clone().skip(1)) {
+                if apart && clause_has_word(&tokens) && dot_stays_in_clause(chars.clone().skip(1), grammar.lowercase_sentence) {
                     tokens.push(Token::Punctuation('.'));
                 }
                 tokens.push(Token::Space);
@@ -2222,7 +2226,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 tokens.push(Token::Punctuation(c));
                 continue;
             }
-            let dot_ends = c == '.' && newline_before_lower_case(chars.clone());
+            let dot_ends = c == '.' && dot_ends_before_lower_case(chars.clone(), grammar.lowercase_sentence);
             // Absorb trailing whitespace after punctuation
             while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
                 chars.next();
@@ -2488,7 +2492,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     word.push('.');
                     chars.next();
                     prev_char = '.';
-                } else if next == '.' && is_dotted_letters(&word) && (grammar.clause_text || dot_stays_in_clause(chars.clone().skip(1))) {
+                } else if next == '.' && is_dotted_letters(&word) && (grammar.clause_text || dot_stays_in_clause(chars.clone().skip(1), grammar.lowercase_sentence)) {
                     word.push('.');
                     chars.next();
                     break;
@@ -6735,29 +6739,36 @@ fn carry_embedded_in_silent_dots(tokens: &[Token], entries: &mut [TranslateEntry
 /// Whether a '.' followed by `after` stays inside the clause, as C's
 /// `ReadClause` decides: a letter or hyphen follows, or blanks without a newline and then a
 /// lower-case letter.
-fn dot_stays_in_clause<I>(after: I) -> bool
+/// A language with `lowercase_sentence` ends the clause at a dot before a lower-case word.
+fn dot_stays_in_clause<I>(after: I, lowercase_sentence: bool) -> bool
 where
     I: Iterator<Item = char> + Clone,
 {
-    let mut after = after.peekable();
-    match after.peek() {
-        Some(&c) if c.is_alphabetic() || c == '-' => true,
-        Some(c) if c.is_whitespace() => {
-            let blanks: Vec<char> = std::iter::from_fn(|| after.next_if(|c| c.is_whitespace())).collect();
-            !blanks.contains(&'\n') && after.next().is_some_and(char::is_lowercase)
-        }
+    match after.clone().next() {
+        Some(c) if c.is_alphabetic() || c == '-' => true,
+        Some(c) if c.is_whitespace() => lower_case_after_blanks(after).is_some_and(|newline| !newline && !lowercase_sentence),
         _ => false,
     }
 }
 
-/// A newline after a '.' ends the clause even before a lower-case word (readclause.c:865).
-fn newline_before_lower_case<I>(after: I) -> bool
+/// A newline or `lowercase_sentence` after a '.' ends the clause even before a lower-case word
+/// (readclause.c:865, 887).
+fn dot_ends_before_lower_case<I>(after: I, lowercase_sentence: bool) -> bool
+where
+    I: Iterator<Item = char>,
+{
+    lower_case_after_blanks(after).is_some_and(|newline| newline || lowercase_sentence)
+}
+
+/// After the blanks at the front of `after`: `Some(newline)` when a lower-case letter follows
+/// them, `newline` telling whether they held a line break.
+fn lower_case_after_blanks<I>(after: I) -> Option<bool>
 where
     I: Iterator<Item = char>,
 {
     let mut after = after.peekable();
     let blanks: Vec<char> = std::iter::from_fn(|| after.next_if(|c| c.is_whitespace())).collect();
-    blanks.contains(&'\n') && after.next().is_some_and(char::is_lowercase)
+    after.next().filter(|c| c.is_lowercase()).map(|_| blanks.contains(&'\n'))
 }
 
 /// Three or more dots in a row read as one ellipsis (C `ReadClause`).
@@ -10237,6 +10248,7 @@ impl Translator {
         if voice_numbers != (0, 0) {
             options.number_grammar = NumberGrammar::for_lang_with(base, voice_numbers);
         }
+        options.number_grammar.lowercase_sentence |= crate::voices::voice_lowercase_sentence(&dir, base);
         Ok(Translator { options, data_dir: dir, loaded: std::sync::Mutex::new(None) })
     }
 

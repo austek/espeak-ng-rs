@@ -757,6 +757,14 @@ pub fn voice_numbers(data_dir: &Path, lang: &str) -> (u32, u32) {
         .map_or((0, 0), |v| v.numbers)
 }
 
+/// Whether a voice file sets `lowercaseSentence` for its language.
+pub fn voice_lowercase_sentence(data_dir: &Path, lang: &str) -> bool {
+    list_voices(data_dir)
+        .iter()
+        .find(|v| v.language.eq_ignore_ascii_case(lang))
+        .is_some_and(|v| v.lowercase_sentence)
+}
+
 /// An MBROLA voice: the `voices/mb/mb-<db>` file's `language` and its
 /// `mbrola <database> <phtrans>` directive.
 #[derive(Debug, Clone, PartialEq, Eq)]

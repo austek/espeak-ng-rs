@@ -36,6 +36,15 @@ const NEWLINE_CASES: &[Case] = &[
     ("ru", "Он сказал .\nпотом ушёл", "ˈon skazˈɑɭ\npˈotʌm uʃˈoɭ", "'on_ skaz'Al\np'otVm uS'ol"),
 ];
 
+const LOWERCASE_SENTENCE_CASES: &[Case] = &[
+    ("ka", "მან თქვა . მერე წავიდა.", "mˈan tʰkʰvˈa\nmˈere tsˈavida", "m'an t#k#v'a\nm'ere ts'avida"),
+    ("ka", "მან თქვა. მერე წავიდა.", "mˈan tʰkʰvˈa\nmˈere tsˈavida", "m'an t#k#v'a\nm'ere ts'avida"),
+    ("mto", "mi sa . ta ko.", "ˈm̩i sˈa\ntˈa kˈo", "'mi s'a\nt'a k'o"),
+    ("mto", "mi sa. ta ko.", "ˈm̩i sˈa\ntˈa kˈo", "'mi s'a\nt'a k'o"),
+    ("xex", "mi sa . ta ko.", "mˈi sa\ntˈa ko", "m'i sa\nt'a ko"),
+    ("xex", "mi sa ta. ko ta", "mi sa tˈa\nkˈo ta", "mi sa t'a\nk'o ta"),
+];
+
 fn check(cases: &[Case]) {
     if !std::path::Path::new("espeak-ng-data/en_dict").exists() {
         eprintln!("[SKIP] no data");
@@ -55,6 +64,11 @@ fn check(cases: &[Case]) {
 #[test]
 fn a_spaced_dot_before_a_clause_ending_dot_is_not_read() {
     check(CASES);
+}
+
+#[test]
+fn a_dot_before_a_lower_case_word_ends_the_clause_where_the_language_says_so() {
+    check(LOWERCASE_SENTENCE_CASES);
 }
 
 #[test]
