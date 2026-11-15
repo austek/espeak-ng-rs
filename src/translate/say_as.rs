@@ -9,6 +9,7 @@ const KEY: i32 = 0x24;
 const DIGITS: i32 = 0x40;
 const DIGITS1: i32 = 0xc1;
 const SINGLE_CHARS: u8 = 4;
+const MAX_BROKEN_DIGITS: usize = 32;
 
 /// The say-as mode a clause starts in and the digit count `count_sayas_digits` carries.
 #[derive(Clone, Copy, Debug, Default)]
@@ -158,17 +159,30 @@ fn group_digits(text: &str, n: usize, state: &mut SayAs) -> String {
 
 /// C `TranslateNumber` declines a number while `option_sayas == SAYAS_DIGITS1`, so its digits
 /// are spoken one by one.  `mode` is the say-as mode at the start of `tokens`.
-pub(crate) fn individual_digit_tokens(tokens: Vec<Token>, mode: i32) -> Vec<Token> {
+pub(crate) fn individual_digit_tokens(tokens: Vec<Token>, mode: i32, grammar: &NumberGrammar) -> Vec<Token> {
     let mut mode = mode;
     tokens
         .into_iter()
-        .map(|token| match token {
+        .flat_map(|token| match token {
             Token::Embedded(cmd) if cmd.letter == 'Y' => {
                 mode = cmd.value.max(0);
-                Token::Embedded(cmd)
+                vec![Token::Embedded(cmd)]
             }
-            Token::Number(NumberToken::Cardinal(d) | NumberToken::Grouped(d)) if mode == DIGITS1 => Token::Digits(d),
-            other => other,
+            Token::Number(NumberToken::Cardinal(d) | NumberToken::Grouped(d)) if mode == DIGITS1 => {
+                broken_digit_words(&d, grammar)
+            }
+            other => vec![other],
         })
         .collect()
+}
+
+/// C `TranslateClause` cuts a run of 5 to 32 digits into the words `break_numbers` names
+/// before any number is read, so each group is spoken digit by digit as a word of its own.
+fn broken_digit_words(digits: &str, grammar: &NumberGrammar) -> Vec<Token> {
+    if !(5..=MAX_BROKEN_DIGITS).contains(&digits.len()) {
+        return vec![Token::Digits(digits.to_string())];
+    }
+    let groups = super::digit_groups(digits, grammar);
+    let spaced = groups.iter().map(|g| Token::Digits((*g).to_string())).flat_map(|t| [Token::Space, t]);
+    spaced.skip(1).collect()
 }

@@ -10558,7 +10558,7 @@ impl Translator {
         apply_space_grouping(&mut tokens, &self.options.number_grammar);
         apply_exponents(&mut tokens, lang);
         if matches!(mode, TokenizeMode::Clause { .. }) {
-            tokens = say_as::individual_digit_tokens(tokens, say_as_start);
+            tokens = say_as::individual_digit_tokens(tokens, say_as_start, &number_grammar);
         }
         split_script_runs(&mut tokens, dict, &self.options);
         let spelled = split_abandoned_words(&mut tokens, dict, &self.options, phdata);
