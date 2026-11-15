@@ -101,6 +101,7 @@ jobs:
           --test ssml_clause_audio
           --test ssml_voice_audio
           --test ssml_prosody_audio
+          --test abbreviation_clause_pause
           --test strend2_before_clause_end_stress
           --test ssml_break_emphasis
           --test ssml_say_as

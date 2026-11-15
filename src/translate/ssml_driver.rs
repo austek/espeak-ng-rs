@@ -5,7 +5,7 @@
 use super::readclause::ssml_tag::{SsmlEnv, SsmlState, N_SPEECH_PARAM, P_CAPITALS, P_PUNCTUATION, P_RATE, P_SSML_BREAK_MUL};
 use super::readclause::voice_stack::{BaseVoice, EntryCatalog};
 use super::readclause::{CharMap, ClauseReader, ReaderLang, ReaderOptions, SourceClause, SsmlTags, Terminator};
-use super::{PhonemeCode, Result, Token, Translator};
+use super::{CodeMarker, PhonemeCode, Result, Token, Translator};
 use crate::synthesize::cgen::phlist::ClauseCodes;
 use crate::voices::{list_catalog, list_voices, select_voice_by_name, VoiceEntry};
 
@@ -180,6 +180,9 @@ impl Translator {
         };
         let no_tonic = u32::from(terminator.intonation()) == INTONATION_NONE;
         let codes = self.translate_clause(&clause.text, no_tonic, carry)?;
+        let abbreviated = clause.terminator.dot_after_last_word()
+            && codes.iter().any(|c| matches!(c.marker, Some(CodeMarker::AbbreviationDot)));
+        let terminator = if abbreviated { terminator.after_abbreviation() } else { terminator };
         Ok(TranslatedClause { codes, terminator, eof: clause.eof, voice_after: clause.voice_change, voice })
     }
 

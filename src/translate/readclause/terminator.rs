@@ -43,6 +43,12 @@ impl Terminator {
         self.0
     }
 
+    /// `TranslateClause` after an abbreviation's dot: a 10 ms pause and no tone, keeping the
+    /// phrase type.
+    pub const fn after_abbreviation(self) -> Terminator {
+        Terminator((self.0 & !(PAUSE_MASK | INTONATION_MASK | Terminator::PAUSE_LONG.0)) | 1 | INTONATION_NONE)
+    }
+
     pub const fn with(self, flag: Terminator) -> Terminator {
         Terminator(self.0 | flag.0)
     }

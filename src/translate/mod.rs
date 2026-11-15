@@ -6301,6 +6301,14 @@ pub(crate) enum TranslateEntryKind {
     Silent,
 }
 
+/// C `TranslateClause`: a clause ended by a dot whose last word may take a dot (`$allowdot`,
+/// `$needsdot`) stopped on an abbreviation such as `Dr.`; the flag marks that boundary.
+fn abbreviation_flags(entries: &[TranslateEntry]) -> u32 {
+    let last_word = entries.iter().rev().find(|e| e.kind != TranslateEntryKind::Other);    last_word
+        .filter(|e| e.kind == TranslateEntryKind::Word)
+        .map_or(0, |e| e.dict_flags & (crate::dictionary::FLAG_ALLOW_DOT | crate::dictionary::FLAG_NEEDS_DOT))
+}
+
 pub(crate) struct TranslateEntry {
     pub(crate) phonemes:   Vec<u8>,
     pub(crate) dict_flags: u32,
@@ -9379,14 +9387,14 @@ pub(crate) fn build_translate_entries(
                     found_in_list: false,
                 });
             }
-            Token::ClauseBoundary(_) => {
+            Token::ClauseBoundary(punct) => {
                 // A clause boundary resets the part-of-speech expectation.
                 // `--punct` names were split into their own clause beforehand
                 // (`announce_clause_punctuation`).
                 prev_word = None;
                 entries.push(TranslateEntry {
                     phonemes:   Vec::new(),
-                    dict_flags: 0,
+                    dict_flags: if matches!(*punct, '.' | ssml::SSML_BREAK) { abbreviation_flags(&entries) } else { 0 },
                     kind:       TranslateEntryKind::ClauseBoundary,
                     word_lower: None,
                     word_group: None,
@@ -9907,7 +9915,8 @@ pub(crate) fn promote_translate_entries(
         boundaries_with_end.push(entries.len());
         for &bound in &boundaries_with_end {
             let slice_end = if bound < entries.len() { bound } else { entries.len() };
-            if slice_end > prev_end {
+            let toneless = entries.get(bound).is_some_and(|e| e.dict_flags != 0);
+            if slice_end > prev_end && !toneless {
                 let words = &emphasized[prev_end..slice_end];
                 promote_clause(&mut entries[prev_end..slice_end], words, phdata, lang_for_promo, outer_continues);
             }
@@ -11146,6 +11155,9 @@ impl Translator {
                 Token::ClauseBoundary(punct) => {
                     prepause_timeout = 0;
                     if entry.phonemes.is_empty() {
+                        if entry.dict_flags != 0 {
+                            codes.push(PhonemeCode { marker: Some(CodeMarker::AbbreviationDot), ..Default::default() });
+                        }
                         codes.push(PhonemeCode {
                             code:         0,
                             is_boundary:  true,
@@ -12779,6 +12791,9 @@ pub enum CodeMarker {
     /// A phoneme stood here that its own program deleted. C's list still held
     /// it when it looked at the phoneme before.
     Deleted,
+    /// The clause that ends here stopped on the dot of an abbreviation (`Dr.`): its pause is
+    /// 10 ms and its tone `CLAUSE_INTONATION_NONE`.
+    AbbreviationDot,
 }
 
 // ---------------------------------------------------------------------------

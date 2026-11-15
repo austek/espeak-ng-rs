@@ -132,7 +132,12 @@ pub fn split_clauses(codes: &[PhonemeCode]) -> Vec<ClauseCodes> {
     for c in codes {
         if c.code == 0 && c.is_boundary && c.marker.is_none() {
             let brk = take_break(&mut cur);
-            out.push(ClauseCodes::plain(std::mem::take(&mut cur), c.clause_char, brk));
+            let abbreviated = cur.iter().any(|k| matches!(k.marker, Some(CodeMarker::AbbreviationDot)));
+            let mut clause = ClauseCodes::plain(std::mem::take(&mut cur), c.clause_char, brk);
+            if abbreviated {
+                clause.terminator = clause.terminator.after_abbreviation();
+            }
+            out.push(clause);
         } else {
             cur.push(c.clone());
         }
