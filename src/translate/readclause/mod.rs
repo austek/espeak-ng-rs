@@ -5,7 +5,7 @@ pub mod attrs;
 pub mod ssml_tag;
 pub mod voice_stack;
 
-mod ctype;
+pub(crate) mod ctype;
 mod decoder;
 mod entity;
 mod iface;

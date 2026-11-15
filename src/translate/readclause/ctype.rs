@@ -32,6 +32,11 @@ pub fn space(c: u32) -> bool {
     of(c).is_some_and(|c| c.is_whitespace() && !matches!(c, '\u{a0}' | '\u{2007}' | '\u{202f}'))
 }
 
+/// C `iswspace` for a `char`.
+pub fn is_blank(c: char) -> bool {
+    space(u32::from(c))
+}
+
 pub fn punct(c: u32) -> bool {
     of(c).is_some_and(|c| !c.is_alphanumeric() && !c.is_whitespace() && !c.is_control())
 }

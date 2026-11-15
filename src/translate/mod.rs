@@ -2231,9 +2231,11 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 tokens.push(Token::Punctuation(c));
                 continue;
             }
-            let dot_ends = c == '.' && dot_ends_before_lower_case(chars.clone(), grammar.lowercase_sentence);
+            let dot_ends = c == '.'
+                && (dot_ends_before_lower_case(chars.clone(), grammar.lowercase_sentence)
+                    || no_break_space_after_blanks(chars.clone()));
             // Absorb trailing whitespace after punctuation
-            while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
+            while chars.peek().is_some_and(|&ch| readclause::ctype::is_blank(ch)) {
                 chars.next();
                 before = Some(' ');
             }
@@ -6848,7 +6850,7 @@ where
 {
     match next {
         ',' | ';' | ':' | '!' | '?' => !ascii_clause_end_follows('.', rest.skip_while(|c| matches!(c, ',' | ';' | ':' | '!' | '?'))),
-        _ => next.is_alphanumeric() || !(next.is_whitespace() || is_bracket(next) || matches!(next, '.' | '-') || next == CTRL_EMBEDDED),
+        _ => next.is_alphanumeric() || !(readclause::ctype::is_blank(next) || is_bracket(next) || matches!(next, '.' | '-') || next == CTRL_EMBEDDED),
     }
 }
 
@@ -6869,7 +6871,7 @@ where
 {
     match after.clone().next() {
         Some(c) if c.is_alphabetic() || c == '-' => true,
-        Some(c) if c.is_whitespace() => lower_case_after_blanks(after).is_some_and(|newline| !newline && !lowercase_sentence),
+        Some(c) if readclause::ctype::is_blank(c) => lower_case_after_blanks(after).is_some_and(|newline| !newline && !lowercase_sentence),
         _ => false,
     }
 }
@@ -6883,6 +6885,15 @@ where
     lower_case_after_blanks(after).is_some_and(|newline| newline || lowercase_sentence)
 }
 
+/// Whether the blanks at the front of `after` end in a space `iswspace` does not know
+/// (U+00A0): C sees a character that is not lower case there, so the dot ends the clause.
+fn no_break_space_after_blanks<I>(mut after: I) -> bool
+where
+    I: Iterator<Item = char>,
+{
+    after.find(|&c| !readclause::ctype::is_blank(c)).is_some_and(char::is_whitespace)
+}
+
 /// After the blanks at the front of `after`: `Some(newline)` when a lower-case letter follows
 /// them, `newline` telling whether they held a line break.
 fn lower_case_after_blanks<I>(after: I) -> Option<bool>
@@ -6890,7 +6901,7 @@ where
     I: Iterator<Item = char>,
 {
     let mut after = after.peekable();
-    let blanks: Vec<char> = std::iter::from_fn(|| after.next_if(|c| c.is_whitespace())).collect();
+    let blanks: Vec<char> = std::iter::from_fn(|| after.next_if(|&c| readclause::ctype::is_blank(c))).collect();
     after.next().filter(|c| c.is_lowercase()).map(|_| blanks.contains(&'\n'))
 }
 

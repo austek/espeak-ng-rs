@@ -325,6 +325,7 @@ jobs:
           --test spelled_word_phoneme_buffer
           --test dotted_abbrev_genitive
           --test dotted_abbrev_hand_over
+          --test dot_clause_ucd_space
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config
