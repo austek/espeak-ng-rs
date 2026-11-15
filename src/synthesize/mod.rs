@@ -444,6 +444,22 @@ impl Synthesizer {
         self.synthesize_codes_marked(codes, phdata, &mut Vec::new(), &mut Vec::new())
     }
 
+    /// Synthesize clauses the SSML reader ended, each with its own terminator and
+    /// end-of-text flag.  Without a data directory the codes render as one stream.
+    pub fn synthesize_clauses(
+        &self,
+        clauses: &[cgen::phlist::ClauseCodes],
+        phdata: &crate::phoneme::PhonemeData,
+    ) -> Result<PcmBuffer> {
+        let Some(dir) = self.voice.data_dir.clone() else {
+            let codes: Vec<_> = clauses.iter().flat_map(|c| c.codes.iter().cloned()).collect();
+            return self.synthesize_codes(&codes, phdata);
+        };
+        let mut out = Vec::new();
+        cgen::render_clauses(clauses, phdata, &dir, &self.voice, &mut |pcm| out.extend_from_slice(pcm));
+        Ok(out)
+    }
+
     /// Build the MBROLA phoneme list for a clause (`MbrolaTranslate`'s input).
     ///
     /// The same annotate + intonation passes as

@@ -120,9 +120,8 @@ fn ssml_audio_missing_file_speaks_fallback() {
         .synth("<audio src=\"/no/such/file.wav\">banana</audio>")
         .expect("fallback synth");
     let (spoken, _) = eng.synth("banana").expect("plain synth");
-    assert!(!fallback.is_empty());
-    // Fallback audio should be within ~35% of speaking the word directly
-    // (both synthesize "banana"; small differences from clause context).
-    let ratio = fallback.len() as f32 / spoken.len().max(1) as f32;
-    assert!(ratio > 0.6 && ratio < 1.6, "fallback ratio {ratio}");
+    assert!(!spoken.is_empty());
+    // C `espeak-ng -m -v en -w`: 8744 samples. `</audio>` ends the clause with
+    // `CLAUSE_NONE`: no tonic fall and no clause pause.
+    assert_eq!(fallback.len(), 8744);
 }

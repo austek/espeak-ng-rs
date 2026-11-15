@@ -98,6 +98,7 @@ jobs:
           --test readclause_reader
           --test readclause_ssml_tags
           --test ssml_clause_reader
+          --test ssml_clause_audio
           --test synth_parity_tone
           --test synth_parity_klatt
           --test synth_parity_next3

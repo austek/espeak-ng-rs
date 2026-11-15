@@ -144,11 +144,17 @@ impl SsmlDocument<'_> {
 
     fn synth_clause(&self, clause: &TranslatedClause) -> ClauseCodes {
         let lang = &self.translator(clause.voice).options.lang;
-        let switch = (*lang != self.base.options.lang)
+        let spoken: Vec<PhonemeCode> = clause
+            .codes
+            .iter()
+            .filter(|c| !(c.code == 0 && c.is_boundary && c.marker.is_none()))
+            .cloned()
+            .collect();
+        let says_something = spoken.iter().any(|c| c.marker.is_some() || (c.code != 0 && c.code != crate::phoneme::PHON_END_WORD));
+        let switch = (*lang != self.base.options.lang && says_something)
             .then(|| PhonemeCode { marker: Some(CodeMarker::LangSwitch(lang.clone())), ..Default::default() });
-        let spoken = clause.codes.iter().filter(|c| !(c.code == 0 && c.is_boundary && c.marker.is_none()));
         ClauseCodes {
-            codes: switch.into_iter().chain(spoken.cloned()).collect(),
+            codes: switch.into_iter().chain(spoken).collect(),
             terminator: clause.terminator,
             eof: clause.eof,
             voice_after: clause.voice_after.clone(),

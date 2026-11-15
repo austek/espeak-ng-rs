@@ -345,6 +345,28 @@ fn switched_tables(codes: &[PhonemeCode], data_dir: &Path, own: &str) -> std::co
     out
 }
 
+/// Synthesize clauses as the SSML reader ended them (C `SpeakNextClause`): each keeps its
+/// terminator and end-of-text flag, and the next clause starts a sentence only when this one
+/// ended one.
+pub fn render_clauses(
+    clauses: &[ClauseCodes],
+    phdata: &PhonemeData,
+    data_dir: &Path,
+    params: &VoiceParams,
+    sink: &mut dyn FnMut(&[i16]),
+) -> (Vec<usize>, Vec<usize>) {
+    let mut r = Renderer::new(phdata, data_dir, params);
+    let all: Vec<PhonemeCode> = clauses.iter().flat_map(|c| c.codes.iter().cloned()).collect();
+    r.switched = switched_tables(&all, data_dir, &params.lang);
+    let mut start_sentence = true;
+    for c in clauses {
+        let pcm = r.clause(c, start_sentence);
+        start_sentence = c.terminator.is_sentence();
+        sink(&pcm);
+    }
+    (r.word_marks, r.sentence_marks)
+}
+
 /// Synthesize a whole code stream; `sink` receives each clause as it is done.
 pub fn render(
     codes: &[PhonemeCode],

@@ -691,6 +691,10 @@ impl EspeakNg {
         let mut table = self.soundicons.clone();
         let base = self.soundicon_base_dir();
         let pieces = crate::soundicon::split_pieces(text, &mut table, &base, self.markup);
+        let has_icon = pieces.iter().any(|p| matches!(p, crate::soundicon::Piece::Icon(_)));
+        if self.markup && !has_icon {
+            return Ok((self.apply_post_fx(self.synth_markup(text)?), rate));
+        }
         let pause = rate as usize / 100;
 
         let mut out: PcmBuffer = Vec::new();
@@ -748,6 +752,21 @@ impl EspeakNg {
         } else {
             pcm
         }
+    }
+
+    /// Synthesize markup clause by clause, as C `SpeakNextClause` does.
+    fn synth_markup(&self, text: &str) -> Result<PcmBuffer> {
+        let translator = self.make_translator()?;
+        let mut phdata = self.load_phdata()?;
+        crate::translate::select_phoneme_table(&mut phdata, &self.data_dir, self.voice_spec.effective_lang())
+            .map_err(|_| Error::VoiceNotFound(self.voice_spec.effective_lang().to_string()))?;
+        let settings = crate::translate::ssml_driver::SsmlSettings {
+            rate_wpm: self.rate as i32,
+            break_mul: self.ssml_break as i32,
+        };
+        let doc = translator.translate_ssml(text, settings)?;
+        let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
+        synth.synthesize_clauses(&doc.clause_codes(), &phdata)
     }
 
     /// Synthesize a plain (icon-free) text run through the normal pipeline.

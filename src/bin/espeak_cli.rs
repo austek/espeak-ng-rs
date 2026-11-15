@@ -256,14 +256,6 @@ fn run() -> std::io::Result<()> {
     if let Some(p) = loaded_pitch {
         engine.set_voice_pitch(Some(p));
     }
-    // A document-level `<prosody>` (wrapping the whole utterance) sets the
-    // global rate/pitch/volume for the audio.  Scoped prosody is left to the
-    // (unaffected) phoneme output.
-    if cli.markup {
-        if let Some(p) = espeak_ng::translate::ssml::document_prosody(&text) {
-            apply_prosody(&mut engine, p);
-        }
-    }
 
     // `--split=<minutes>`: a new WAV file at the first sentence boundary past
     // the limit.  Only for `-w` — a split stream makes no sense on stdout.
@@ -622,21 +614,6 @@ fn print_voices(cli: &Cli) {
     );
     for v in &voices {
         println!("{}", voice_line(v));
-    }
-}
-
-/// Apply document-level `<prosody>` multipliers to the engine's rate/pitch/
-/// volume (each scaled from its current value; `set_parameter` clamps).
-fn apply_prosody(engine: &mut EspeakNg, p: espeak_ng::translate::ssml::Prosody) {
-    let scale = |cur: i32, m: Option<f32>| m.map(|m| (cur as f32 * m).round() as i32);
-    if let Some(r) = scale(engine.get_parameter(Parameter::Rate), p.rate) {
-        engine.set_parameter(Parameter::Rate, r);
-    }
-    if let Some(v) = scale(engine.get_parameter(Parameter::Pitch), p.pitch) {
-        engine.set_parameter(Parameter::Pitch, v);
-    }
-    if let Some(v) = scale(engine.get_parameter(Parameter::Volume), p.volume) {
-        engine.set_parameter(Parameter::Volume, v);
     }
 }
 

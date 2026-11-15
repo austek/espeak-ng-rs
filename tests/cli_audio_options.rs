@@ -68,7 +68,9 @@ fn break_lengths_follow_the_tag() {
     // `time` is wall-clock exact, whatever the speaking rate.
     assert!((delta(r#"one<break time="2s"/>two"#) - 2000).abs() < 60);
     assert!((delta(r#"one<break time="500ms"/>two"#) - 500).abs() < 60);
-    assert!((delta(r#"one<break time="1.5s"/>two"#) - 1500).abs() < 60);
+    // C reads only the digits before the `.`, with no unit: `1.5s` is 19234 samples
+    // (872 ms) against 18840 (854 ms) for "one two".
+    assert_eq!(delta(r#"one<break time="1.5s"/>two"#), 18);
     // `strength` is in clause units, which follow the voice's rate, so these
     // are only checked for order and for being in the right neighbourhood.
     let weak = delta(r#"one<break strength="weak"/>two"#);
