@@ -1192,7 +1192,9 @@ pub enum Token {
     Embedded(EmbeddedCmd),
     /// A word C speaks letter by letter under `<say-as>` (`SpeakIndividualLetters` with
     /// `spell_word` 2 to 4).  `pause` puts four pause units before it unless it opens the clause.
-    Spelled { text: String, mode: u8, pause: bool },
+    /// `continues` marks a later group of a digit run that C cut into words: it shares the
+    /// clause position of the run's first group.
+    Spelled { text: String, mode: u8, pause: bool, continues: bool },
     /// Digits C speaks one by one (`SAYAS_DIGITS1`).
     Digits(String),
     /// Follows a `.` boundary that C ends the clause at although a lower-case word comes next
@@ -6671,6 +6673,18 @@ pub(crate) fn trailing_clause_ends(codes: &[PhonemeCode]) -> usize {
         .count()
 }
 
+/// Index of the first group of the digit run that the spelled token at `ix` belongs to.
+fn spelled_run_start(tokens: &[Token], ix: usize) -> usize {
+    let mut start = ix;
+    while matches!(tokens[start], Token::Spelled { continues: true, .. }) {
+        match tokens[..start].iter().rposition(|t| matches!(t, Token::Spelled { .. })) {
+            Some(prev) => start = prev,
+            None => break,
+        }
+    }
+    start
+}
+
 /// Whether the text so far ends with a clause that holds no word, which C
 /// reports once however many marks follow.
 fn empty_clause_pending(tokens: &[Token]) -> bool {
@@ -11262,7 +11276,7 @@ impl Translator {
                             )
                         };
                         let spelled_after_a_word = matches!(token, Token::Spelled { pause: true, .. })
-                            && tokens[..token_ix].iter().any(is_word);
+                            && tokens[..spelled_run_start(&tokens, token_ix)].iter().any(is_word);
                         let mut pre_pause = if spelled_after_a_word { 4 } else { 0 };
                         prepause_timeout = prepause_timeout.saturating_sub(1);
                         let after = tokens[token_ix + 1..]

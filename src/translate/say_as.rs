@@ -88,7 +88,7 @@ fn note_mode(token: &Token, state: &mut SayAs) {
 
 fn tokenize_text(text: &str, grammar: &NumberGrammar, state: &mut SayAs) -> Vec<Token> {
     match state.mode {
-        m if m & 0xf0 == CHARS_GROUP => spelled_words(text, (m & 0xf) as u8, true),
+        m if m & 0xf0 == CHARS_GROUP => spelled_words(text, (m & 0xf) as u8, true, grammar),
         KEY => key_words(text, grammar),
         m if m & 0xf0 == DIGITS => digit_words(&group_digits(text, (m & 0xf) as usize, state), grammar),
         _ => tokenize_opts(text, grammar),
@@ -123,28 +123,32 @@ fn whitespace_words(text: &str, word: impl Fn(&str) -> Vec<Token>) -> Vec<Token>
     out
 }
 
-fn spelled_words(text: &str, mode: u8, pause: bool) -> Vec<Token> {
-    whitespace_words(text, |w| vec![Token::Spelled { text: w.to_string(), mode, pause }])
+fn spelled_words(text: &str, mode: u8, pause: bool, grammar: &NumberGrammar) -> Vec<Token> {
+    whitespace_words(text, |w| {
+        let words = spelled_digit_groups(w, grammar).into_iter();
+        let spelled = words.enumerate().map(|(ix, text)| Token::Spelled { text, mode, pause, continues: ix > 0 });
+        spelled.flat_map(|t| [Token::Space, t]).skip(1).collect()
+    })
 }
 
 /// C `TranslateWord3`: a one-character word of a key name is spelled; a longer one is looked
 /// up, and read by the rules, under its `_`-prefixed name.
 fn key_words(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     whitespace_words(text, |w| match w.chars().count() {
-        1 => vec![Token::Spelled { text: w.to_lowercase(), mode: KEY_CHAR, pause: false }],
+        1 => vec![Token::Spelled { text: w.to_lowercase(), mode: KEY_CHAR, pause: false, continues: false }],
         _ => tokenize_opts(&w.to_lowercase(), grammar).into_iter().map(key_token).collect(),
     })
 }
 
 fn key_token(token: Token) -> Token {
-    let spelled = |text: String| Token::Spelled { text, mode: SINGLE_CHARS, pause: false };
+    let spelled = |text: String| Token::Spelled { text, mode: SINGLE_CHARS, pause: false, continues: false };
     match token {
         Token::Word(w) if w.chars().count() == 1 => spelled(w),
         Token::Word(w) => Token::Word(format!("_{w}")),
         Token::Number(NumberToken::Cardinal(d)) if d.len() == 1 => spelled(d),
         Token::Number(NumberToken::Cardinal(d)) => Token::Word(format!("_{d}")),
         Token::Punctuation(c) | Token::Operator(c) if super::is_spoken_symbol(c) => {
-            Token::Spelled { text: c.to_string(), mode: KEY_CHAR, pause: false }
+            Token::Spelled { text: c.to_string(), mode: KEY_CHAR, pause: false, continues: false }
         }
         other => other,
     }
@@ -194,8 +198,20 @@ pub(crate) fn individual_digit_tokens(tokens: Vec<Token>, mode: i32, grammar: &N
 /// C `TranslateClause` cuts a run of 5 to 32 digits into the words `break_numbers` names
 /// before any number is read, so each group is spoken digit by digit as a word of its own.
 fn broken_digit_words(digits: &str, grammar: &NumberGrammar) -> Vec<Token> {
+    match broken_digit_groups(digits, grammar) {
+        Some(groups) => {
+            let words = groups.into_iter().map(Token::Digits);
+            words.flat_map(|t| [Token::Space, t]).skip(1).collect()
+        }
+        None => vec![Token::Digits(digits.to_string())],
+    }
+}
+
+/// The words `TranslateClause` cuts `digits` into, each with its padding zeros and the separator
+/// written after it; `None` when the run is too short or too long to be cut.
+fn broken_digit_groups(digits: &str, grammar: &NumberGrammar) -> Option<Vec<String>> {
     if !(5..=MAX_BROKEN_DIGITS).contains(&digits.len()) {
-        return vec![Token::Digits(digits.to_string())];
+        return None;
     }
     let groups = super::digit_groups(digits, grammar);
     let pad = !super::reads_digit_by_digit(digits, grammar);
@@ -205,9 +221,24 @@ fn broken_digit_words(digits: &str, grammar: &NumberGrammar) -> Vec<Token> {
         let padding = if pad && ix > 0 { zero_padding(digits.len() - start, grammar.break_numbers) } else { "" };
         let sep = grammar.group_separator.filter(|_| ix < last).map(String::from).unwrap_or_default();
         start += group.len();
-        Token::Digits(format!("{padding}{group}{sep}"))
+        format!("{padding}{group}{sep}")
     });
-    words.flat_map(|t| [Token::Space, t]).skip(1).collect()
+    Some(words.collect())
+}
+
+/// C cuts a word that starts with a run of digits the same way whatever the say-as mode is.
+fn spelled_digit_groups(word: &str, grammar: &NumberGrammar) -> Vec<String> {
+    let run = word.chars().take_while(char::is_ascii_digit).count();
+    let (digits, rest) = word.split_at(run);
+    match broken_digit_groups(digits, grammar) {
+        Some(mut groups) => {
+            if let Some(last) = groups.last_mut() {
+                last.push_str(rest);
+            }
+            groups
+        }
+        None => vec![word.to_string()],
+    }
 }
 
 /// The zeros C writes before a group that `remaining` digits start, when the group after it
