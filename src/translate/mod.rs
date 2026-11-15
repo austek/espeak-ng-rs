@@ -7871,6 +7871,30 @@ fn unnamed_letter_phonemes(
     }
 }
 
+/// What `TranslateLetter` says for a letter another voice names: the name spoken in that voice,
+/// between a switch to it and a switch back, NUL-terminated.
+fn handed_over_letter_phonemes(
+    c: char,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+    alts: &letters::AltLangs,
+) -> Option<Vec<u8>> {
+    let voice = letters::Ctx { dict, phdata, stress: stress_opts, options };
+    let items = match letters::translate_letter(&letters::LetterEnv { voice, tr: voice, alts }, c) {
+        letters::LetterOut::Items(items) => items,
+        letters::LetterOut::HandOver(name) => {
+            let mut items = letters::spell_in_switched(voice, alts, &letters::switch_language(&name), c)?;
+            if items.first() != Some(&letters::Item::Ph(crate::phoneme::PHON_PAUSE)) {
+                items.insert(0, letters::Item::Ph(crate::phoneme::PHON_PAUSE));
+            }
+            items
+        }
+    };
+    (!items.is_empty()).then(|| [letters::encode(&items), vec![0]].concat())
+}
+
 /// Offsets of the primary stresses in a phoneme string, skipping the table name
 /// that follows each language switch.
 fn stress_positions(out: &[u8]) -> Vec<usize> {
@@ -8140,12 +8164,15 @@ fn spell_individual_letters(
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     options: &LangOptions,
+    alts: &letters::AltLangs,
 ) -> Option<Vec<u8>> {
     let chars: Vec<char> = text.chars().map(spelled_character).collect();
     let capital = word_to_phonemes_pos("_cap", dict, phdata, stress_opts, options, PosExpect::default()).phonemes;
     let mut buf: Vec<u8> = Vec::new();
     for (ix, &c) in chars.iter().enumerate() {
-        let name = character_name(c, ix + 1 < chars.len(), dict, phdata, stress_opts, options)?;
+        let named = character_name(c, ix + 1 < chars.len(), dict, phdata, stress_opts, options)
+            .filter(|name| name.first() != Some(&crate::phoneme::PHON_SWITCH));
+        let name = named.or_else(|| handed_over_letter_phonemes(c, dict, phdata, stress_opts, options, alts))?;
         let announce = mode > 2 && c.is_uppercase();
         let name = if ix == 0 { &name[..] } else { without_leading_break(&name, stress_opts) };
         let chunk: Vec<u8> = std::iter::once(LETTER_START)
@@ -9745,11 +9772,12 @@ pub(crate) fn build_translate_entries(
                     .then(|| key_name_replacement(text, dict, phdata, stress_opts, options))
                     .flatten();
                 let mode = if *mode == say_as::KEY_CHAR { 4 } else { *mode };
-                let phonemes = replaced.or_else(|| spell_individual_letters(text, mode, dict, phdata, stress_opts, options));
+                let phonemes = replaced.or_else(|| spell_individual_letters(text, mode, dict, phdata, stress_opts, options, alts));
+                let handed_over = phonemes.as_deref().is_some_and(|ph| letters::has_switch(&letters::decode(ph)));
                 entries.push(TranslateEntry {
                     phonemes: phonemes.unwrap_or_default(),
                     dict_flags: 0,
-                    kind: TranslateEntryKind::Word,
+                    kind: if handed_over { TranslateEntryKind::Stream } else { TranslateEntryKind::Word },
                     word_lower: Some(text.to_lowercase()),
                     word_group: None, spelled: false,
                     found_in_list: false,
