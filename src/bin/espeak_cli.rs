@@ -879,7 +879,10 @@ fn markup_phoneme_lines(cli: &Cli, translator: &Translator, text: &str) -> std::
         rate_wpm: cli.rate.map_or(175, |r| r as i32),
         break_mul: cli.ssml_break.map_or(100, |b| b as i32),
     };
-    let doc = translator.translate_ssml(text, settings).map_err(ioerr)?;
+    let base = resolved_data_dir(cli.path_override.as_deref()).join("soundicons");
+    let table = std::cell::RefCell::new(espeak_ng::SoundIconTable::new(22_050));
+    let load = |path: &str| table.borrow_mut().load_file(path, &base).ok().map(|ix| ix as i32);
+    let doc = translator.translate_ssml_with_sounds(text, settings, &load).map_err(ioerr)?;
     let lines = if cli.ipa { doc.ipa_lines(false) } else { doc.mnemonic_lines(cli.sep, cli.tie) }.map_err(ioerr)?;
     Ok(lines.iter().map(|l| format!("{l}\n")).collect())
 }

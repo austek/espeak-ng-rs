@@ -98,6 +98,7 @@ jobs:
           --test ssml_say_as_digit_groups
           --test ssml_say_as_key_names
           --test ssml_say_as_letter_names
+          --test ssml_audio_phoneme_output
           --test readclause_terminator
           --test readclause_reader
           --test readclause_ssml_tags
