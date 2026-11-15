@@ -155,6 +155,7 @@ jobs:
           --test vietnamese_zero_hundred
           --test indic_lakh_grouping
           --test fraction_omitted_one_break
+          --test pyash_replaced_digits
           --test ordinal_unknown_suffix
           --test ordinal_composition
           --test ordinal_dot_context

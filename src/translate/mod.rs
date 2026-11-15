@@ -1435,6 +1435,7 @@ fn with_dict_ordinal_suffixes(grammar: &NumberGrammar, text: &str, dict: &Dictio
                 && !rules_read_char(dict, c)
         })
         .collect();
+    unread.extend(text.chars().filter(|&c| c.is_ascii_digit() && rules_read_char(dict, c)));
     unread.sort_unstable();
     unread.dedup();
     extended.listed_symbols.extend(unread);
@@ -2232,14 +2233,14 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // "סימן מינוס").  The currency symbol and digits tokenise normally
             // on the following iterations.
             tokens.push(Token::Operator('-'));
-        } else if c.is_ascii_digit() {
+        } else if c.is_ascii_digit() && !grammar.listed_symbols.contains(&c) {
             let mut digits = String::new();
             digits.push(c);
             let mut has_dot = false;
             let mut separated = false;
             let mut fractional = String::new();
             while let Some(&next) = chars.peek() {
-                if next.is_ascii_digit() {
+                if next.is_ascii_digit() && !grammar.listed_symbols.contains(&next) {
                     if has_dot {
                         fractional.push(next);
                     } else {
@@ -2370,6 +2371,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 }
             }
         } else if (is_word_letter(c) && !is_emoji_char(c))
+            || (c.is_ascii_digit() && grammar.listed_symbols.contains(&c))
             || (c == '\''
                 && (grammar.apostrophe & 1 != 0
                     || (matches!(tokens.last(), Some(Token::Number(_)))
@@ -2431,7 +2433,9 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     // `next` starts the new word.
                     word_break = true;
                     break;
-                } else if grammar.tone_numbers && next.is_ascii_digit() {
+                } else if (grammar.tone_numbers || grammar.listed_symbols.contains(&next))
+                    && next.is_ascii_digit()
+                {
                     // Tone digit belongs to the syllable (`ni3`), not to a number.
                     word.push(next);
                     chars.next();
