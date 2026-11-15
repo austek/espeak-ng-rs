@@ -6721,7 +6721,15 @@ fn join_spaced_letter_dots(tokens: &mut Vec<Token>) {
 
 /// C gives a word with no phonemes a very short pause when an embedded command is attached to
 /// it (translate.c:649); the pause already in an emphasized word's phonemes serves instead.
-fn carry_embedded_in_silent_dots(tokens: &[Token], entries: &mut [TranslateEntry], emphasized: &[bool]) {
+/// A bracket keeps its empty entry, whose pause the renderer builds, and is reported in the
+/// returned mask so the renderer puts the carrying pause before it.
+fn carry_embedded_in_silent_words(
+    tokens: &[Token],
+    entries: &mut [TranslateEntry],
+    emphasized: &[bool],
+    swallowed: &[bool],
+) -> Vec<bool> {
+    let mut bracket_carries = vec![false; entries.len()];
     let carries = |ix: usize| {
         tokens[..ix]
             .iter()
@@ -6730,11 +6738,18 @@ fn carry_embedded_in_silent_dots(tokens: &[Token], entries: &mut [TranslateEntry
             .is_some_and(|t| matches!(t, Token::Embedded(_)))
     };
     for (ix, entry) in entries.iter_mut().enumerate() {
-        let silent_dot = matches!(tokens.get(ix), Some(Token::Punctuation('.'))) && entry.phonemes.is_empty();
-        if silent_dot && !emphasized.get(ix).copied().unwrap_or(false) && carries(ix) {
-            entry.phonemes = vec![crate::phoneme::PHON_PAUSE_VSHORT];
+        let is_word = matches!(tokens.get(ix), Some(Token::Word(_) | Token::Operator(_)))
+            || matches!(tokens.get(ix), Some(Token::Punctuation(c)) if !matches!(c, '-' | '\''));
+        let silent_word = is_word && entry.phonemes.is_empty() && !swallowed.get(ix).copied().unwrap_or(false);
+        if silent_word && !emphasized.get(ix).copied().unwrap_or(false) && carries(ix) {
+            if matches!(tokens.get(ix), Some(Token::Punctuation(c)) if is_bracket(*c)) {
+                bracket_carries[ix] = true;
+            } else {
+                entry.phonemes = vec![crate::phoneme::PHON_PAUSE_VSHORT];
+            }
         }
     }
+    bracket_carries
 }
 
 /// Whether a '.' followed by `after` stays inside the clause, as C's
@@ -9040,7 +9055,7 @@ pub(crate) fn build_translate_entries(
     alts: &letters::AltLangs,
     spelled: &[Option<usize>],
     emphasized: &[bool],
-) -> Vec<TranslateEntry> {
+) -> (Vec<TranslateEntry>, Vec<bool>) {
     crate::dictionary::rules::clear_uncovered_brackets();
     let mut entries: Vec<TranslateEntry> = Vec::with_capacity(tokens.len());
     // `$max3` bookkeeping: which symbol is repeating, and how many times so far.
@@ -9138,7 +9153,10 @@ pub(crate) fn build_translate_entries(
     // Words a multi-word list entry already pronounced with its first word.
     let mut skip_words = 0usize;
     let mut dot_removed_at: Option<usize> = None;
+    let mut swallowed = vec![false; tokens.len()];
     for (token_ix, token) in tokens.iter().enumerate() {
+        swallowed[token_ix] = (matches!(token, Token::Word(_)) && skip_words > 0)
+            || (matches!(token, Token::Punctuation('.')) && point_after_number(tokens, token_ix));
         match token {
             Token::Punctuation('.') if dot_removed_at == Some(token_ix) => {
                 entries.push(TranslateEntry {
@@ -9826,7 +9844,7 @@ pub(crate) fn build_translate_entries(
             e.kind = TranslateEntryKind::LangSwitch;
         }
     }
-    entries
+    (entries, swallowed)
 }
 
 /// Tones for the vowels of a stretch spoken in another language's table inside a
@@ -10793,7 +10811,7 @@ impl Translator {
         };
         let alts = letters::AltLangs::new(&self.data_dir);
         let (emphasized, end_emphasis) = emphasized_tokens(&tokens, start_emphasis);
-        let mut entries = build_translate_entries(
+        let (mut entries, swallowed) = build_translate_entries(
             &tokens,
             dict,
             phdata,
@@ -10809,7 +10827,7 @@ impl Translator {
             c.emphasis = end_emphasis;
         }
         promote_translate_entries(&mut entries, &emphasized, phdata, lang, outer_continues);
-        carry_embedded_in_silent_dots(&tokens, &mut entries, &emphasized);
+        let bracket_carries = carry_embedded_in_silent_words(&tokens, &mut entries, &emphasized, &swallowed);
         if primary_bcp47_subtag(lang) == "en" {
             apply_en_or_linking_r(&mut entries, phdata);
         }
@@ -11093,6 +11111,15 @@ impl Translator {
                                     .iter()
                                     .rposition(|k| k.marker.is_none())
                                     .is_some_and(|i| codes[i].code == crate::phoneme::PHON_PAUSE);
+                            if bracket_carries[token_ix] {
+                                if closed && !only_pauses_since_clause_start(&codes) {
+                                    codes.push(PhonemeCode { code: 15, is_boundary: true, ..Default::default() });
+                                }
+                                codes.push(PhonemeCode {
+                                    code: crate::phoneme::PHON_PAUSE_VSHORT,
+                                    ..Default::default()
+                                });
+                            }
                             let pauses = if pause_open {
                                 0
                             } else if punct_covers(&self.options, *c) {
