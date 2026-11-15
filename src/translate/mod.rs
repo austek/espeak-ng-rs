@@ -2057,6 +2057,7 @@ fn split_overlong_clauses(tokens: Vec<Token>) -> Vec<Token> {
 pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     let text = normalize_number_symbols_except(text, &grammar.listed_symbols);
     let text = ellipsis_for_dot_runs(text.as_ref());
+    let text = dots_blanked_before_hyphens(text.as_ref());
     let text = text.as_ref();
     let mut tokens = Vec::new();
     let mut chars = text.chars().peekable();
@@ -6855,6 +6856,18 @@ where
 {
     let mut rest = after.by_ref().skip_while(|c| c.is_whitespace() && *c != '\n');
     rest.next() == Some('\'') && rest.next() == Some('s')
+}
+
+/// A '.' after a word and before a hyphen is blanked, so it is not pronounced (translate.c:1513).
+fn dots_blanked_before_hyphens(text: &str) -> std::borrow::Cow<'_, str> {
+    if !text.contains(".-") {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let blanked = |ix: usize| {
+        chars[ix] == '.' && chars.get(ix + 1) == Some(&'-') && ix > 0 && chars[ix - 1].is_alphabetic()
+    };
+    std::borrow::Cow::Owned(chars.iter().enumerate().filter(|&(ix, _)| !blanked(ix)).map(|(_, c)| *c).collect())
 }
 
 /// A language with `lowercase_sentence` ends the clause at a dot before a lower-case word.
