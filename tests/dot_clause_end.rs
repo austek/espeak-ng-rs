@@ -36,6 +36,17 @@ const NEWLINE_CASES: &[Case] = &[
     ("ru", "Он сказал .\nпотом ушёл", "ˈon skazˈɑɭ\npˈotʌm uʃˈoɭ", "'on_ skaz'Al\np'otVm uS'ol"),
 ];
 
+const SYMBOL_AFTER_DOT_CASES: &[Case] = &[
+    ("en", "He said .,then left", "hiː sˈɛd dˈɒt ðˈɛn lˈɛft", "hi: s'Ed d'0t D'En l'Eft"),
+    ("en", "He said .;then left", "hiː sˈɛd dˈɒt ðˈɛn lˈɛft", "hi: s'Ed d'0t D'En l'Eft"),
+    ("en", "He said .?then left", "hiː sˈɛd dˈɒt ðˈɛn lˈɛft", "hi: s'Ed d'0t D'En l'Eft"),
+    ("de", "Er sagte .;dann ging er", "ɛɾ zˈɑːɡtə dan ɡˈɪŋ ɛɾ", "_!_|Er z'A:gt@ dan g'IN _|Er"),
+    ("es", "Dijo .,luego se fue", "dˈixo pˈunto luˈeɣo se fwˈe", "d'ixo p'unto lu'eQo se fw'e"),
+    ("en", "He said.,then left", "hiː sˈɛd dˈɒt ðˈɛn lˈɛft", "hi: s'Ed d'0t D'En l'Eft"),
+    ("en", "He said .,", "hiː sˈɛd", "hi: s'Ed"),
+    ("en", "He said .? Then left", "hiː sˈɛd\nðˈɛn lˈɛft", "hi: s'Ed\nD'En l'Eft"),
+];
+
 const LOWERCASE_SENTENCE_CASES: &[Case] = &[
     ("ka", "მან თქვა . მერე წავიდა.", "mˈan tʰkʰvˈa\nmˈere tsˈavida", "m'an t#k#v'a\nm'ere ts'avida"),
     ("ka", "მან თქვა. მერე წავიდა.", "mˈan tʰkʰvˈa\nmˈere tsˈavida", "m'an t#k#v'a\nm'ere ts'avida"),
@@ -64,6 +75,11 @@ fn check(cases: &[Case]) {
 #[test]
 fn a_spaced_dot_before_a_clause_ending_dot_is_not_read() {
     check(CASES);
+}
+
+#[test]
+fn a_dot_followed_by_a_symbol_without_a_blank_stays_in_the_clause() {
+    check(SYMBOL_AFTER_DOT_CASES);
 }
 
 #[test]

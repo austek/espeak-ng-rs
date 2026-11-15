@@ -2174,7 +2174,8 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // full stop is always followed by whitespace or end of text.  (An
             // English "3.14" never reaches here — its '.' is the decimal
             // separator, consumed by the number tokenizer above.)
-            if c == '.' && matches!(chars.peek(), Some(n) if n.is_alphanumeric()) {
+            let glued = chars.clone().next().is_some_and(|n| dot_stays_before(n, chars.clone().skip(1)));
+            if c == '.' && glued {
                 tokens.push(Token::Punctuation('.'));
                 continue;
             }
@@ -6739,6 +6740,19 @@ fn carry_embedded_in_silent_dots(tokens: &[Token], entries: &mut [TranslateEntry
 /// Whether a '.' followed by `after` stays inside the clause, as C's
 /// `ReadClause` decides: a letter or hyphen follows, or blanks without a newline and then a
 /// lower-case letter.
+/// A '.' directly followed by `next` never ends the clause: C only checks for a clause end
+/// when a blank, bracket, `?` or embedded command follows (readclause.c:817).  Another dot and
+/// a hyphen are handled by their own rules.
+fn dot_stays_before<I>(next: char, rest: I) -> bool
+where
+    I: Iterator<Item = char> + Clone,
+{
+    match next {
+        ',' | ';' | ':' | '!' | '?' => !ascii_clause_end_follows('.', rest.skip_while(|c| matches!(c, ',' | ';' | ':' | '!' | '?'))),
+        _ => next.is_alphanumeric() || !(next.is_whitespace() || is_bracket(next) || matches!(next, '.' | '-') || next == CTRL_EMBEDDED),
+    }
+}
+
 /// A language with `lowercase_sentence` ends the clause at a dot before a lower-case word.
 fn dot_stays_in_clause<I>(after: I, lowercase_sentence: bool) -> bool
 where
