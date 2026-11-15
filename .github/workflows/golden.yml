@@ -102,6 +102,7 @@ jobs:
           --test strend2_before_clause_end_stress
           --test ssml_break_emphasis
           --test ssml_say_as
+          --test word_before_number_context
           --test synth_parity_tone
           --test synth_parity_klatt
           --test synth_parity_next3

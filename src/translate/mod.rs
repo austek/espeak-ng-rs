@@ -8744,15 +8744,22 @@ fn lowercase_for_lang(word: &str, lang: &str) -> String {
 /// a digit" (`__) - (_D`), so the digits have to be visible.
 fn next_word_opening(tokens: &[Token], from: usize, lang: &str) -> [u8; 8] {
     let mut out = [0u8; 8];
+    let word_ends_alphabetic = matches!(from.checked_sub(1).map(|i| &tokens[i]), Some(Token::Word(w)) if w.ends_with(char::is_alphabetic));
     let Some(next) = tokens[from..]
         .iter()
         .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
-        .find_map(|t| match t {
-            Token::Word(w) => Some(lowercase_for_lang(w, lang)),
-            Token::Number(n) => Some(n.surface().to_string()),
-            // A currency sign stays in C's clause text (pt `r (_\$` reads "R$").
-            Token::Punctuation(c) if matches!(c, '$' | '€' | '£' | '¥' | '¢') => Some(c.to_string()),
-            _ => None,
+        .enumerate()
+        .find_map(|(skipped, t)| {
+            Some(match t {
+                Token::Word(w) => lowercase_for_lang(w, lang),
+                // C puts an extra space between a word and a number after it, so a rule
+                // that wants the digit right behind a single space (`_) a (_D`) misses.
+                Token::Number(n) if skipped > 0 && word_ends_alphabetic => format!(" {}", n.surface()),
+                Token::Number(n) => n.surface().to_string(),
+                // A currency sign stays in C's clause text (pt `r (_\$` reads "R$").
+                Token::Punctuation(c) if matches!(c, '$' | '€' | '£' | '¥' | '¢') => c.to_string(),
+                _ => return None,
+            })
         })
     else {
         return out;
