@@ -9200,7 +9200,10 @@ pub(crate) fn build_translate_entries(
                 // pronunciation ("the word has $abbrev flag, but no pronunciation
                 // specified.  Speak as individual letters") — English `usa` is
                 // `j,u:,Es'eI`.
-                let dot_follows = matches!(tokens.get(token_ix + 1), Some(Token::Punctuation('.')));
+                let dot_follows = matches!(
+                    tokens[token_ix + 1..].iter().find(|t| !matches!(t, Token::Space | Token::Embedded(_))),
+                    Some(Token::Punctuation('.'))
+                );
                 let mut short_caps_spelling = (expect.all_upper
                     && !wr.found_in_list
                     && (2..4).contains(&word.chars().count())
