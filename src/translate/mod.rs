@@ -8343,64 +8343,6 @@ fn apply_exponents(tokens: &mut Vec<Token>, lang: &str) {
     *tokens = out;
 }
 
-/// English fraction denominator word for a small denominator (`2`–`10`),
-/// singular or plural — `1/2`→"half", `3/4`→"quarters".  `None` otherwise.
-fn fraction_denominator_word(denom: &str, plural: bool) -> Option<&'static str> {
-    Some(match (denom, plural) {
-        ("2", false) => "half",     ("2", true) => "halves",
-        ("3", false) => "third",    ("3", true) => "thirds",
-        ("4", false) => "quarter",  ("4", true) => "quarters",
-        ("5", false) => "fifth",    ("5", true) => "fifths",
-        ("6", false) => "sixth",    ("6", true) => "sixths",
-        ("7", false) => "seventh",  ("7", true) => "sevenths",
-        ("8", false) => "eighth",   ("8", true) => "eighths",
-        ("9", false) => "ninth",    ("9", true) => "ninths",
-        ("10", false) => "tenth",   ("10", true) => "tenths",
-        _ => return None,
-    })
-}
-
-/// Read `<num>/<den>` as a spoken fraction (`1/2`→"one half", `3/4`→"three
-/// quarters") for small denominators — this also renders the vulgar-fraction
-/// characters, which `normalize_number_symbols` turns into `n/m`.  English-only;
-/// a trailing `/` (a date like `1/2/2024`) is left alone.
-fn apply_fractions(tokens: &mut Vec<Token>, lang: &str) {
-    if primary_bcp47_subtag(lang) != "en" {
-        return;
-    }
-    let mut out = Vec::with_capacity(tokens.len());
-    let mut i = 0;
-    while i < tokens.len() {
-        if let Token::Number(NumberToken::Cardinal(num)) = &tokens[i] {
-            let is_slash = matches!(tokens.get(i + 1), Some(Token::Punctuation('/')));
-            let not_date = !matches!(tokens.get(i + 3), Some(Token::Punctuation('/')));
-            if is_slash && not_date {
-                if let Some(Token::Number(NumberToken::Cardinal(den))) = tokens.get(i + 2) {
-                    if let Some(word) = fraction_denominator_word(den, num != "1") {
-                        // A whole number immediately before (`1 1/2`, i.e. `1½`) is a
-                        // mixed number → "<whole> and <num> <fraction>" ("one and one
-                        // half").  (The idiomatic "and a half" is avoided: a bare "a"
-                        // reads as the letter name, not the article.)
-                        let mixed = matches!(out.last(), Some(Token::Space | Token::WordJoin))
-                            && matches!(out.get(out.len().wrapping_sub(2)), Some(Token::Number(NumberToken::Cardinal(_))));
-                        if mixed {
-                            out.pop(); // drop the space between whole and fraction
-                            out.push(Token::Word("and".to_string()));
-                        }
-                        out.push(Token::Number(NumberToken::Cardinal(num.clone())));
-                        out.push(Token::Word(word.to_string()));
-                        i += 3;
-                        continue;
-                    }
-                }
-            }
-        }
-        out.push(tokens[i].clone());
-        i += 1;
-    }
-    *tokens = out;
-}
-
 /// Look up the spoken name of a standalone symbol via the dictionary's
 /// character-name entries (`_%`, `_$`, …), mirroring `LookupCharName`.
 /// Returns the phoneme bytes, or empty if the symbol has no name in this voice.
@@ -10428,7 +10370,6 @@ impl Translator {
         apply_decades(&mut tokens, lang);
         apply_dimensions(&mut tokens, lang);
         apply_space_grouping(&mut tokens, &self.options.number_grammar);
-        apply_fractions(&mut tokens, lang);
         apply_exponents(&mut tokens, lang);
         split_script_runs(&mut tokens, dict, &self.options);
         let spelled = split_abandoned_words(&mut tokens, dict, &self.options, phdata);
@@ -12797,34 +12738,6 @@ mod tests {
         let mut t2 = tokenize_opts("x^2", &NumberGrammar::for_lang("en"));
         apply_exponents(&mut t2, "en");
         assert!(t2.iter().any(|t| matches!(t, Token::Punctuation('^'))));
-    }
-
-    #[test]
-    fn simple_fractions_are_spoken() {
-        let rewrite = |s: &str, lang: &str| {
-            let mut t = tokenize_opts(s, &NumberGrammar::for_lang(lang));
-            apply_fractions(&mut t, lang);
-            t
-        };
-        let words = |s: &str| -> Vec<String> {
-            rewrite(s, "en").iter().filter_map(|t| match t {
-                Token::Word(w) => Some(w.clone()),
-                Token::Number(NumberToken::Cardinal(n)) => Some(n.clone()),
-                _ => None,
-            }).collect()
-        };
-        assert_eq!(words("1/2"), vec!["1", "half"]);
-        assert_eq!(words("3/4"), vec!["3", "quarters"]);
-        assert_eq!(words("2/3"), vec!["2", "thirds"]);
-        // Mixed numbers: "1 1/2" → "one and one half".
-        assert_eq!(words("1 1/2"), vec!["1", "and", "1", "half"]);
-        assert_eq!(words("2 3/4"), vec!["2", "and", "3", "quarters"]);
-        // A date-like `a/b/c` is not a fraction.
-        assert!(rewrite("3/4/2024", "en").iter().any(|t| matches!(t, Token::Punctuation('/'))));
-        // A large denominator is left as a slash.
-        assert!(rewrite("1/12", "en").iter().any(|t| matches!(t, Token::Punctuation('/'))));
-        // Non-English is untouched.
-        assert!(rewrite("1/2", "de").iter().any(|t| matches!(t, Token::Punctuation('/'))));
     }
 
     #[test]
