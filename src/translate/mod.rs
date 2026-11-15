@@ -9619,8 +9619,9 @@ pub(crate) fn promote_translate_entries(
     ) {
         let n = entries.len();
         let alt_attributes = StressOpts::for_lang(lang).alt_attributes;
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..n {
+        // Last word first: a word later in the clause has taken its own end stress before
+        // an earlier `$strend2` word asks whether everything after it is unstressed.
+        for i in (0..n).rev() {
             if entries[i].kind != TranslateEntryKind::Word {
                 continue;
             }
