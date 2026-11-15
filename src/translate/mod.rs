@@ -6858,7 +6858,7 @@ fn apostrophe_s_follows<I>(mut after: I) -> bool
 where
     I: Iterator<Item = char>,
 {
-    let mut rest = after.by_ref().skip_while(|c| c.is_whitespace() && *c != '\n');
+    let mut rest = after.by_ref().skip_while(|&c| readclause::ctype::is_blank(c) && c != '\n');
     rest.next() == Some('\'') && rest.next() == Some('s')
 }
 
@@ -10722,6 +10722,13 @@ impl Translator {
     /// name is `LookupCharName` in the default voice, which reads exactly this
     /// key — so `he @` is "at sign", not the short reading of `@` ("at") that
     /// re-translating the character itself would give.
+    /// A word with its apostrophe kept (`'s` after dotted initials), looked up as one word.
+    pub(crate) fn kept_apostrophe_word(&self, word: &str) -> Option<Vec<u8>> {
+        let loaded = self.loaded_data().ok()?;
+        let wr = word_to_phonemes(word, &loaded.dict, &loaded.phdata, &loaded.stress_opts, &self.options);
+        wr.phonemes.iter().any(|&b| b != 0).then_some(wr.phonemes)
+    }
+
     pub(crate) fn char_name_phonemes(&self, c: char) -> Option<Vec<u8>> {
         let loaded = self.loaded_data().ok()?;
         let (dict, phdata, stress_opts) = (&loaded.dict, &loaded.phdata, &loaded.stress_opts);
@@ -11171,7 +11178,18 @@ impl Translator {
                         Token::Word(w) if w.to_lowercase() == word => w.as_str(),
                         _ => word,
                     };
+                    let kept_apostrophe = cased_word.starts_with('\'') && cased_word.chars().count() > 1;
                     let sw = match char_name {
+                        None if kept_apostrophe => switch_cache.get(&target).and_then(|tr| {
+                            tr.kept_apostrophe_word(cased_word).map(|ph| {
+                                let mut named = ph.iter()
+                                    .filter(|&&b| b != 0)
+                                    .map(|&b| PhonemeCode { code: b, ..Default::default() })
+                                    .collect::<Vec<_>>();
+                                tr.resolve_programs(&mut named);
+                                named
+                            })
+                        }),
                         Some(c) => switch_cache.get(&target).and_then(|tr| {
                             char_name_cache
                                 .entry((target.clone(), c))

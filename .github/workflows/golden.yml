@@ -332,6 +332,7 @@ jobs:
           --test ssml_say_as_characters_capital
           --test handed_over_word_case
           --test dotted_abbrev_unspaced_hand_over
+          --test dotted_abbrev_genitive_handed_over
           --test ssml_say_as_pause_after_switched_word
       - name: C ABI tests
         run: |
