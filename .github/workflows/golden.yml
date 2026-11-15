@@ -323,6 +323,7 @@ jobs:
           --test dotted_abbrev_blank_before_dot
           --test dotted_abbrev_buffer_limit
           --test spelled_word_phoneme_buffer
+          --test dotted_abbrev_genitive
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

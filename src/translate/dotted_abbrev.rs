@@ -13,6 +13,7 @@ const MAX_LOOKAHEAD: usize = 2 * MAX_LETTER_BYTES + 4;
 pub(super) struct Run {
     pub letters: String,
     pub last: usize,
+    pub possessive: bool,
 }
 
 /// The words of C's clause text from `from` on: words and dots set apart by blanks.  A word
@@ -36,12 +37,12 @@ pub(super) fn clause_words(tokens: &[Token], from: usize) -> Vec<(usize, &str)> 
             Token::Word(w) if blank => w.as_str(),
             Token::Punctuation('.') if blank => {
                 words.push((ix, "."));
-                blank = matches!(tokens.get(ix + 1), Some(Token::Word(_)));
+                blank = matches!(tokens.get(ix + 1), Some(Token::Word(_))) || apostrophe_s_after(tokens, ix);
                 continue;
             }
             Token::ClauseBoundary(_) => break,
             _ => {
-                if !blank {
+                if !blank && !apostrophe_s_after(tokens, ix.saturating_sub(1)) {
                     words.pop();
                 }
                 break;
@@ -86,13 +87,15 @@ fn scan(tokens: &[Token], from: usize) -> Scan {
     let mut letters = String::new();
     let mut count = 0;
     let mut last = from;
+    let mut possessive = false;
     let mut at = 0;
     while let Some(&(ix, word)) = words.get(at).filter(|(_, w)| is_letter(w)) {
-        let dot = words.get(at + 1).is_some_and(|&(_, d)| d == ".");
-        let ok = match (dot, words.get(at + 2).is_some(), count > 0) {
-            (true, true, _) => 1,
-            (true, false, _) | (false, _, false) => 0,
-            (false, _, true) => 2,
+        let dot_at = words.get(at + 1).filter(|&&(_, d)| d == ".").map(|&(dot_ix, _)| dot_ix);
+        let ok = match (dot_at, words.get(at + 2).is_some(), count > 0) {
+            (Some(_), true, _) => 1,
+            (Some(dot_ix), false, _) if apostrophe_s_after(tokens, dot_ix) => 3,
+            (Some(_), false, _) | (None, _, false) => 0,
+            (None, _, true) => 2,
         };
         if ok == 0 {
             break;
@@ -102,15 +105,24 @@ fn scan(tokens: &[Token], from: usize) -> Scan {
         }
         letters.push_str(word);
         count += 1;
-        last = ix;
-        if ok == 2 {
+        last = if ok == 3 { dot_at.unwrap_or(ix) } else { ix };
+        possessive = ok == 3 || (ok == 2 && apostrophe_s_after(tokens, ix));
+        if ok >= 2 {
             break;
         }
         at += 2;
     }
     if count > 1 {
-        Scan::Run(Run { letters, last })
+        Scan::Run(Run { letters, last, possessive })
     } else {
         Scan::Short
     }
+}
+
+/// C drops the final dot of `u.s.a.'s` (CheckDottedAbbrev, translateword.c:1195).
+fn apostrophe_s_after(tokens: &[Token], dot: usize) -> bool {
+    matches!(
+        (tokens.get(dot + 1), tokens.get(dot + 2)),
+        (Some(Token::Punctuation('\'')), Some(Token::Word(w))) if w.starts_with('s')
+    )
 }

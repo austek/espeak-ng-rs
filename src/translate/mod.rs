@@ -2177,7 +2177,8 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // full stop is always followed by whitespace or end of text.  (An
             // English "3.14" never reaches here — its '.' is the decimal
             // separator, consumed by the number tokenizer above.)
-            let glued = chars.clone().next().is_some_and(|n| dot_stays_before(n, chars.clone().skip(1)));
+            let glued = chars.clone().next().is_some_and(|n| dot_stays_before(n, chars.clone().skip(1)))
+                || (c == '.' && apostrophe_s_follows(chars.clone()));
             if c == '.' && glued {
                 tokens.push(Token::Punctuation('.'));
                 continue;
@@ -2496,7 +2497,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     word.push('.');
                     chars.next();
                     prev_char = '.';
-                } else if next == '.' && is_dotted_letters(&word) && (grammar.clause_text || dot_stays_in_clause(chars.clone().skip(1), grammar.lowercase_sentence)) {
+                } else if next == '.' && is_dotted_letters(&word) && (grammar.clause_text || dot_stays_in_clause(chars.clone().skip(1), grammar.lowercase_sentence) || apostrophe_s_follows(chars.clone().skip(1))) {
                     word.push('.');
                     chars.next();
                     break;
@@ -6716,7 +6717,7 @@ fn join_spaced_letter_dots(
     while ix < tokens.len() {
         let run = match &tokens[ix] {
             Token::Word(w) if is_single_letter_word(w) || is_dotted_letters(w) => {
-                dotted_abbrev::check(tokens, ix).filter(|run| run.last > ix)
+                dotted_abbrev::check(tokens, ix).filter(|run| run.last > ix || run.possessive)
             }
             _ => None,
         };
@@ -6736,8 +6737,21 @@ fn join_spaced_letter_dots(
         };
         let moved = tokens[ix + 1..=run.last].iter().filter(|t| matches!(t, Token::Embedded(_))).cloned();
         let replacement: Vec<Token> = [Token::Word(word), Token::Space].into_iter().chain(moved).collect();
+        let after = ix + replacement.len();
         tokens.splice(ix..=run.last, replacement);
+        if run.possessive {
+            fuse_genitive_s(tokens, after);
+        }
         ix += 1;
+    }
+}
+
+/// The `'s` behind a joined acronym (`u.s.a.'s`) is a word of its own, as C leaves it once the
+/// final dot has been deleted.
+fn fuse_genitive_s(tokens: &mut Vec<Token>, at: usize) {
+    if let (Some(Token::Punctuation('\'')), Some(Token::Word(w))) = (tokens.get(at), tokens.get(at + 1)) {
+        let fused = Token::Word(format!("'{w}"));
+        tokens.splice(at..=at + 1, [fused]);
     }
 }
 
@@ -6810,6 +6824,16 @@ where
         ',' | ';' | ':' | '!' | '?' => !ascii_clause_end_follows('.', rest.skip_while(|c| matches!(c, ',' | ';' | ':' | '!' | '?'))),
         _ => next.is_alphanumeric() || !(next.is_whitespace() || is_bracket(next) || matches!(next, '.' | '-') || next == CTRL_EMBEDDED),
     }
+}
+
+/// C keeps a '.' inside the clause when blanks without a newline and then `'s` follow
+/// (readclause.c:872, English acronym plus genitive such as `u.s.a.'s`).
+fn apostrophe_s_follows<I>(mut after: I) -> bool
+where
+    I: Iterator<Item = char>,
+{
+    let mut rest = after.by_ref().skip_while(|c| c.is_whitespace() && *c != '\n');
+    rest.next() == Some('\'') && rest.next() == Some('s')
 }
 
 /// A language with `lowercase_sentence` ends the clause at a dot before a lower-case word.
