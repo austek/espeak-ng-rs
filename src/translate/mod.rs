@@ -565,6 +565,9 @@ pub struct NumberGrammar {
     /// Slavic scale-word declension (gender + case agreement on "thousand",
     /// "million", …).  See `SlavicThousands`.
     pub thousands_variant: SlavicThousands,
+    /// The text is one clause the clause reader already cut: a dot left in it is text, not a
+    /// clause end.
+    pub clause_text: bool,
     /// Longest run of 5 to 32 digits read as a cardinal; longer runs up to 32
     /// digits are spelled in groups (upstream `langopts.max_digits`).
     pub max_digits: u8,
@@ -1013,6 +1016,7 @@ impl Default for NumberGrammar {
             dutch_ij: false,
             elide_tens_vowel: false,
             thousands_variant: SlavicThousands::None,
+            clause_text: false,
             max_digits: 14,
             break_numbers: BREAK_THOUSANDS,
             c_numbers: 1,
@@ -1334,7 +1338,11 @@ fn is_ordinal_suffix(suffix: &str, digits: &str, grammar: &NumberGrammar) -> boo
 fn dot_marks_ordinal_before(
     mut rest: impl Iterator<Item = char> + Clone,
     declined: &[String],
+    clause_text: bool,
 ) -> bool {
+    if clause_text && rest.clone().all(char::is_whitespace) {
+        return true;
+    }
     match rest.next() {
         Some(first) if first.is_whitespace() => {
             let next = rest.clone().next();
@@ -2162,6 +2170,10 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 tokens.push(Token::Punctuation('.'));
                 continue;
             }
+            if c == '.' && grammar.clause_text && previous.is_none_or(|p| p.is_whitespace() || p == CTRL_EMBEDDED) {
+                tokens.push(Token::Punctuation('.'));
+                continue;
+            }
             // A word that follows a spoken dot keeps its own dot too: C drops a
             // dot only after a word that does not itself follow punctuation.
             if c == '.'
@@ -2334,7 +2346,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             if grammar.ordinals.dot_marks_ordinal && chars.peek() == Some(&'.') {
                 let mut lookahead = chars.clone();
                 lookahead.next(); // skip '.'
-                if dot_marks_ordinal_before(lookahead, &grammar.ordinals.alt_words) {
+                if dot_marks_ordinal_before(lookahead, &grammar.ordinals.alt_words, grammar.clause_text) {
                     chars.next();
                     tokens.push(Token::Number(NumberToken::Ordinal(OrdinalNumber {
                         digits,
@@ -2464,7 +2476,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     word.push('.');
                     chars.next();
                     prev_char = '.';
-                } else if next == '.' && is_dotted_letters(&word) && dot_stays_in_clause(chars.clone().skip(1)) {
+                } else if next == '.' && is_dotted_letters(&word) && (grammar.clause_text || dot_stays_in_clause(chars.clone().skip(1))) {
                     word.push('.');
                     chars.next();
                     break;
@@ -10520,7 +10532,10 @@ impl Translator {
 
         let text = normalize_apostrophes(text);
         let text = schwa_for_article_apostrophe(&text, lang);
-        let number_grammar = with_dict_ordinal_suffixes(&self.options.number_grammar, &text, dict);
+        let number_grammar = NumberGrammar {
+            clause_text: matches!(mode, TokenizeMode::Clause { .. }),
+            ..with_dict_ordinal_suffixes(&self.options.number_grammar, &text, dict)
+        };
         let say_as_start = carry.as_deref().map_or(0, |c| c.say_as.mode);
         let raw = match carry.as_deref_mut() {
             Some(c) if matches!(mode, TokenizeMode::Clause { .. }) => {
