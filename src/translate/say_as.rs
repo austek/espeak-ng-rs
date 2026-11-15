@@ -124,15 +124,22 @@ fn spelled_words(text: &str, mode: u8, pause: bool) -> Vec<Token> {
     whitespace_words(text, |w| vec![Token::Spelled { text: w.to_string(), mode, pause }])
 }
 
-/// C `TranslateWord3`: a one-character key name is spelled, a longer one is read as a word.
+/// C `TranslateWord3`: a one-character word of a key name is spelled; a longer one is looked
+/// up, and read by the rules, under its `_`-prefixed name.
 fn key_words(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
-    whitespace_words(text, |w| {
-        let lower = w.to_lowercase();
-        match lower.chars().count() {
-            1 => vec![Token::Spelled { text: lower, mode: SINGLE_CHARS, pause: false }],
-            _ => tokenize_opts(&lower, grammar),
-        }
+    whitespace_words(text, |w| match w.chars().count() {
+        1 => vec![Token::Spelled { text: w.to_lowercase(), mode: SINGLE_CHARS, pause: false }],
+        _ => tokenize_opts(&w.to_lowercase(), grammar).into_iter().map(key_token).collect(),
     })
+}
+
+fn key_token(token: Token) -> Token {
+    let spelled = |text: String| Token::Spelled { text, mode: SINGLE_CHARS, pause: false };
+    match token {
+        Token::Word(w) if w.chars().count() == 1 => spelled(w),
+        Token::Word(w) => Token::Word(format!("_{w}")),
+        Token::Number(NumberToken::Cardinal(d)) if d.len() == 1 => spelled(d),        other => other,
+    }
 }
 
 /// C splits a digit run into words of `n` digits (`count_sayas_digits`) and ends it at

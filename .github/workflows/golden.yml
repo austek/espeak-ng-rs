@@ -96,6 +96,7 @@ jobs:
           --test ssml_full_stop_before_tag
           --test ssml_dot_next_to_tag
           --test ssml_say_as_digit_groups
+          --test ssml_say_as_key_names
           --test readclause_terminator
           --test readclause_reader
           --test readclause_ssml_tags
