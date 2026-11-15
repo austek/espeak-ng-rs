@@ -6862,14 +6862,37 @@ where
     rest.next() == Some('\'') && rest.next() == Some('s')
 }
 
+/// Offsets of the letters that close an embedded command (`\x01+10P`): C's previous source
+/// character is not a letter after one.
+fn embedded_command_ends(chars: &[char]) -> std::collections::HashSet<usize> {
+    let mut ends = std::collections::HashSet::new();
+    let mut ix = 0;
+    while ix < chars.len() {
+        if chars[ix] == CTRL_EMBEDDED {
+            ix += 1 + usize::from(matches!(chars.get(ix + 1), Some('+' | '-')));
+            while chars.get(ix).is_some_and(char::is_ascii_digit) {
+                ix += 1;
+            }
+            ends.insert(ix);
+        }
+        ix += 1;
+    }
+    ends
+}
+
 /// A '.' after a word and before a hyphen is blanked, so it is not pronounced (translate.c:1513).
 fn dots_blanked_before_hyphens(text: &str) -> std::borrow::Cow<'_, str> {
     if !text.contains(".-") {
         return std::borrow::Cow::Borrowed(text);
     }
     let chars: Vec<char> = text.chars().collect();
+    let command_ends = embedded_command_ends(&chars);
     let blanked = |ix: usize| {
-        chars[ix] == '.' && chars.get(ix + 1) == Some(&'-') && ix > 0 && chars[ix - 1].is_alphabetic()
+        chars[ix] == '.'
+            && chars.get(ix + 1) == Some(&'-')
+            && ix > 0
+            && chars[ix - 1].is_alphabetic()
+            && !command_ends.contains(&(ix - 1))
     };
     std::borrow::Cow::Owned(chars.iter().enumerate().filter(|&(ix, _)| !blanked(ix)).map(|(_, c)| *c).collect())
 }
@@ -11441,6 +11464,9 @@ impl Translator {
                     let joined = matches!(
                         token_ix.checked_sub(1).map(|k| &tokens[k]),
                         Some(Token::WordJoin)
+                    ) || matches!(
+                        token_ix.checked_sub(2).map(|k| &tokens[k..token_ix]),
+                        Some([Token::Punctuation('.'), Token::Punctuation('-')])
                     );
                     // Does the open run end in phonemes this word should be
                     // separated from?  A run of nothing but pauses doesn't count:

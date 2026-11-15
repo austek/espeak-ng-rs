@@ -328,6 +328,7 @@ jobs:
           --test dot_clause_ucd_space
           --test dot_clause_mark_run
           --test dot_before_hyphen
+          --test dot_after_command_before_hyphen
           --test ssml_say_as_characters_handed_over
           --test ssml_say_as_characters_capital
           --test handed_over_word_case
