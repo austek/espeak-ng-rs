@@ -6722,6 +6722,7 @@ fn join_spaced_letter_dots(
     tokens: &mut Vec<Token>,
     lists_phrase: &dyn Fn(&[Token], usize) -> Option<usize>,
     hands_over: &dyn Fn(char) -> bool,
+    word_hands_over: &dyn Fn(&str) -> bool,
 ) {
     let mut ix = 0;
     while ix < tokens.len() {
@@ -6735,8 +6736,13 @@ fn join_spaced_letter_dots(
             ix += 1;
             continue;
         };
-        let spelled = !run.letters.chars().next().is_some_and(hands_over);
-        if spelled && run.last == ix && !run.possessive {
+        let single_token = run.last == ix && !run.possessive;
+        let handed = match &tokens[ix] {
+            Token::Word(w) if single_token => word_hands_over(w),
+            _ => run.letters.chars().next().is_some_and(hands_over),
+        };
+        let spelled = !handed;
+        if spelled && single_token {
             ix += 1;
             continue;
         }
@@ -11067,10 +11073,16 @@ impl Translator {
             let env = letters::LetterEnv { voice, tr: voice, alts: &alts };
             matches!(letters::translate_letter(&env, c), letters::LetterOut::HandOver(_))
         };
+        let word_hands_over = |word: &str| {
+            let letters = lowercase_for_lang(&word.replace('.', ""), lang);
+            spell_word_letters(&letters, dict, phdata, stress_opts, &self.options)
+                .is_none_or(|ph| ph.contains(&crate::phoneme::PHON_SWITCH))
+        };
         join_spaced_letter_dots(
             &mut tokens,
             &|tokens, ix| list_takes_phrase(tokens, ix, dict, lang, start_emphasis),
             &first_letter_hands_over,
+            &word_hands_over,
         );
         if number_grammar.c_numbers != 0 {
             apply_time_reading(&mut tokens);
