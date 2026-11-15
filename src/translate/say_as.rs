@@ -9,6 +9,9 @@ const KEY: i32 = 0x24;
 const DIGITS: i32 = 0x40;
 const DIGITS1: i32 = 0xc1;
 const SINGLE_CHARS: u8 = 4;
+/// `Token::Spelled` mode of a one-character key name that C first looks up as a word, so a
+/// replacement entry (`+` is "plus") is read under its `_`-prefixed key name.
+pub(crate) const KEY_CHAR: u8 = 0x24;
 const MAX_BROKEN_DIGITS: usize = 32;
 
 /// The say-as mode a clause starts in and the digit count `count_sayas_digits` carries.
@@ -128,7 +131,7 @@ fn spelled_words(text: &str, mode: u8, pause: bool) -> Vec<Token> {
 /// up, and read by the rules, under its `_`-prefixed name.
 fn key_words(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     whitespace_words(text, |w| match w.chars().count() {
-        1 => vec![Token::Spelled { text: w.to_lowercase(), mode: SINGLE_CHARS, pause: false }],
+        1 => vec![Token::Spelled { text: w.to_lowercase(), mode: KEY_CHAR, pause: false }],
         _ => tokenize_opts(&w.to_lowercase(), grammar).into_iter().map(key_token).collect(),
     })
 }
@@ -138,7 +141,12 @@ fn key_token(token: Token) -> Token {
     match token {
         Token::Word(w) if w.chars().count() == 1 => spelled(w),
         Token::Word(w) => Token::Word(format!("_{w}")),
-        Token::Number(NumberToken::Cardinal(d)) if d.len() == 1 => spelled(d),        other => other,
+        Token::Number(NumberToken::Cardinal(d)) if d.len() == 1 => spelled(d),
+        Token::Number(NumberToken::Cardinal(d)) => Token::Word(format!("_{d}")),
+        Token::Punctuation(c) | Token::Operator(c) if super::is_spoken_symbol(c) => {
+            Token::Spelled { text: c.to_string(), mode: KEY_CHAR, pause: false }
+        }
+        other => other,
     }
 }
 

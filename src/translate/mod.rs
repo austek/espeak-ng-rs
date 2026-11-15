@@ -4752,6 +4752,31 @@ fn spelled_digit_groups(
     out
 }
 
+/// C's `TranslateWord3` under `tts:key`: a one-character key whose list entry is a
+/// replacement text reads that text, each word of it under its `_`-prefixed key name.
+fn key_name_replacement(
+    key: &str,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+) -> Option<Vec<u8>> {
+    let ctx = LookupCtx { dict_condition: options.dict_condition, ..Default::default() };
+    let entry = lookup(dict, key, &ctx)?;
+    let replaces = entry.flags1.found()
+        && !entry.phonemes.is_empty()
+        && entry.flags1.textmode() != options.reversed_textmode;
+    let expect = PosExpect { key_names: true, ..PosExpect::default() };
+    let spoken = word_to_phonemes_pos(key, dict, phdata, stress_opts, options, expect);
+    (replaces && !spoken.phonemes.iter().all(|&b| b == 0)).then_some(spoken.phonemes)
+}
+
+/// The digits of a key name's `_<digits>` lookup word, which C reads digit by digit when the
+/// list has no entry for the whole number.
+fn key_digit_run(word: &str) -> Option<&str> {
+    word.strip_prefix('_').filter(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+}
+
 /// One group of digits spoken digit by digit as a word, with the reading of the separator
 /// that C glues to it (`tail`) run on and the whole stressed once.
 fn spelled_group_word(
@@ -5222,6 +5247,8 @@ pub struct PosExpect {
     pub follow: [u8; 32],
     /// Which of this word and the ones in `follow` are emphasized, bit 0 being this word.
     pub emphasized_words: u32,
+    /// Under `tts:key`, the words of a replacement text are looked up under `_<word>`.
+    pub key_names: bool,
     /// A hyphen joins this word to the next, so it does not end a word in C's
     /// phoneme list and the word-final changes (devoicing) do not apply.
     pub hyphen_after: bool,
@@ -5771,6 +5798,11 @@ fn word_to_phonemes_inner(
                     // falls through to being read as raw phoneme *codes*
                     // (`-v de ∑` → `B'AE,EQ@,aIQqJ^Q"QE2`).
                     let lower = part.to_lowercase();
+                    let lower = if expect.key_names && lower.chars().count() > 1 {
+                        format!("_{lower}")
+                    } else {
+                        lower
+                    };
                     let letters: Vec<char> =
                         part.chars().filter(|c| c.is_alphabetic()).collect();
                     // Clause position is deliberately *not* passed down: an
@@ -9151,6 +9183,9 @@ pub(crate) fn build_translate_entries(
                     ..pos_expect_after_in(prev_word.as_deref(), dict, options.dict_condition)
                 };
                 let mut wr = word_to_phonemes_pos(&lower, dict, phdata, stress_opts, options, expect);
+                if let Some(run) = key_digit_run(&lower).filter(|_| wr.phonemes.iter().all(|&b| b == 0)) {
+                    wr.phonemes = spelled_group_word(run, &[], dict, phdata, stress_opts);
+                }
                 let mut spelled_with_switch = false;
                 let mut spelled_by_letters = false;
                 // The indicator of an ordinal that was read as a number (`3.º`)
@@ -9509,7 +9544,11 @@ pub(crate) fn build_translate_entries(
                 });
             }
             Token::Spelled { text, mode, .. } => {
-                let phonemes = spell_individual_letters(text, *mode, dict, phdata, stress_opts, options);
+                let replaced = (*mode == say_as::KEY_CHAR)
+                    .then(|| key_name_replacement(text, dict, phdata, stress_opts, options))
+                    .flatten();
+                let mode = if *mode == say_as::KEY_CHAR { 4 } else { *mode };
+                let phonemes = replaced.or_else(|| spell_individual_letters(text, mode, dict, phdata, stress_opts, options));
                 entries.push(TranslateEntry {
                     phonemes: phonemes.unwrap_or_default(),
                     dict_flags: 0,
