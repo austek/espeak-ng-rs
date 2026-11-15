@@ -10307,8 +10307,8 @@ impl Translator {
 
     /// One clause as the SSML clause reader ended it (C `TranslateClause` on `source[]`):
     /// punctuation the reader kept is text, and the clause closes with one boundary.
-    pub(crate) fn translate_clause(&self, text: &str) -> Result<Vec<PhonemeCode>> {
-        self.translate_codes_in_mode(text, true, None, TokenizeMode::Clause)
+    pub(crate) fn translate_clause(&self, text: &str, no_tonic: bool) -> Result<Vec<PhonemeCode>> {
+        self.translate_codes_in_mode(text, true, None, TokenizeMode::Clause { no_tonic })
     }
 
     fn translate_codes_in_mode(
@@ -11121,7 +11121,7 @@ impl Translator {
         }
         let outer_continues = self.options.switched && !self.options.switched_last;
         let tone_language = crate::dictionary::rules::tone_language(&self.options.lang);
-        if !outer_continues && !tone_language {
+        if !outer_continues && !tone_language && !mode.no_tonic() {
             promote_clause_tonics(&mut out, phdata, &self.options.lang, stress_opts.stress_flags);
         }
 

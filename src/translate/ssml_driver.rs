@@ -13,18 +13,25 @@ use crate::voices::{list_voices, select_voice_by_name, VoiceEntry};
 #[derive(Clone, Copy)]
 pub(crate) enum TokenizeMode {
     Plain,
-    /// The text is one clause already: only a closing boundary ends it.
-    Clause,
+    /// The text is one clause already: only a closing boundary ends it.  `no_tonic` is C
+    /// `CalcPitches` `clause_type == 4`: the clause gets no tonic syllable.
+    Clause { no_tonic: bool },
 }
 
 impl TokenizeMode {
     pub(crate) fn apply(self, tokens: Vec<Token>) -> Vec<Token> {
         match self {
             TokenizeMode::Plain => tokens,
-            TokenizeMode::Clause => single_clause(tokens),
+            TokenizeMode::Clause { .. } => single_clause(tokens),
         }
     }
+
+    pub(crate) fn no_tonic(self) -> bool {
+        matches!(self, TokenizeMode::Clause { no_tonic: true })
+    }
 }
+
+const INTONATION_NONE: u32 = 4;
 
 fn single_clause(mut tokens: Vec<Token>) -> Vec<Token> {
     let last = tokens.iter().rposition(|t| !matches!(t, Token::Space));
@@ -200,11 +207,11 @@ impl Translator {
     }
 
     fn translate_source_clause(&self, clause: SourceClause, voice: usize) -> Result<TranslatedClause> {
-        let codes = self.translate_clause(&clause.text)?;
         let terminator = match clause.tone_override {
             Some(tone) => Terminator::from_bits((clause.terminator.bits() & !0x7000) | (u32::from(tone) << 12)),
             None => clause.terminator,
         };
+        let codes = self.translate_clause(&clause.text, u32::from(terminator.intonation()) == INTONATION_NONE)?;
         Ok(TranslatedClause { codes, terminator, eof: clause.eof, voice_after: clause.voice_change, voice })
     }
 

@@ -100,6 +100,7 @@ jobs:
           --test ssml_clause_reader
           --test ssml_clause_audio
           --test strend2_before_clause_end_stress
+          --test ssml_break_emphasis
           --test synth_parity_tone
           --test synth_parity_klatt
           --test synth_parity_next3
