@@ -6625,6 +6625,38 @@ fn is_dotted_letters(word: &str) -> bool {
     word.contains('.') && word.split('.').all(is_single_letter_word)
 }
 
+fn is_lone_letter(word: &str) -> bool {
+    word.rsplit('.').next().is_some_and(|last| last.chars().count() == 1 && last.chars().all(char::is_alphabetic))
+}
+
+/// C's `LookupDictList` closes up single letters set apart by blanks and dots (`a . b` is
+/// `a.b`); embedded commands between them move behind the joined word.
+fn join_spaced_letter_dots(tokens: &mut Vec<Token>) {
+    let blank = |t: &Token| matches!(t, Token::Space | Token::Embedded(_));
+    let mut ix = 0;
+    while ix < tokens.len() {
+        let rest = &tokens[ix..];
+        let dot_ix = 1 + rest.iter().skip(1).take_while(|t| blank(t)).count();
+        let after = rest.iter().skip(dot_ix + 1).take_while(|t| blank(t)).count();
+        let end = dot_ix + 1 + after;
+        let joined = match (rest.first(), rest.get(dot_ix), rest.get(end)) {
+            (Some(Token::Word(a)), Some(Token::Punctuation('.')), Some(Token::Word(b)))
+                if is_lone_letter(a) && is_lone_letter(b) && !b.contains('.') =>
+            {
+                Some(format!("{a}.{b}"))
+            }
+            _ => None,
+        };
+        let Some(word) = joined else {
+            ix += 1;
+            continue;
+        };
+        let moved = rest[1..end].iter().filter(|t| matches!(t, Token::Embedded(_))).cloned();
+        let replacement: Vec<Token> = [Token::Word(word), Token::Space].into_iter().chain(moved).collect();
+        tokens.splice(ix..=ix + end, replacement);
+    }
+}
+
 /// C gives a word with no phonemes a very short pause when an embedded command is attached to
 /// it (translate.c:649); the pause already in an emphasized word's phonemes serves instead.
 fn carry_embedded_in_silent_dots(tokens: &[Token], entries: &mut [TranslateEntry], emphasized: &[bool]) {
@@ -10589,6 +10621,7 @@ impl Translator {
         expand_dotted_phrases(&mut tokens, dict, lang);
         tokens = announce_clause_punctuation(tokens, &self.options);
         suppress_abbreviation_periods(&mut tokens);
+        join_spaced_letter_dots(&mut tokens);
         if number_grammar.c_numbers != 0 {
             apply_time_reading(&mut tokens);
         }

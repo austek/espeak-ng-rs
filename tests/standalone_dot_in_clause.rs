@@ -21,7 +21,14 @@ fn run(lang: &str, flag: &str, text: &str) -> String {
 
 type Case = (&'static str, &'static str, &'static str, &'static str);
 
-const CASES: [Case; 17] = [
+const CASES: [Case; 24] = [
+    ("en", "a . b", "ˌeɪbˈiː", ",eIb'i:"),
+    ("en", "x . y z", "ˌɛkswˈaɪ zˈɛd", ",Eksw'aI z'Ed"),
+    ("en", "a . b . c", "ˌeɪbˌiːsˈiː", ",eIb,i:s'i:"),
+    ("en", "<speak>a <emphasis>.</emphasis> b</speak>", "ˌeɪbˈiː", ",eIb'i:"),
+    ("en", "<speak>x<mark name=\"m\"/>. y</speak>", "ˌɛkswˈaɪ", ",Eksw'aI"),
+    ("de", "a . b", "ˌɑːbˈeː", "_!,A:b'e:"),
+    ("es", "a . b", "ˌaβˈe", ",aB'e"),
     ("en", "<speak>C<mark name=\"x\"/>. and D</speak>", "sˈiː dˈɒt and dˈiː", "s'i: d'0t_:_: and d'i:"),
     ("en", "3.5 . and 4.5", "θɹˈiː pɔɪnt fˈaɪv dˈɒt and fˈɔː pɔɪnt fˈaɪv","Tr'i: pOInt f'aIv d'0t_:_: and f'o@ pOInt f'aIv"),
     ("en", "<speak>N.A.S.A<mark name=\"m\"/>. is here</speak>", "ˌɛnˌeɪˌɛsˈeɪ  ɪz hˈiə",",En,eI,Es'eI _| Iz h'i@3"),
