@@ -30,7 +30,7 @@ pub(crate) mod ucd_alpha;
 pub mod ssml;
 pub mod readclause;
 pub mod ssml_driver;
-use ssml_driver::TokenizeMode;
+use ssml_driver::{ClauseCarry, TokenizeMode};
 mod accent;
 mod mandarin_sandhi;
 pub(crate) mod letters;
@@ -9600,8 +9600,11 @@ fn apply_tone_sandhi(entries: &mut [TranslateEntry], phdata: &PhonemeData, lang:
     }
 }
 
+/// `emphasized[i]` marks a word spoken under `<emphasis>` (C `FLAG_EMPHASIZED`): it takes
+/// stress 6 in place of the clause-end stress change.
 pub(crate) fn promote_translate_entries(
     entries: &mut [TranslateEntry],
+    emphasized: &[bool],
     phdata: &PhonemeData,
     lang: &str,
     outer_continues: bool,
@@ -9613,6 +9616,7 @@ pub(crate) fn promote_translate_entries(
 
     fn promote_clause(
         entries: &mut [TranslateEntry],
+        emphasized: &[bool],
         phdata: &PhonemeData,
         lang: &str,
         outer_continues: bool,
@@ -9623,6 +9627,10 @@ pub(crate) fn promote_translate_entries(
         // an earlier `$strend2` word asks whether everything after it is unstressed.
         for i in (0..n).rev() {
             if entries[i].kind != TranslateEntryKind::Word {
+                continue;
+            }
+            if emphasized.get(i).copied().unwrap_or(false) {
+                emphasize_word(&mut entries[i].phonemes, phdata);
                 continue;
             }
             let dict_flags = entries[i].dict_flags;
@@ -9761,7 +9769,7 @@ pub(crate) fn promote_translate_entries(
 
     let lang_for_promo = lang;
     if clause_boundaries.is_empty() {
-        promote_clause(entries, phdata, lang_for_promo, outer_continues);
+        promote_clause(entries, emphasized, phdata, lang_for_promo, outer_continues);
     } else {
         let mut prev_end = 0usize;
         let mut boundaries_with_end = clause_boundaries.clone();
@@ -9769,7 +9777,8 @@ pub(crate) fn promote_translate_entries(
         for &bound in &boundaries_with_end {
             let slice_end = if bound < entries.len() { bound } else { entries.len() };
             if slice_end > prev_end {
-                promote_clause(&mut entries[prev_end..slice_end], phdata, lang_for_promo, outer_continues);
+                let words = &emphasized[prev_end..slice_end];
+                promote_clause(&mut entries[prev_end..slice_end], words, phdata, lang_for_promo, outer_continues);
             }
             prev_end = if bound < entries.len() { bound + 1 } else { entries.len() };
         }
@@ -10302,13 +10311,18 @@ impl Translator {
         allow_switch: bool,
         track: Option<&mut Vec<TokenCodes>>,
     ) -> Result<Vec<PhonemeCode>> {
-        self.translate_codes_in_mode(text, allow_switch, track, TokenizeMode::Plain)
+        self.translate_codes_in_mode(text, allow_switch, track, TokenizeMode::Plain, None)
     }
 
     /// One clause as the SSML clause reader ended it (C `TranslateClause` on `source[]`):
     /// punctuation the reader kept is text, and the clause closes with one boundary.
-    pub(crate) fn translate_clause(&self, text: &str, no_tonic: bool) -> Result<Vec<PhonemeCode>> {
-        self.translate_codes_in_mode(text, true, None, TokenizeMode::Clause { no_tonic })
+    pub(crate) fn translate_clause(
+        &self,
+        text: &str,
+        no_tonic: bool,
+        carry: &mut ClauseCarry,
+    ) -> Result<Vec<PhonemeCode>> {
+        self.translate_codes_in_mode(text, true, None, TokenizeMode::Clause { no_tonic }, Some(carry))
     }
 
     fn translate_codes_in_mode(
@@ -10317,6 +10331,7 @@ impl Translator {
         allow_switch: bool,
         track: Option<&mut Vec<TokenCodes>>,
         mode: TokenizeMode,
+        carry: Option<&mut ClauseCarry>,
     ) -> Result<Vec<PhonemeCode>> {
         let lang = &self.options.lang;
         // An unknown voice is a *voice* error, not an unimplemented feature:
@@ -10381,7 +10396,12 @@ impl Translator {
             &spelled,
         );
         let outer_continues = self.options.switched && !self.options.switched_last;
-        promote_translate_entries(&mut entries, phdata, lang, outer_continues);
+        let start_emphasis = carry.as_deref().map_or(0, |c| c.emphasis);
+        let (emphasized, end_emphasis) = emphasized_tokens(&tokens, start_emphasis);
+        if let Some(c) = carry {
+            c.emphasis = end_emphasis;
+        }
+        promote_translate_entries(&mut entries, &emphasized, phdata, lang, outer_continues);
         if primary_bcp47_subtag(lang) == "en" {
             apply_en_or_linking_r(&mut entries, phdata);
         }
@@ -10415,7 +10435,7 @@ impl Translator {
         // may not pause again.  Reset at each clause.
         let mut prepause_timeout = 0u8;
         // C's `option_emphasis`, set by the `F` embedded command.
-        let mut option_emphasis = 0i32;
+        let mut option_emphasis = start_emphasis;
 
         let (spoken_before_clause, spoken_after) = clause_spoken_flags(&tokens, &entries);
 
@@ -11818,6 +11838,92 @@ pub(crate) fn stress_levels(
         i += 1;
     }
     (level, wordstress)
+}
+
+/// C `CalcPitches`: an emphasized syllable (stress 6) lowers the nearest primary stress among
+/// the three syllables before it, and the phoneme list C prints shows that lowered level.
+/// Returns the syllable indices to lower, given each syllable's stress.
+fn syllables_lowered_by_emphasis(stress: &[u8]) -> Vec<usize> {
+    let n_primary = stress.iter().filter(|&&s| s >= 4).count();
+    let mut st = stress.to_vec();
+    let (mut start, mut seen) = (0, 0);
+    let mut lowered = Vec::new();
+    for k in 0..st.len() {
+        seen += usize::from(st[k] >= 4);
+        if st[k] != 6 {
+            continue;
+        }
+        let window = start.max(k.saturating_sub(3))..k;
+        let hit = window.rev().take_while(|&i| st[i] != 6).find(|&i| st[i] == 4);
+        if let Some(i) = hit {
+            st[i] = 3;
+            lowered.push(i);
+        }
+        let later = st[k + 1..].iter().copied().find(|&s| s == 4 || s == 6);
+        if later == Some(6) {
+            st[k] = 5;
+            continue;
+        }
+        let mut count = usize::from(n_primary - seen > 1);
+        let end = st[k + 1..].iter().position(|&s| {
+            count += usize::from(s == 4);
+            s > 4 || count > 1
+        });
+        start = end.map_or(st.len(), |p| k + 1 + p);
+    }
+    lowered
+}
+
+/// The clause's codes as C prints them after `CalcPitches`: syllables an emphasized one
+/// lowered carry secondary stress (`say <emphasis>no` is `s,eI_! n'oU`).
+pub(crate) fn lower_stress_before_emphasis(codes: &[PhonemeCode], phdata: &PhonemeData) -> Vec<PhonemeCode> {
+    let mut out = codes.to_vec();
+    let mut start = 0;
+    while start <= out.len() {
+        let end = out[start..].iter().position(|c| c.is_boundary && c.code == 0).map_or(out.len(), |p| start + p);
+        lower_in_clause(&mut out[start..end], phdata);
+        start = end + 1;
+    }
+    out
+}
+
+fn lower_in_clause(clause: &mut [PhonemeCode], phdata: &PhonemeData) {
+    let (level, _) = stress_levels(clause, phdata);
+    let vowels: Vec<usize> = (0..clause.len()).filter(|&i| level[i] != NO_STRESS_LEVEL).collect();
+    let stress: Vec<u8> = vowels.iter().map(|&i| level[i]).collect();
+    for syllable in syllables_lowered_by_emphasis(&stress) {
+        let before = syllable.checked_sub(1).map_or(0, |p| vowels[p] + 1);
+        let marker = (before..vowels[syllable]).rev().find(|&i| clause[i].code == PHON_STRESS_P);
+        if let Some(i) = marker {
+            clause[i].code = crate::phoneme::PHON_STRESS_3;
+        }
+    }
+}
+
+/// C `ChangeWordStress(word, 6)`: the word's primary stress becomes the emphasis level.
+fn emphasize_word(phonemes: &mut Vec<u8>, phdata: &PhonemeData) {
+    if phonemes.iter().any(|&c| c != 0) {
+        change_word_stress(phonemes, phdata, 6);
+    }
+}
+
+/// Which tokens are words spoken under an `F` embedded command of level 3 or more (C
+/// `word_emphasis`, set by `EmbeddedCommand` and carried across clauses).  Returns the flags
+/// and the level the command stream leaves behind.
+fn emphasized_tokens(tokens: &[Token], level: i32) -> (Vec<bool>, i32) {
+    let mut level = level;
+    let flags = tokens
+        .iter()
+        .map(|t| {
+            if let Token::Embedded(cmd) = t {
+                if cmd.letter == 'F' {
+                    level = cmd.value.max(0);
+                }
+            }
+            level >= 3
+        })
+        .collect();
+    (flags, level)
 }
 
 /// `stress_levels` marker for a code that is not a vowel.

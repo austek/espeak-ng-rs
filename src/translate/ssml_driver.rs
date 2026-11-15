@@ -33,6 +33,13 @@ impl TokenizeMode {
 
 const INTONATION_NONE: u32 = 4;
 
+/// The translator statics C keeps across the clauses of one text (`option_emphasis` and
+/// `word_emphasis`, reset only by `InitText`).
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct ClauseCarry {
+    pub emphasis: i32,
+}
+
 fn single_clause(mut tokens: Vec<Token>) -> Vec<Token> {
     let last = tokens.iter().rposition(|t| !matches!(t, Token::Space));
     let closing = last.filter(|&i| matches!(tokens[i], Token::ClauseBoundary(_)));
@@ -195,9 +202,10 @@ impl Translator {
         let mut reader = ClauseReader::new(text, self.reader_options(), SsmlTags::new(state, env));
         let mut doc = SsmlDocument { base: self, others: Vec::new(), clauses: Vec::new() };
         let mut voice = 0;
+        let mut carry = ClauseCarry::default();
         while !reader.at_end() {
             let clause = reader.next_clause(&ClauseLang(doc.translator(voice)));
-            let translated = doc.translator(voice).translate_source_clause(clause, voice)?;
+            let translated = doc.translator(voice).translate_source_clause(clause, voice, &mut carry)?;
             if let Some(id) = &translated.voice_after {
                 voice = doc.voice_for(id, &voices);
             }
@@ -206,12 +214,13 @@ impl Translator {
         Ok(doc)
     }
 
-    fn translate_source_clause(&self, clause: SourceClause, voice: usize) -> Result<TranslatedClause> {
+    fn translate_source_clause(&self, clause: SourceClause, voice: usize, carry: &mut ClauseCarry) -> Result<TranslatedClause> {
         let terminator = match clause.tone_override {
             Some(tone) => Terminator::from_bits((clause.terminator.bits() & !0x7000) | (u32::from(tone) << 12)),
             None => clause.terminator,
         };
-        let codes = self.translate_clause(&clause.text, u32::from(terminator.intonation()) == INTONATION_NONE)?;
+        let no_tonic = u32::from(terminator.intonation()) == INTONATION_NONE;
+        let codes = self.translate_clause(&clause.text, no_tonic, carry)?;
         Ok(TranslatedClause { codes, terminator, eof: clause.eof, voice_after: clause.voice_change, voice })
     }
 
@@ -258,8 +267,9 @@ impl Translator {
 
     fn clause_ipa(&self, codes: &[PhonemeCode], preserve_punctuation: bool) -> Result<String> {
         let loaded = self.loaded_data()?;
+        let codes = super::lower_stress_before_emphasis(codes, &loaded.phdata);
         let ipa = super::phoneme_ipa::codes_to_ipa_opts(
-            codes,
+            &codes,
             &loaded.phdata,
             &self.data_dir,
             &self.options.lang,
@@ -272,7 +282,8 @@ impl Translator {
 
     fn clause_mnemonics(&self, codes: &[PhonemeCode], sep: Option<char>, tie: Option<char>) -> Result<String> {
         let loaded = self.loaded_data()?;
-        let x = crate::phoneme_text::format_mnemonics(codes, &loaded.phdata, sep, tie, &self.data_dir, &self.options.lang);
+        let codes = super::lower_stress_before_emphasis(codes, &loaded.phdata);
+        let x = crate::phoneme_text::format_mnemonics(&codes, &loaded.phdata, sep, tie, &self.data_dir, &self.options.lang);
         Ok(x.trim_end_matches('\n').replace('\n', " "))
     }
 }
