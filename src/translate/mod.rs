@@ -6711,7 +6711,7 @@ fn empty_clause_pending(tokens: &[Token]) -> bool {
 
 /// C turns the hyphen after a kept dot into a blank that joins the next word (translate.c:1497),
 /// so `.-b` is a dot word and a join, not a minus.
-fn join_dot_hyphen(tokens: &mut Vec<Token>) {
+fn join_dot_hyphen(tokens: &mut [Token]) {
     let hyphens: Vec<usize> = (1..tokens.len().saturating_sub(1))
         .filter(|&ix| {
             matches!(tokens[ix - 1], Token::Punctuation('.'))
