@@ -7963,7 +7963,12 @@ fn spelled_character_word(
     let announce = mode > 2 && c.is_uppercase();
     let env = letters::LetterEnv { voice, tr: voice, alts };
     let (lang, spelling_stress, items) = match letters::translate_letter_with(&env, c, announce) {
-        letters::LetterOut::Items(items) => (voice.options.lang.clone(), voice.stress.spelling_stress, items),
+        letters::LetterOut::Items(items) => {
+            let own = character_name(c, false, voice.dict, voice.phdata, voice.stress, voice.options)
+                .filter(|name| name.first() != Some(&crate::phoneme::PHON_SWITCH))
+                .map(|name| letters::decode(&letters::with_capital(voice, announce, &name)));
+            (voice.options.lang.clone(), voice.stress.spelling_stress, own.unwrap_or(items))
+        }
         letters::LetterOut::HandOver(name) => {
             let (tr, items) = letters::spell_in_target(voice, alts, &letters::switch_language(&name), c, announce)?;
             (tr.options.lang.clone(), tr.stress_opts.spelling_stress, items)
