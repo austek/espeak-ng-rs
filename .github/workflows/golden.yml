@@ -104,6 +104,7 @@ jobs:
           --test abbreviation_clause_pause
           --test ssml_audio_icon
           --test audio_wave_flag_across_clauses
+          --test clause_leading_pause_word_start
           --test strend2_before_clause_end_stress
           --test ssml_break_emphasis
           --test ssml_say_as

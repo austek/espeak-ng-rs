@@ -2,7 +2,7 @@
 //! the stress handling `MakePhonemeList` does after translation.
 
 use crate::phoneme::{
-    PhonemeData, PhonemeTab, PHON_DEFAULTTONE, PHON_END_WORD, PHON_LENGTHEN, PHON_PAUSE, PHON_PAUSE_SHORT, PHON_SWITCH, PHON_SYLLABIC, PH_LIQUID,
+    PhonemeData, PhonemeTab, PHON_DEFAULTTONE, PHON_END_WORD, PHON_LENGTHEN, PHON_PAUSE, PHON_PAUSE_NOLINK, PHON_PAUSE_SHORT, PHON_SWITCH, PHON_SYLLABIC, PH_LIQUID,
     PH_NASAL, PH_PAUSE, PH_PREVOICE, PH_STRESS, PH_VFRICATIVE, PH_VOWEL, PH_VSTOP,
 };
 use crate::translate::readclause::Terminator;
@@ -258,8 +258,11 @@ pub fn build_list(
         }
         let before = std::mem::replace(&mut insert, Insert::None);
         let s = entry_stress(before, t.typ, &mut stress, || follows_vowel(&codes[idx + 1..], table));
-        let mut p = Ph::new(t.clone(), s, newword);
-        newword = 0;
+        let leading_pause = matches!(c.code, PHON_PAUSE | PHON_PAUSE_NOLINK) && newword & PHLIST_START_OF_CLAUSE != 0;
+        let mut p = Ph::new(t.clone(), s, if leading_pause { 0 } else { newword });
+        if !leading_pause {
+            newword = 0;
+        }
         if before == Insert::Neighbour {
             bare.push(list.len());
         }
