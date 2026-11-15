@@ -190,6 +190,26 @@ fn broken_digit_words(digits: &str, grammar: &NumberGrammar) -> Vec<Token> {
         return vec![Token::Digits(digits.to_string())];
     }
     let groups = super::digit_groups(digits, grammar);
-    let spaced = groups.iter().map(|g| Token::Digits((*g).to_string())).flat_map(|t| [Token::Space, t]);
-    spaced.skip(1).collect()
+    let pad = !super::reads_digit_by_digit(digits, grammar);
+    let last = groups.len() - 1;
+    let mut start = 0;
+    let words = groups.iter().enumerate().map(|(ix, group)| {
+        let padding = if pad && ix > 0 { zero_padding(digits.len() - start, grammar.break_numbers) } else { "" };
+        let sep = grammar.group_separator.filter(|_| ix < last).map(String::from).unwrap_or_default();
+        start += group.len();
+        Token::Digits(format!("{padding}{group}{sep}"))
+    });
+    words.flat_map(|t| [Token::Space, t]).skip(1).collect()
+}
+
+/// The zeros C writes before a group that `remaining` digits start, when the group after it
+/// would be one or two digits long.
+fn zero_padding(remaining: usize, break_numbers: u32) -> &'static str {
+    let breaks_at = |back: usize| remaining.checked_sub(back).is_some_and(|n| break_numbers & (1 << n) != 0);
+    match (breaks_at(1), breaks_at(2)) {
+        (true, true) => "000",
+        (true, false) => "00",
+        (false, true) => "0",
+        (false, false) => "",
+    }
 }

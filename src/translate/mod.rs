@@ -4740,22 +4740,9 @@ fn spelled_digit_groups(
         Vec::new()
     };
     for (ix, group) in groups.iter().enumerate() {
-        let mut word = Pronunciation::default();
-        for (ix, d) in group.bytes().enumerate() {
-            let mut piece = trim_lookup(&lookup_num_phonemes(dict, &num_key(d - b'0'))).to_vec();
-            // As `push_individual_digits`: every second digit of a group is
-            // followed by a no-link pause.
-            if ix % 2 == 1 {
-                piece.push(crate::phoneme::PHON_PAUSE_NOLINK);
-            }
-            word.append_lookup_suffix(&piece);
-        }
-        let mut phonemes = word.finish();
         let pointed = ix + 1 < groups.len() && !point.is_empty();
-        if pointed {
-            NumberTail { raw: point.clone(), fused: true }.append_to(&mut phonemes);
-        }
-        set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
+        let tail = if pointed { point.as_slice() } else { &[] };
+        let phonemes = spelled_group_word(group, tail, dict, phdata, stress_opts);
         out.extend(phonemes.iter().copied().take_while(|&b| b != 0));
         if pointed {
             out.push(PHON_END_WORD);
@@ -4763,6 +4750,33 @@ fn spelled_digit_groups(
     }
     out.push(0);
     out
+}
+
+/// One group of digits spoken digit by digit as a word, with the reading of the separator
+/// that C glues to it (`tail`) run on and the whole stressed once.
+fn spelled_group_word(
+    group: &str,
+    tail: &[u8],
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+) -> Vec<u8> {
+    let mut word = Pronunciation::default();
+    for (ix, d) in group.bytes().enumerate() {
+        let mut piece = trim_lookup(&lookup_num_phonemes(dict, &num_key(d - b'0'))).to_vec();
+        // As `push_individual_digits`: every second digit of a group is
+        // followed by a no-link pause.
+        if ix % 2 == 1 {
+            piece.push(crate::phoneme::PHON_PAUSE_NOLINK);
+        }
+        word.append_lookup_suffix(&piece);
+    }
+    let mut phonemes = word.finish();
+    if !tail.is_empty() {
+        NumberTail { raw: tail.to_vec(), fused: true }.append_to(&mut phonemes);
+    }
+    set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
+    phonemes
 }
 
 /// Whether a scale group is *exact* — the whole number has no non-zero digit
@@ -9509,8 +9523,15 @@ pub(crate) fn build_translate_entries(
                 let grammar = NumberGrammar { c_numbers: 0, ..options.number_grammar.clone() };
                 let speak = |symbol: &str| symbol_phonemes(symbol, dict, options);
                 let number = NumberToken::Cardinal(digits.clone());
-                let wr = translate_number_token(&number, dict, phdata, stress_opts, &grammar, &speak)
-                    .unwrap_or_else(|| word_to_phonemes(digits, dict, phdata, stress_opts, options));
+                let body = digits.trim_end_matches(|c: char| !c.is_ascii_digit());
+                let wr = if body.len() < digits.len() {
+                    let tail = speak(&digits[body.len()..]);
+                    let phonemes = spelled_group_word(body, &tail, dict, phdata, stress_opts);
+                    WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() }
+                } else {
+                    translate_number_token(&number, dict, phdata, stress_opts, &grammar, &speak)
+                        .unwrap_or_else(|| word_to_phonemes(digits, dict, phdata, stress_opts, options))
+                };
                 entries.push(TranslateEntry {
                     phonemes: wr.phonemes,
                     dict_flags: wr.dict_flags,
