@@ -2269,7 +2269,9 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                         .iter()
                         .all(|c| c.is_some_and(|c| c.is_ascii_digit()));
                     let more_digits = lookahead.peek().is_some_and(|c| c.is_ascii_digit());
-                    if three_digits && !more_digits {
+                    let lakh_group = grammar.break_numbers != BREAK_THOUSANDS
+                        && lakh_group_follows(chars.clone().skip(1), next);
+                    if (three_digits && !more_digits) || lakh_group {
                         chars.next(); // consume the separator; the 3 digits accumulate below
                         separated = true;
                     } else {
@@ -4631,6 +4633,19 @@ fn digit_groups<'a>(digits: &'a str, grammar: &NumberGrammar) -> Vec<&'a str> {
     starts.insert(0, 0);
     starts.push(n);
     starts.windows(2).map(|w| &digits[w[0]..w[1]]).collect()
+}
+
+/// C joins comma-grouped digits of the lakh languages (`1,23,45,678`) into one
+/// number when the group after the separator has three digits or more, or two
+/// that another separated group follows; a shorter final group stays apart.
+fn lakh_group_follows(after_separator: impl Iterator<Item = char> + Clone, separator: char) -> bool {
+    let run = after_separator.clone().take_while(char::is_ascii_digit).count();
+    let mut rest = after_separator.skip(run);
+    match run {
+        0 | 1 => false,
+        2 => rest.next() == Some(separator) && rest.next().is_some_and(|c| c.is_ascii_digit()),
+        _ => true,
+    }
 }
 
 /// The unstressed phonemes the translation rules give `word`.
