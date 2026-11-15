@@ -1191,6 +1191,10 @@ pub enum Token {
     Spelled { text: String, mode: u8, pause: bool },
     /// Digits C speaks one by one (`SAYAS_DIGITS1`).
     Digits(String),
+    /// Follows a `.` boundary that C ends the clause at although a lower-case word comes next
+    /// (a newline between them); `suppress_abbreviation_periods` keeps that boundary and drops
+    /// this marker.
+    DotEndsClause,
 }
 
 /// Parsed number token.
@@ -2218,12 +2222,16 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 tokens.push(Token::Punctuation(c));
                 continue;
             }
+            let dot_ends = c == '.' && newline_before_lower_case(chars.clone());
             // Absorb trailing whitespace after punctuation
             while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
                 chars.next();
                 before = Some(' ');
             }
             tokens.push(Token::ClauseBoundary(c));
+            if dot_ends {
+                tokens.push(Token::DotEndsClause);
+            }
         } else if c == '-'
             && minus_precedes_number(&chars)
             && matches!(
@@ -6725,7 +6733,7 @@ fn carry_embedded_in_silent_dots(tokens: &[Token], entries: &mut [TranslateEntry
 }
 
 /// Whether a '.' followed by `after` stays inside the clause, as C's
-/// `ReadClause` decides: a letter or hyphen follows, or blanks and then a
+/// `ReadClause` decides: a letter or hyphen follows, or blanks without a newline and then a
 /// lower-case letter.
 fn dot_stays_in_clause<I>(after: I) -> bool
 where
@@ -6734,9 +6742,22 @@ where
     let mut after = after.peekable();
     match after.peek() {
         Some(&c) if c.is_alphabetic() || c == '-' => true,
-        Some(c) if c.is_whitespace() => after.find(|c| !c.is_whitespace()).is_some_and(char::is_lowercase),
+        Some(c) if c.is_whitespace() => {
+            let blanks: Vec<char> = std::iter::from_fn(|| after.next_if(|c| c.is_whitespace())).collect();
+            !blanks.contains(&'\n') && after.next().is_some_and(char::is_lowercase)
+        }
         _ => false,
     }
+}
+
+/// A newline after a '.' ends the clause even before a lower-case word (readclause.c:865).
+fn newline_before_lower_case<I>(after: I) -> bool
+where
+    I: Iterator<Item = char>,
+{
+    let mut after = after.peekable();
+    let blanks: Vec<char> = std::iter::from_fn(|| after.next_if(|c| c.is_whitespace())).collect();
+    blanks.contains(&'\n') && after.next().is_some_and(char::is_lowercase)
 }
 
 /// Three or more dots in a row read as one ellipsis (C `ReadClause`).
@@ -8299,7 +8320,7 @@ fn merge_digit_follow(tokens: &mut Vec<Token>, dict: &Dictionary) {
 
 /// Downgrade a clause-ending period that is not followed by a capitalised
 /// word to a plain word break, and a comma between two numbers to a space.
-fn suppress_abbreviation_periods(tokens: &mut [Token]) {
+fn suppress_abbreviation_periods(tokens: &mut Vec<Token>) {
     // A period only ends a sentence when a capitalised word (or nothing)
     // follows — "one. two" is not a break, "one. Two" is.  Upstream's `-x`
     // shows exactly this: `w'0n t'u:` on one line versus `w'0n` / `t'u:` on
@@ -8307,7 +8328,8 @@ fn suppress_abbreviation_periods(tokens: &mut [Token]) {
     let mut next_word: Option<usize> = None;
     for i in (0..tokens.len()).rev() {
         let announced = i > 0 && matches!(tokens[i - 1], Token::Punctuation('.'));
-        if matches!(tokens[i], Token::ClauseBoundary('.')) && !announced {
+        let dot_ends = matches!(tokens.get(i + 1), Some(Token::DotEndsClause));
+        if matches!(tokens[i], Token::ClauseBoundary('.')) && !announced && !dot_ends {
             let ends_sentence = match next_word.map(|j| &tokens[j]) {
                 Some(Token::Word(w)) => w.chars().next().is_some_and(|c| !c.is_lowercase()),
                 _ => true,
@@ -8316,10 +8338,11 @@ fn suppress_abbreviation_periods(tokens: &mut [Token]) {
                 tokens[i] = Token::Space;
             }
         }
-        if !matches!(tokens[i], Token::Space | Token::WordJoin | Token::ClauseBoundary(_)) {
+        if !matches!(tokens[i], Token::Space | Token::WordJoin | Token::ClauseBoundary(_) | Token::DotEndsClause) {
             next_word = Some(i);
         }
     }
+    tokens.retain(|t| !matches!(t, Token::DotEndsClause));
 
 }
 
@@ -11329,7 +11352,7 @@ impl Translator {
                 }
                 // A hyphen-joined pair is spoken as one word: no boundary, no
                 // space in the output.
-                Token::WordJoin => {}
+                Token::WordJoin | Token::DotEndsClause => {}
                 Token::Space => {
                     let before_entry = previous_entry(&tokens, &entries, token_ix);
                     let before = before_entry.map(|e| &e.kind);
@@ -11615,7 +11638,7 @@ fn token_surface(token: &Token, grammar: &NumberGrammar) -> String {
         Token::InlinePhonemes(p) => format!("[[{p}]]"),
         Token::Operator(c) | Token::Punctuation(c) | Token::ClauseBoundary(c) => c.to_string(),
         Token::DigitColon { .. } => ":".to_string(),
-        Token::Space | Token::WordJoin | Token::Embedded(_) => String::new(),
+        Token::Space | Token::WordJoin | Token::Embedded(_) | Token::DotEndsClause => String::new(),
     }
 }
 

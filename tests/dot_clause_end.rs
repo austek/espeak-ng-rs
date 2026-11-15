@@ -26,13 +26,22 @@ const CASES: &[Case] = &[
     ("fa", "گفت .. سپس رفت", "ɡˈoft\nsˈepas rˈaft", "g'oft\ns'epas R'aft"),
 ];
 
-#[test]
-fn a_spaced_dot_before_a_clause_ending_dot_is_not_read() {
+const NEWLINE_CASES: &[Case] = &[
+    ("en", "He said .\nthen left", "hiː sˈɛd\nðˈɛn lˈɛft", "hi: s'Ed\nD'En l'Eft"),
+    ("en", "He said .\n\nthen left", "hiː sˈɛd\nðˈɛn lˈɛft", "hi: s'Ed\nD'En l'Eft"),
+    ("en", "He said .  \n  then left", "hiː sˈɛd\nðˈɛn lˈɛft", "hi: s'Ed\nD'En l'Eft"),
+    ("en", "He said.\nthen left", "hiː sˈɛd\nðˈɛn lˈɛft", "hi: s'Ed\nD'En l'Eft"),
+    ("de", "Er sagte .\ndann ging er", "ɛɾ zˈɑːɡtə\ndan ɡˈɪŋ ɛɾ", "_!_|Er z'A:gt@\ndan g'IN _|Er"),
+    ("es", "Dijo .\nluego se fue", "dˈixo\nluˈeɣo se fwˈe", "d'ixo\nlu'eQo se fw'e"),
+    ("ru", "Он сказал .\nпотом ушёл", "ˈon skazˈɑɭ\npˈotʌm uʃˈoɭ", "'on_ skaz'Al\np'otVm uS'ol"),
+];
+
+fn check(cases: &[Case]) {
     if !std::path::Path::new("espeak-ng-data/en_dict").exists() {
         eprintln!("[SKIP] no data");
         return;
     }
-    let bad: Vec<String> = CASES
+    let bad: Vec<String> = cases
         .iter()
         .flat_map(|&(l, t, i, x)| [(l, "--ipa", i, t), (l, "-x", x, t)])
         .filter_map(|(l, f, want, t)| {
@@ -41,4 +50,14 @@ fn a_spaced_dot_before_a_clause_ending_dot_is_not_read() {
         })
         .collect();
     assert!(bad.is_empty(), "differs from C:\n{}", bad.join("\n"));
+}
+
+#[test]
+fn a_spaced_dot_before_a_clause_ending_dot_is_not_read() {
+    check(CASES);
+}
+
+#[test]
+fn a_dot_before_a_newline_ends_the_clause_even_before_a_lower_case_word() {
+    check(NEWLINE_CASES);
 }
