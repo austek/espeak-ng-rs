@@ -11,6 +11,8 @@
 use std::fs;
 use std::path::Path;
 
+pub mod select;
+
 /// One voice, parsed from a `lang/**` definition file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VoiceEntry {

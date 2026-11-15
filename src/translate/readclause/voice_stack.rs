@@ -6,7 +6,8 @@
 //! keeps that behaviour (see [`VoiceStack::depth`]).
 
 use super::attrs::{attr_copy, attr_lookup, attr_number, get_ssml_attribute};
-use crate::voices::{find_voice, select_voice_by_name, VoiceEntry, VoiceQuery};
+use crate::voices::select::{select_voice, sorted_voices, voice_by_name, VoiceRequest};
+use crate::voices::VoiceEntry;
 
 pub const N_SSML_STACK: usize = 20;
 pub const ENGENDER_UNKNOWN: i32 = 0;
@@ -49,17 +50,18 @@ pub struct BaseVoice {
 }
 
 impl BaseVoice {
-    /// `SetVoiceStack`: frame 0 holds the base voice. C `strcpy`s `v->languages`,
-    /// which is the priority byte followed by the first language name.
+    /// `SetVoiceStack`: frame 0 holds the base voice. C copies `voice->language_name`, the
+    /// first language line cut at its first `-` (`strtok(language_name, "-")` in `LoadVoice`).
     pub fn frame0(&self) -> SsmlFrame {
-        let first = self.languages.first().cloned().unwrap_or_default();
+        let first = self.languages.first().map(String::as_str).unwrap_or_default();
+        let primary = first.split('-').find(|part| !part.is_empty()).unwrap_or_default();
         SsmlFrame {
             tag_type: 0,
             variant: self.variant,
             gender: self.gender,
             age: self.age,
             voice_name: self.name.chars().take(VOICE_NAME_LEN - 1).collect(),
-            language: format!("{}{first}", char::from(self.priority)),
+            language: primary.chars().take(LANGUAGE_LEN - 1).collect(),
         }
     }
 }
@@ -83,28 +85,24 @@ pub trait VoiceCatalog {
     fn select(&self, sel: &VoiceSelect) -> Option<String>;
 }
 
-/// [`VoiceCatalog`] over the installed voice list. `select` scores by language
-/// and gender only; C's `+variant` expansion for a non-zero `variant` is not ported.
+/// [`VoiceCatalog`] over the installed voice list, with `voices.c`'s matching.
 pub struct EntryCatalog<'a>(pub &'a [VoiceEntry]);
 
 impl VoiceCatalog for EntryCatalog<'_> {
     fn by_name(&self, name: &str) -> Option<String> {
-        select_voice_by_name(self.0, name).map(|v| v.file.clone())
+        voice_by_name(&sorted_voices(self.0), name).map(|v| v.file.clone())
     }
 
     fn select(&self, sel: &VoiceSelect) -> Option<String> {
-        let language: String = sel.language.chars().filter(|c| *c > ' ').collect();
-        if language.is_empty() {
-            let base = sel.name.split('+').next().unwrap_or("");
-            return self.by_name(base).or_else(|| self.by_name("en"));
-        }
-        let gender = match sel.gender {
-            ENGENDER_MALE => Some('M'),
-            ENGENDER_FEMALE => Some('F'),
-            _ => None,
+        let request = VoiceRequest {
+            name: Some(&sel.name),
+            identifier: Some(&sel.identifier),
+            language: Some(&sel.language),
+            age: sel.age,
+            gender: sel.gender,
+            variant: sel.variant,
         };
-        let query = VoiceQuery { language: Some(language), name: None, gender };
-        find_voice(self.0, &query).map(|v| v.file.clone()).or_else(|| self.by_name("en"))
+        select_voice(self.0, &request).map(|s| s.id)
     }
 }
 
@@ -116,6 +114,7 @@ pub struct VoiceStack {
     pub depth: usize,
     pub current_voice_id: String,
     pub base: BaseVoice,
+    loaded_languages: Vec<String>,
     pub base_variant: String,
     /// C's `static char identifier[40]` inside `VoiceFromStack`.
     identifier: String,
@@ -129,6 +128,7 @@ impl VoiceStack {
             frames,
             depth: 1,
             current_voice_id: String::new(),
+            loaded_languages: base.languages.clone(),
             base,
             base_variant: base_variant.to_string(),
             identifier: String::new(),
@@ -239,11 +239,18 @@ impl VoiceStack {
         }
     }
 
+    /// `base_voice->languages` points at the static list `LoadVoice` rewrites for every voice
+    /// it loads, so the list is that of the voice loaded last.
     fn base_language_for(&self, language: &str) -> String {
-        match self.base.languages.iter().any(|l| l == language) {
-            true => self.base.languages[0].clone(),
+        match self.loaded_languages.iter().any(|l| l == language) {
+            true => self.loaded_languages[0].clone(),
             false => language.to_string(),
         }
+    }
+
+    /// `LoadVoice` of a voice with `languages` (its `language` lines, `variant` excluded).
+    pub fn voice_loaded(&mut self, languages: Vec<String>) {
+        self.loaded_languages = languages;
     }
 
     fn keep_base_variant(&self, id: String, sel: &VoiceSelect) -> String {

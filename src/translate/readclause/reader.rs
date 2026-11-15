@@ -158,6 +158,10 @@ impl<T: TagProcessor> ClauseReader<T> {
         self.dec.eof()
     }
 
+    pub fn tags_mut(&mut self) -> &mut T {
+        &mut self.tags
+    }
+
     pub fn read_all(&mut self, lang: &dyn ReaderLang) -> Vec<SourceClause> {
         let mut clauses = Vec::new();
         while !self.at_end() {

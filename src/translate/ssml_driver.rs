@@ -7,7 +7,7 @@ use super::readclause::voice_stack::{BaseVoice, EntryCatalog};
 use super::readclause::{CharMap, ClauseReader, ReaderLang, ReaderOptions, SourceClause, SsmlTags, Terminator};
 use super::{PhonemeCode, Result, Token, Translator};
 use crate::synthesize::cgen::phlist::ClauseCodes;
-use crate::voices::{list_voices, select_voice_by_name, VoiceEntry};
+use crate::voices::{list_catalog, list_voices, select_voice_by_name, VoiceEntry};
 
 /// How the token stream of one translation call is cut into clauses.
 #[derive(Clone, Copy)]
@@ -141,7 +141,8 @@ impl Translator {
     /// Read and translate a markup text clause by clause.
     pub fn translate_ssml(&self, text: &str, settings: SsmlSettings) -> Result<SsmlDocument<'_>> {
         let voices = list_voices(&self.data_dir);
-        let catalog = EntryCatalog(&voices);
+        let all_voices = list_catalog(&self.data_dir);
+        let catalog = EntryCatalog(&all_voices);
         let pause_factors = |wpm: i32| pause_factors(wpm);
         let no_sound = |_: &str| None;
         let env = SsmlEnv {
@@ -163,6 +164,9 @@ impl Translator {
             let translated = doc.translator(voice).translate_source_clause(clause, voice, &mut carry)?;
             if let Some(id) = &translated.voice_after {
                 voice = doc.voice_for(id, &voices);
+                if let Some(entry) = voice_file_entry(&all_voices, id) {
+                    reader.tags_mut().state.voice.voice_loaded(language_names(entry));
+                }
             }
             doc.clauses.push(translated);
         }
@@ -254,8 +258,7 @@ impl<'a> SsmlDocument<'a> {
             return 0;
         }
         let dir = &self.base.data_dir;
-        let stem = lang.map(|l| super::resolve_dict_stem(dir, &l).unwrap_or(l));
-        let tr = stem.and_then(|l| Translator::new(&l, Some(dir)).ok());
+        let tr = lang.and_then(|l| Translator::new(&l, Some(dir)).ok());
         match tr {
             Some(tr) => {
                 self.others.push((id.to_string(), tr));
@@ -268,6 +271,17 @@ impl<'a> SsmlDocument<'a> {
     fn base_id_is(&self, file: &str, voices: &[VoiceEntry]) -> bool {
         self.base.own_voice_entry(voices).is_some_and(|v| v.file == file)
     }
+}
+
+/// The voice file a voice id (`file` or `file+variant`) names.
+fn voice_file_entry<'v>(voices: &'v [VoiceEntry], id: &str) -> Option<&'v VoiceEntry> {
+    let file = id.split('+').next().unwrap_or(id);
+    voices.iter().find(|v| v.file == file)
+}
+
+/// `voice_languages` after `LoadVoice`: every `language` line except `variant`.
+fn language_names(entry: &VoiceEntry) -> Vec<String> {
+    entry.languages.iter().filter(|(l, _)| l != "variant").map(|(l, _)| l.clone()).collect()
 }
 
 fn pause_factors(wpm: i32) -> (i32, i32) {
