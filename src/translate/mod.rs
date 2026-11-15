@@ -6503,6 +6503,21 @@ fn is_single_letter_word(w: &str) -> bool {
     matches!(chars.next(), Some(c) if c.is_alphabetic()) && chars.next().is_none()
 }
 
+/// Removes the word breaks that follow `from`, looking past markers, up to the first code
+/// that is neither: C marks the first word of a clause as a clause start, with no separator.
+fn drop_word_breaks_from(codes: &mut Vec<PhonemeCode>, from: usize) {
+    let mut k = from;
+    while let Some(c) = codes.get(k) {
+        if c.marker.is_some() {
+            k += 1;
+        } else if c.is_boundary && c.code == crate::phoneme::PHON_END_WORD && c.clause_char.is_none() {
+            codes.remove(k);
+        } else {
+            break;
+        }
+    }
+}
+
 /// Whether the codes since the last clause boundary are nothing but the pauses
 /// of a bracket, which belong to the word that follows.
 fn only_pauses_since_clause_start(codes: &[PhonemeCode]) -> bool {
@@ -10858,7 +10873,7 @@ impl Translator {
                                     ..Default::default()
                                 });
                             }
-                            if closed {
+                            if closed && !only_pauses_since_clause_start(&codes) {
                                 codes.push(PhonemeCode {
                                     code: 15, is_boundary: true, ..Default::default()
                                 });
@@ -11060,11 +11075,8 @@ impl Translator {
                             let clause_start = codes[..at].iter().rev().take_while(|c| {
                                 !(c.is_boundary && c.code == 0 && c.clause_char.is_some())
                             }).all(|c| c.is_boundary || c.marker.is_some());
-                            let sep = codes.get(at + n).is_some_and(|c| {
-                                c.is_boundary && c.code == crate::phoneme::PHON_END_WORD
-                            });
-                            if clause_start && sep {
-                                codes.remove(at + n);
+                            if clause_start {
+                                drop_word_breaks_from(&mut codes, at + n);
                             }
                             pause_opens_clause = clause_start;
                             from_dict.resize(codes.len(), false);
@@ -11080,7 +11092,7 @@ impl Translator {
                     };
                     let opened_by_bracket = tokens[..token_ix]
                         .iter()
-                        .rfind(|t| !matches!(t, Token::Operator(_) | Token::Punctuation('-')))
+                        .rfind(|t| !matches!(t, Token::Operator(_) | Token::Punctuation('-') | Token::Embedded(_)))
                         .is_some_and(|t| matches!(t, Token::Punctuation(p) if is_bracket(*p)));
                     let after_clause_start_pauses =
                         pause_opens_clause || (opened_by_bracket && only_pauses_since_clause_start(&codes));
