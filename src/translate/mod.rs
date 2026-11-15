@@ -3638,6 +3638,8 @@ struct ScaleGroup {
     scale: Option<u8>,
     /// Digits to the right of this group.
     below: usize,
+    /// A higher group precedes this one (C's `prev_thousands` control bit).
+    after_higher: bool,
 }
 
 /// Longest digit run spoken as a number; espeak-ng breaks anything longer than
@@ -3667,6 +3669,7 @@ fn split_scale_groups(digits: &str, grammar: &NumberGrammar) -> Vec<ScaleGroup> 
                 value: chunk.bytes().fold(0, |acc, b| acc * 10 + u32::from(b.wrapping_sub(b'0'))),
                 scale: if scale == 0 { None } else { u8::try_from(scale).ok() },
                 below,
+                after_higher: index > 0,
             }
         })
         .collect()
@@ -3797,6 +3800,22 @@ fn append_scale_word(
     dst.push_lookup_word(&scale_word);
 }
 
+/// C `NUM_ZERO_HUNDRED` (`LookupNum3`): a group below a hundred that follows a
+/// higher group still says its empty hundreds place.
+fn says_zero_hundred(group: ScaleGroup, grammar: &NumberGrammar) -> bool {
+    grammar.c_numbers & ordinal::NUM_ZERO_HUNDRED != 0 && group.after_higher && group.value < 100
+}
+
+fn push_zero_hundred(dst: &mut Pronunciation, dict: &Dictionary, grammar: &NumberGrammar, tensunits: u32) {
+    let exact = if tensunits == 0 { lookup_num_phonemes(dict, "_0C0") } else { Vec::new() };
+    let hundred = if exact.is_empty() { lookup_num_phonemes(dict, "_0C") } else { exact };
+    dst.push_lookup_word(&lookup_num_phonemes(dict, "_0"));
+    dst.append_lookup_suffix(&hundred);
+    if (1..10).contains(&tensunits) && grammar.c_numbers & ordinal::NUM_HUNDRED_AND_DIGIT != 0 {
+        dst.append_lookup_suffix(&lookup_num_phonemes(dict, "_0and"));
+    }
+}
+
 fn append_cardinal_group(
     dst: &mut Pronunciation,
     group: ScaleGroup,
@@ -3806,6 +3825,12 @@ fn append_cardinal_group(
     preceded: bool,
 ) {
     if group.value == 0 {
+        if says_zero_hundred(group, grammar) {
+            dst.start_word();
+            push_zero_hundred(dst, dict, grammar, 0);
+            dst.missing_thousands -= 1;
+            return;
+        }
         if let Some(scale) = group.scale.filter(|_| dst.missing_thousands == 1) {
             let above = lookup_num_phonemes(dict, &format!("_0M{}", scale + 1));
             if above.is_empty() {
@@ -3818,6 +3843,9 @@ fn append_cardinal_group(
 
     dst.start_word();
     let group_start = dst.bytes.len();
+    if says_zero_hundred(group, grammar) {
+        push_zero_hundred(dst, dict, grammar, group.value);
+    }
     append_group_body(dst, group, dict, grammar, exact, preceded);
     if preceded && grammar.hundreds.conjunction_before_hundreds && group.value >= 100 {
         let and = lookup_num_phonemes(dict, "_0and");
@@ -4160,7 +4188,12 @@ fn num3_phonemes_g(
         }
     }
 
-    if hundreds > 0 && tensunits > 0 && grammar.hundreds.use_conjunction_with_remainder {
+    let and_before_digit =
+        grammar.c_numbers & ordinal::NUM_HUNDRED_AND_DIGIT != 0 && tensunits < 10;
+    if hundreds > 0
+        && tensunits > 0
+        && (grammar.hundreds.use_conjunction_with_remainder || and_before_digit)
+    {
         hundreds_part.append_lookup_suffix(&lookup_num_phonemes(dict, "_0and"));
     } else if hundreds > 0 && tensunits > 0 && grammar.hundreds.conjunction_before_simple_remainder {
         // Only when the remainder is a single word (round ten, or a number with
