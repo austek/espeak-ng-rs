@@ -7402,6 +7402,18 @@ fn spell_lone_letter(c: char, voice: letters::Ctx, alts: &letters::AltLangs) -> 
     }
 }
 
+/// Moves the markers that close a word ahead of the word separators after them, so that a
+/// pause for the next word lands after the switch back (C's switch is the word's last
+/// phoneme).  Returns how many markers moved; a tail that holds a phoneme stays as it is.
+fn lift_switch_markers(tail: &mut [PhonemeCode]) -> usize {
+    let has_switch = tail.iter().any(|c| matches!(c.marker, Some(CodeMarker::LangSwitch(_))));
+    if !has_switch || !tail.iter().all(|c| c.is_boundary || c.marker.is_some()) {
+        return 0;
+    }
+    tail.sort_by_key(|c| c.is_boundary);
+    tail.iter().filter(|c| c.marker.is_some()).count()
+}
+
 /// A spelled word that opens with its own pause, after which C starts the word.
 fn paused_stream(e: &TranslateEntry) -> bool {
     e.kind == TranslateEntryKind::Stream && e.phonemes.first() == Some(&crate::phoneme::PHON_PAUSE)
@@ -11475,6 +11487,7 @@ impl Translator {
                                     && c.code != crate::phoneme::PHON_END_WORD
                             })
                             .map_or(0, |i| i + 1);
+                        let at = at + lift_switch_markers(&mut codes[at..]);
                         // A bracket's pause is the larger of the two, not an
                         // addition (C's `pre_pause = max(pre_pause, pre_pause_add)`).
                         let pending = 2 * codes[..at]

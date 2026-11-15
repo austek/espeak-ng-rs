@@ -329,6 +329,7 @@ jobs:
           --test dot_clause_mark_run
           --test dot_before_hyphen
           --test ssml_say_as_characters_handed_over
+          --test ssml_say_as_pause_after_switched_word
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config
