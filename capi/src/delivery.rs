@@ -38,7 +38,7 @@ fn c_events(t: &Target, evs: &[Ev], names: &mut Vec<CString>) -> Vec<EspeakEvent
             EvKind::SampleRate(r) => event(t, EVENT_SAMPLERATE, ev, EventId { number: *r }),
             EvKind::Sentence(n) => event(t, EVENT_SENTENCE, ev, EventId { number: *n }),
             EvKind::Word(n) => event(t, EVENT_WORD, ev, EventId { number: *n }),
-            EvKind::End => event(t, EVENT_END, ev, EventId { number: 0 }),
+            EvKind::End(n) => event(t, EVENT_END, ev, EventId { number: *n }),
             EvKind::Mark(name) => {
                 names.push(CString::new(name.replace('\0', "")).unwrap_or_default());
                 let p = names.last().map_or(ptr::null(), |c| c.as_ptr());
@@ -46,7 +46,7 @@ fn c_events(t: &Target, evs: &[Ev], names: &mut Vec<CString>) -> Vec<EspeakEvent
             }
         })
         .collect();
-    let end = Ev { kind: EvKind::End, position: 0, length: 0, sample: 0 };
+    let end = Ev { kind: EvKind::End(0), position: 0, length: 0, sample: 0 };
     out.push(event(t, EVENT_LIST_TERMINATED, &end, EventId { number: 0 }));
     out
 }
@@ -70,7 +70,7 @@ fn deliver_block(t: &Target, block: &Block) -> bool {
 }
 
 fn terminated(t: &Target) -> bool {
-    let msg = Ev { kind: EvKind::End, position: 0, length: 0, sample: 0 };
+    let msg = Ev { kind: EvKind::End(0), position: 0, length: 0, sample: 0 };
     let mut list = vec![
         event(t, EVENT_MSG_TERMINATED, &msg, EventId { number: 0 }),
         event(t, EVENT_LIST_TERMINATED, &msg, EventId { number: 0 }),
