@@ -8482,7 +8482,7 @@ fn letter_name(
     // C stresses a letter name afresh (`SetWordStress` with no flags), so a
     // function word's `$u` does not make `a` unstressed.
     let word = |text: &str| {
-        let expect = PosExpect { no_replace: true, defer_stress: true, ..PosExpect::default() };
+        let expect = PosExpect { no_replace: true, defer_stress: true, at_clause_end: true, ..PosExpect::default() };
         word_to_phonemes_inner(text, dict, phdata, stress_opts, options, 0, expect)
     };
     let mut wr = word(&format!("_{key}"));
@@ -11119,23 +11119,20 @@ impl Translator {
         let alts = letters::AltLangs::new(&self.data_dir);
         let run_hands_over = |word: &str| {
             let letters = lowercase_for_lang(&word.replace('.', ""), lang);
-            let first = letters.chars().next().map(String::from).unwrap_or_default();
-            let switched_by_rules = word_to_phonemes(&first, dict, phdata, stress_opts, &self.options)
+            let dotted = letters.chars().map(String::from).collect::<Vec<_>>().join(".");
+            let switched_by_rules = word_to_phonemes(&dotted, dict, phdata, stress_opts, &self.options)
                 .phonemes
                 .first()
                 == Some(&crate::phoneme::PHON_SWITCH);
+            let voice = letters::Ctx { dict, phdata, stress: stress_opts, options: &self.options };
+            let env = letters::LetterEnv { voice, tr: voice, alts: &alts };
+            let hands = |c: char| matches!(letters::translate_letter(&env, c), letters::LetterOut::HandOver(_));
             let explicit_rule = || {
-                let voice = letters::Ctx { dict, phdata, stress: stress_opts, options: &self.options };
-                let env = letters::LetterEnv { voice, tr: voice, alts: &alts };
-                let c = first.chars().next().unwrap_or(' ');
-                crate::dictionary::rules::while_spelling_characters(|| {
-                    matches!(letters::translate_letter(&env, c), letters::LetterOut::HandOver(_))
-                })
+                crate::dictionary::rules::while_spelling_characters(|| letters.chars().any(hands))
             };
             switched_by_rules
                 && (dict.voice_letter_bits_offset > 0 || explicit_rule())
-                && spell_word_letters(&letters, dict, phdata, stress_opts, &self.options)
-                    .is_none_or(|ph| ph.contains(&crate::phoneme::PHON_SWITCH))
+                && letters.chars().any(hands)
         };
         join_dot_hyphen(&mut tokens);
         join_spaced_letter_dots(

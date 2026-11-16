@@ -17,13 +17,16 @@ fn run(lang: &str, flag: &str, text: &str) -> String {
 
 type Case = (&'static str, &'static str, &'static str, &'static str);
 
-const CASES: [Case; 6] = [
+const CASES: [Case; 9] = [
     ("mk", "A.B.C.", "ˌæbˌətsˈə", ",&b,@ts'@"),
     ("mk", "U.S.A.", "ˌʊsˌəˈa", ",Us,@'a"),
     ("mk", "e.g. this", "ˌɛɡˈə thˈis", ",Eg'@ th'is"),
     ("ta", "A.B.C.", "ˈeːjbˌiːsˌiː", "'e:jb,i:s,i:"),
     ("mk", "a.b.c", "ˌæbˌətsˈə", ",&b,@ts'@"),
     ("ta", "a.b.c", "ˈeːjbˌiːsˌiː", "'e:jb,i:s,i:"),
+    ("hy", "e.g. this", "(en)fˌɔːɹɛɡzˈampəl ðˈɪs(hy)", "(en)f,O@rEgz'aamp@L D'Is(hy)"),
+    ("hy", "A.B.C.", "ˌabˌisˈi", ",ab,is'i"),
+    ("hy", "e.b.", "ˌebˈi", ",eb'i"),
 ];
 
 #[test]
