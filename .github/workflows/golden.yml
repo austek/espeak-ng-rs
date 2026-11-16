@@ -320,6 +320,7 @@ jobs:
           --test voice_letter_bits_offset
           --test c_letter_group_offsets
           --test embedded_command_empty_word_pause
+          --test embedded_unknown_letter
           --test ssml_say_as_characters_digit_groups
           --test dotted_abbrev_check
           --test dotted_abbrev_blank_before_dot

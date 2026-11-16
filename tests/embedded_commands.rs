@@ -14,9 +14,9 @@ fn commands_are_parsed_and_stripped() {
     assert_eq!((cmds[0].letter, cmds[0].value, cmds[0].relative), ('P', 10, 1));
     assert_eq!((cmds[1].letter, cmds[1].value, cmds[1].relative), ('S', 5, -1));
     assert_eq!((cmds[2].letter, cmds[2].value, cmds[2].relative), ('A', 50, 0));
-    // A stray \x01 at end, and an unknown command letter, are consumed/dropped.
-    assert_eq!(parse_embedded_commands("hi\u{01}").0, "hi");
-    assert_eq!(parse_embedded_commands("a\u{01}9zb").0, "ab"); // \x01 9 z (invalid) dropped
+    // C blanks the \x01 of a sequence without a command letter; the rest stays text.
+    assert_eq!(parse_embedded_commands("hi\u{01}").0, "hi ");
+    assert_eq!(parse_embedded_commands("a\u{01}9qb").0, "a 9qb");
     assert!(parse_embedded_commands("plain text").1.is_empty());
 }
 

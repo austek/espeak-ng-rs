@@ -1874,10 +1874,33 @@ pub struct EmbeddedCmd {
     pub relative: i8,
 }
 
+/// Read the `[±]<value><letter>` that follows a `\x01`, advancing `chars` past it only when the
+/// letter is a command.  C's `EmbeddedCommand` leaves the source untouched otherwise, so the
+/// sign, digits and letter stay text.
+fn read_embedded_command(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<EmbeddedCmd> {
+    let mut ahead = chars.clone();
+    let relative = match ahead.peek() {
+        Some('+') => { ahead.next(); 1 }
+        Some('-') => { ahead.next(); -1 }
+        _ => 0,
+    };
+    let mut digits = String::new();
+    while let Some(d) = ahead.next_if(char::is_ascii_digit) {
+        digits.push(d);
+    }
+    let letter = ahead.next().filter(|l| EMBED_LETTERS.contains(l.to_ascii_uppercase()))?;
+    *chars = ahead;
+    Some(EmbeddedCmd {
+        letter: letter.to_ascii_uppercase(),
+        value: digits.parse().unwrap_or(-1),
+        relative,
+    })
+}
+
 /// Parse and strip inline embedded commands (`\x01…`) from `text`, returning the
 /// command-free text and the commands in order.  Mirrors C's handling of
-/// `CTRL_EMBEDDED`; a stray `\x01` (or one not followed by a valid letter) is
-/// dropped so it can never be spoken as garbage.
+/// `CTRL_EMBEDDED`: a `\x01` that does not start a command (no valid letter) becomes a
+/// space and what follows it stays text.
 pub fn parse_embedded_commands(text: &str) -> (String, Vec<EmbeddedCmd>) {
     let mut out = String::with_capacity(text.len());
     let mut cmds = Vec::new();
@@ -1885,29 +1908,10 @@ pub fn parse_embedded_commands(text: &str) -> (String, Vec<EmbeddedCmd>) {
     while let Some(c) = chars.next() {
         if c != CTRL_EMBEDDED {
             out.push(c);
-            continue;
-        }
-        let relative = match chars.peek() {
-            Some('+') => { chars.next(); 1 }
-            Some('-') => { chars.next(); -1 }
-            _ => 0,
-        };
-        let mut digits = String::new();
-        while matches!(chars.peek(), Some(d) if d.is_ascii_digit()) {
-            digits.push(chars.next().unwrap());
-        }
-        match chars.next() {
-            Some(l) if EMBED_LETTERS.contains(l.to_ascii_uppercase()) => {
-                cmds.push(EmbeddedCmd {
-                    letter: l.to_ascii_uppercase(),
-                    value: digits.parse().unwrap_or(-1),
-                    relative,
-                });
-            }
-            // Not a valid command (or `\x01` at end): the whole sequence —
-            // including the trailing char — is consumed and dropped, matching
-            // C's `EmbeddedCommand` (which advances past the letter regardless).
-            _ => {}
+        } else if let Some(cmd) = read_embedded_command(&mut chars) {
+            cmds.push(cmd);
+        } else {
+            out.push(' ');
         }
     }
     (out, cmds)
@@ -2068,31 +2072,20 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
         if clause_punctuation_class(c).is_some() {
             while chars.next_if(|&n| clause_punctuation_class(n).is_some()).is_some() {}
         }
-        if c == CTRL_EMBEDDED {
-            // `\x01[±]<value><letter>` — keep it as a token so the change applies
-            // from here on rather than to the whole utterance.
-            let relative = match chars.peek() {
-                Some('+') => { chars.next(); 1 }
-                Some('-') => { chars.next(); -1 }
-                _ => 0,
-            };
-            let mut digits = String::new();
-            while matches!(chars.peek(), Some(d) if d.is_ascii_digit()) {
-                digits.push(chars.next().unwrap());
-            }
-            match chars.next() {
-                Some(l) if EMBED_LETTERS.contains(l.to_ascii_uppercase()) => {
-                    tokens.push(Token::Embedded(EmbeddedCmd {
-                        letter: l.to_ascii_uppercase(),
-                        value: digits.parse().unwrap_or(-1),
-                        relative,
-                    }));
+        // `\x01[±]<value><letter>` — keep it as a token so the change applies
+        // from here on rather than to the whole utterance.  Without a command
+        // letter only the `\x01` is blanked, as C does.
+        let c = if c == CTRL_EMBEDDED {
+            match read_embedded_command(&mut chars) {
+                Some(cmd) => {
+                    tokens.push(Token::Embedded(cmd));
+                    continue;
                 }
-                // A stray `\x01` is dropped rather than spoken as garbage.
-                _ => {}
+                None => ' ',
             }
-            continue;
-        }
+        } else {
+            c
+        };
         if c.is_whitespace() {
             // Collapse runs of whitespace into a single Space token.
             while chars.peek().map(|c| c.is_whitespace()).unwrap_or(false) {
