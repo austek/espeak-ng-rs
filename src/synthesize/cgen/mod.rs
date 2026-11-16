@@ -27,8 +27,34 @@ use speed::Speed;
 use voice::{LangSynth, WVoice};
 use wavegen::{Wavegen, EMBEDDED_DEFAULT, EMBED_A, EMBED_P, EMBED_S, EMBED_S2, N_EMBEDDED_VALUES};
 
-pub const MARKER_WORD: u8 = 1;
-pub const MARKER_SENTENCE: u8 = 2;
+/// What a queued marker announces (`espeakEVENT_*` of `DoMarker`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MarkerKind {
+    Word,
+    Sentence,
+}
+
+/// `DoMarker`'s payload: a source position, a word length and a value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Marker {
+    pub kind: MarkerKind,
+    pub pos: u32,
+    pub len: u8,
+    pub value: i32,
+}
+
+impl Marker {
+    pub const fn new(kind: MarkerKind) -> Self {
+        Marker { kind, pos: 0, len: 0, value: 0 }
+    }
+}
+
+/// A marker the wave generator reached, with the message-wide sample offset.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RawEvent {
+    pub marker: Marker,
+    pub sample: usize,
+}
 
 /// A pitch or amplitude envelope: one of the built-in `envelope_data[]`, or a
 /// 128-byte table in `phondata`.
@@ -49,7 +75,7 @@ pub enum Wcmd {
     Spect { spect2: bool, len: i32, modn: i32, fr1: usize, fr2: usize },
     FmtAmplitude(i32),
     Embedded { cmd: i32, value: i32 },
-    Marker(u8),
+    Marker(Marker),
 }
 
 /// `EMBED_*` number for an embedded command letter.
@@ -195,8 +221,7 @@ pub struct Renderer<'a> {
     max_clause_pause: i32,
     switched: std::collections::HashMap<String, PhonemeData>,
     emitted: usize,
-    pub word_marks: Vec<usize>,
-    pub sentence_marks: Vec<usize>,
+    pub events: Vec<RawEvent>,
 }
 
 impl<'a> Renderer<'a> {
@@ -232,9 +257,22 @@ impl<'a> Renderer<'a> {
             max_clause_pause: 0,
             switched: std::collections::HashMap::new(),
             emitted: 0,
-            word_marks: Vec::new(),
-            sentence_marks: Vec::new(),
+            events: Vec::new(),
         }
+    }
+
+    /// Sample offsets of the word markers, in queue order.
+    pub fn word_marks(&self) -> Vec<usize> {
+        self.marks(MarkerKind::Word)
+    }
+
+    /// Sample offsets of the sentence markers, in queue order.
+    pub fn sentence_marks(&self) -> Vec<usize> {
+        self.marks(MarkerKind::Sentence)
+    }
+
+    fn marks(&self, kind: MarkerKind) -> Vec<usize> {
+        self.events.iter().filter(|e| e.marker.kind == kind).map(|e| e.sample).collect()
     }
 
     /// Synthesize one clause; returns the samples it produced.
@@ -348,12 +386,8 @@ impl<'a> Renderer<'a> {
         self.wave_flag = g.wave_flag();
         self.dump_queue(&g.queue, &g.frames);
         let base = self.emitted;
-        let (words, sentences) = (&mut self.word_marks, &mut self.sentence_marks);
-        let mut on_marker = |kind: u8, pos: usize| match kind {
-            MARKER_WORD => words.push(base + pos),
-            MARKER_SENTENCE => sentences.push(base + pos),
-            _ => {}
-        };
+        let events = &mut self.events;
+        let mut on_marker = |marker: &Marker, pos: usize| events.push(RawEvent { marker: *marker, sample: base + pos });
         let with_icons: Vec<u8>;
         let wave_data: &[u8] = if self.icon_bytes.is_empty() {
             &phdata.phondata
@@ -461,7 +495,7 @@ pub fn render_clauses(
         start_sentence = c.terminator.is_sentence();
         sink(&pcm);
     }
-    (r.word_marks, r.sentence_marks)
+    (r.word_marks(), r.sentence_marks())
 }
 
 /// Synthesize a whole code stream; `sink` receives each clause as it is done.
@@ -481,5 +515,40 @@ pub fn render(
         start_sentence = c.brk.is_none() && c.terminator.is_sentence();
         sink(&pcm);
     }
-    (r.word_marks, r.sentence_marks)
+    (r.word_marks(), r.sentence_marks())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::synthesize::Synthesizer;
+
+    fn hello_world_events() -> Option<(Vec<RawEvent>, Vec<usize>, Vec<usize>)> {
+        let dir = Path::new("espeak-ng-data");
+        if !dir.join("phontab").exists() {
+            return None;
+        }
+        let tr = crate::translate::Translator::new("en", Some(dir)).ok()?;
+        let mut phdata = PhonemeData::load(dir).ok()?;
+        crate::translate::select_phoneme_table(&mut phdata, dir, "en").ok()?;
+        let codes = tr.translate_to_codes("hello world").ok()?;
+        let params = VoiceParams { lang: "en".into(), data_dir: Some(dir.to_path_buf()), ..VoiceParams::default() };
+        let mut r = Renderer::new(&phdata, dir, &params);
+        for c in phlist::split_clauses(&codes) {
+            r.clause(&c, true);
+        }
+        let (_, words, sentences) = Synthesizer::new(params).synthesize_codes_with_marks(&codes, &phdata).ok()?;
+        Some((r.events, words, sentences))
+    }
+
+    #[test]
+    fn hello_world_queues_sentence_then_two_words() {
+        let Some((events, words, sentences)) = hello_world_events() else { return };
+        let kinds: Vec<MarkerKind> = events.iter().map(|e| e.marker.kind).collect();
+        assert_eq!(kinds, [MarkerKind::Sentence, MarkerKind::Word, MarkerKind::Word]);
+        let samples: Vec<usize> = events.iter().map(|e| e.sample).collect();
+        assert_eq!(samples[0], 0);
+        assert_eq!(&samples[1..], words.as_slice());
+        assert!(sentences.is_empty());
+    }
 }

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use super::phlist::{Ph, PHLIST_START_OF_SENTENCE, PHLIST_START_OF_WORD, SFLAG_LENGTHEN, SFLAG_NEXT_PAUSE, SFLAG_SEQCONTINUE};
 use super::speed::Speed;
 use super::voice::{LangSynth, WVoice};
-use super::{Env, Wcmd, MARKER_SENTENCE, MARKER_WORD};
+use super::{Env, Marker, MarkerKind, Wcmd};
 use crate::phoneme::{
     PhonemeData, PHON_LENGTHEN, PH_FRICATIVE, PH_LIQUID, PH_LONG, PH_NASAL, PH_NOPAUSE, PH_PAUSE,
     PH_PREVOICE, PH_STOP, PH_TRILL, PH_VFRICATIVE, PH_VOWEL, PH_VSTOP,
@@ -986,10 +986,10 @@ impl<'a> Generator<'a> {
                 self.last_frame = None;
             }
             if p.newword & PHLIST_START_OF_SENTENCE != 0 {
-                self.push(Wcmd::Marker(MARKER_SENTENCE));
+                self.push(Wcmd::Marker(Marker::new(MarkerKind::Sentence)));
             }
             if p.newword & PHLIST_START_OF_WORD != 0 {
-                self.push(Wcmd::Marker(MARKER_WORD));
+                self.push(Wcmd::Marker(Marker::new(MarkerKind::Word)));
             }
         }
         self.end_amplitude();

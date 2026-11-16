@@ -11,7 +11,7 @@ const KLATT_BUFFER_SAMPLES: usize = 1324;
 const SPEECH_PLAYER_SOURCE: i32 = 6;
 const FADE_SAMPLES: i32 = 110;
 use super::voice::WVoice;
-use super::{Env, Wcmd};
+use super::{Env, Marker, Wcmd};
 use crate::synthesize::envelopes::ENVELOPE_DATA;
 use crate::synthesize::phondata::SpectFrame;
 
@@ -830,7 +830,7 @@ impl Wavegen {
 
     /// `WavegenFill2` over a whole clause queue; `on_marker` sees each marker
     /// with the number of samples produced before it.
-    pub fn run(&mut self, queue: &[Wcmd], frames: &[SpectFrame], phondata: &[u8], on_marker: &mut dyn FnMut(u8, usize)) {
+    pub fn run(&mut self, queue: &[Wcmd], frames: &[SpectFrame], phondata: &[u8], on_marker: &mut dyn FnMut(&Marker, usize)) {
         if self.wdata.pitch < 102400 {
             self.wdata.pitch = 102400;
         }
@@ -842,7 +842,7 @@ impl Wavegen {
         }
     }
 
-    fn run_cmd(&mut self, qi: usize, cmd: &Wcmd, queue: &[Wcmd], frames: &[SpectFrame], phondata: &[u8], on_marker: &mut dyn FnMut(u8, usize)) {
+    fn run_cmd(&mut self, qi: usize, cmd: &Wcmd, queue: &[Wcmd], frames: &[SpectFrame], phondata: &[u8], on_marker: &mut dyn FnMut(&Marker, usize)) {
         let carried = self.silence_left.take();
         match *cmd {
             Wcmd::Pitch { len, env, p1, p2 } => self.set_pitch(len, env, p1, p2, phondata),
@@ -889,7 +889,7 @@ impl Wavegen {
             Wcmd::Amplitude { len, env, amp } => self.set_amplitude(len, env, amp),
             Wcmd::Embedded { cmd, value } => self.set_embedded(cmd, value),
             Wcmd::FmtAmplitude(a) => self.wdata.amplitude_fmt = if a == 0 { 100 } else { a },
-            Wcmd::Marker(kind) => on_marker(kind, self.out.len()),
+            Wcmd::Marker(marker) => on_marker(&marker, self.out.len()),
         }
     }
 
