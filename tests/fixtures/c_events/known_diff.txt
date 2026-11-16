@@ -39,9 +39,9 @@ plain_french	events
 plain_embedded_unknown_letter	audio
 plain_embedded_break_z	audio
 plain_embedded_rate	events
-plain_private_use	audio
-plain_private_use_after_dot	audio
-plain_private_use_boundary	audio
+plain_private_use	events
+plain_private_use_after_dot	events
+plain_private_use_boundary	events
 ph1_hello	events
 ph3_hello	events
 ph1_hello_world	events

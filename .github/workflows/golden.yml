@@ -98,6 +98,7 @@ jobs:
           --test ssml_say_as_unrecognised_modes
           --test ssml_full_stop_before_tag
           --test ssml_dot_next_to_tag
+          --test private_use_separator
           --test standalone_dot_in_clause
           --test dot_clause_end
           --test ssml_say_as_digit_groups

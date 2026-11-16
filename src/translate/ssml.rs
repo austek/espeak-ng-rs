@@ -37,7 +37,7 @@
 /// `</s>`).  Chosen from the Unicode Private Use Area so it never collides with
 /// real input text.  The tokenizer maps it to a
 /// [`Token::ClauseBoundary`](crate::translate::Token::ClauseBoundary).
-pub(crate) const SSML_BREAK: char = '\u{E000}';
+pub(crate) const SSML_BREAK: char = '\u{E002}';
 
 /// The embedded-command letter that carries an SSML pause length, in
 /// milliseconds (`\x01<ms><BREAK_LETTER>`).

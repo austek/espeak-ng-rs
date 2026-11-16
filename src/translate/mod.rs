@@ -2096,11 +2096,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 chars.next();
             }
             tokens.push(Token::Space);
-        } else if c == ssml::SSML_BREAK {
-            // SSML clause boundary (<break/>, </p>, </s>) — silent boundary,
-            // never printed even in preserve-punctuation mode.
-            tokens.push(Token::ClauseBoundary(c));
-        } else if c == '[' && chars.peek() == Some(&'[') {
+        } else if c == '['&& chars.peek() == Some(&'[') {
             // Inline phonemes: [[ mnemonics ]] — read verbatim to the closing ]].
             chars.next(); // consume second '['
             let mut content = String::new();
