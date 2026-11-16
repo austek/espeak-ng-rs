@@ -150,6 +150,91 @@ static int scenario_events(int argc, char **argv) {
 	return 0;
 }
 
+static long flat_samples = 0;
+
+static int on_flat(short *wav, int n, espeak_EVENT *e) {
+	if (wav)
+		flat_samples += n;
+	for (; e && e->type != espeakEVENT_LIST_TERMINATED; e++) {
+		printf("ev %d %d %d %d %d ", (int)e->type, e->text_position, e->length, e->audio_position, e->sample);
+		switch (e->type) {
+		case espeakEVENT_MARK:
+		case espeakEVENT_PLAY:
+			printf("name=%s\n", e->id.name ? e->id.name : "(null)");
+			break;
+		case espeakEVENT_PHONEME:
+			printf("ph=[%.8s]\n", e->id.string);
+			break;
+		default:
+			printf("num=%d\n", e->id.number);
+		}
+	}
+	return 0;
+}
+
+static int accept_uri(int type, const char *uri, const char *base) {
+	return 0; /* 0 means the caller plays the clip */
+}
+
+/* Reads \xNN and \u{H...} escapes, \n, into a UTF-8 string. */
+static char *unescape(const char *s) {
+	char *out = malloc(strlen(s) * 4 + 1);
+	char *o = out;
+	while (*s) {
+		if (s[0] == '\\' && s[1] == 'x') {
+			*o++ = (char)strtoul((char[]){s[2], s[3], 0}, NULL, 16);
+			s += 4;
+		} else if (s[0] == '\\' && s[1] == 'n') {
+			*o++ = '\n';
+			s += 2;
+		} else if (s[0] == '\\' && s[1] == 'u' && s[2] == '{') {
+			unsigned long c = strtoul(s + 3, NULL, 16);
+			if (c < 0x80) {
+				*o++ = (char)c;
+			} else if (c < 0x800) {
+				*o++ = (char)(0xc0 | (c >> 6));
+				*o++ = (char)(0x80 | (c & 0x3f));
+			} else if (c < 0x10000) {
+				*o++ = (char)(0xe0 | (c >> 12));
+				*o++ = (char)(0x80 | ((c >> 6) & 0x3f));
+				*o++ = (char)(0x80 | (c & 0x3f));
+			} else {
+				*o++ = (char)(0xf0 | (c >> 18));
+				*o++ = (char)(0x80 | ((c >> 12) & 0x3f));
+				*o++ = (char)(0x80 | ((c >> 6) & 0x3f));
+				*o++ = (char)(0x80 | (c & 0x3f));
+			}
+			s = strchr(s, '}') + 1;
+		} else {
+			*o++ = *s++;
+		}
+	}
+	*o = 0;
+	return out;
+}
+
+static int scenario_evflat(int argc, char **argv) {
+	/* evflat <options> <voice> <flags> <text>: one line per event, synchronous
+	 * mode, then the sample total.  Options bit 0x10000 installs a URI callback
+	 * that accepts <audio> URIs and is not passed to espeak_Initialize.  Text takes \xNN, \u{H} and \n. */
+	int options = atoi(argv[0]);
+	int accept = (options & 0x10000) != 0;
+	int rate = espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, NULL, options & 0xffff);
+	if (rate < 0)
+		return 2;
+	espeak_SetSynthCallback(on_flat);
+	if (accept)
+		espeak_SetUriCallback(accept_uri);
+	espeak_SetVoiceByName(argv[1]);
+	unsigned flags = (unsigned)strtoul(argv[2], NULL, 0) | espeakCHARS_UTF8;
+	char *text = unescape(argv[3]);
+	espeak_Synth(text, strlen(text) + 1, 0, POS_CHARACTER, 0, flags, NULL, NULL);
+	espeak_Synchronize();
+	printf("samples=%ld\n", flat_samples);
+	espeak_Terminate();
+	return 0;
+}
+
 static int scenario_voices(int argc, char **argv) {
 	init(AUDIO_OUTPUT_SYNCHRONOUS, 0);
 	const espeak_VOICE **v = espeak_ListVoices(NULL);
@@ -268,6 +353,7 @@ int main(int argc, char **argv) {
 	if (!strcmp(s, "ngapi")) return scenario_ngapi(argc - 2, argv + 2);
 	if (!strcmp(s, "wav")) return scenario_wav(argc - 2, argv + 2);
 	if (!strcmp(s, "events")) return scenario_events(argc - 2, argv + 2);
+	if (!strcmp(s, "evflat")) return scenario_evflat(argc - 2, argv + 2);
 	if (!strcmp(s, "voices")) return scenario_voices(argc - 2, argv + 2);
 	if (!strcmp(s, "params")) return scenario_params(argc - 2, argv + 2);
 	if (!strcmp(s, "errors")) return scenario_errors(argc - 2, argv + 2);

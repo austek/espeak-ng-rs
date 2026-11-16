@@ -1,0 +1,6 @@
+ev 8 0 0 0 0 num=22050
+ev 2 1 0 0 0 num=1
+ev 1 1 2 0 0 num=1
+ev 3 9 0 331 7317 name=end
+ev 5 21 0 632 13954 num=1
+samples=13954

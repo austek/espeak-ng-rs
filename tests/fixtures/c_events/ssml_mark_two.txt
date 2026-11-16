@@ -1,0 +1,9 @@
+ev 8 0 0 0 0 num=22050
+ev 2 1 0 0 0 num=1
+ev 1 1 3 0 0 num=1
+ev 3 22 0 226 4997 name=a
+ev 1 22 3 226 4997 num=2
+ev 3 43 0 435 9605 name=b
+ev 1 43 5 435 9605 num=3
+ev 5 47 0 1046 23082 num=1
+samples=23082

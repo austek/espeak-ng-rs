@@ -1,0 +1,61 @@
+ssml_plain_words	0	en	0x1010	hello world
+ssml_mark_middle	0	en	0x1010	<speak>Hi <mark name="m1"/> there.</speak>
+ssml_mark_start	0	en	0x1010	<speak><mark name="s"/>Hi there.</speak>
+ssml_mark_end_no_word	0	en	0x1010	hi <mark name="end"/>
+ssml_mark_multibyte	0	en	0x1010	café <mark name="m"/>über
+ssml_mark_two	0	en	0x1010	one <mark name="a"/> two <mark name="b"/> three
+ssml_mark_before_s_end	0	en	0x1010	<s>One <mark name="z"/></s><s>Two</s>
+ssml_mark_nested	0	en	0x1010	<speak><p>One <mark name="in"/>two.</p> Three.</speak>
+ssml_two_sentences	0	en	0x1010	<s>One</s><s>Two</s>
+ssml_two_paragraphs	0	en	0x1010	<p>First one.</p><p>Second one.</p>
+ssml_heading	0	en	0x1010	<h1>Title</h1> Body text.
+ssml_list_item	0	en	0x1010	<li>apples</li><li>pears</li>
+ssml_break_time	0	en	0x1010	one <break time="500ms"/> two
+ssml_break_strength	0	en	0x1010	one <break strength="strong"/> two
+ssml_voice_switch	0	en	0x1010	hello <voice xml:lang="de">welt</voice> end
+ssml_voice_only	0	en	0x1010	<voice xml:lang="de">Guten Tag</voice>
+ssml_audio_no_callback	0	en	0x1010	one <audio src="x.wav">alt</audio> two
+ssml_audio_accepted	65536	en	0x1010	one <audio src="x.wav">alt</audio> two
+ssml_say_as_characters	0	en	0x1010	<say-as interpret-as="characters">abc</say-as> done
+ssml_say_as_digits	0	en	0x1010	<say-as interpret-as="digits">123</say-as> done
+ssml_prosody	0	en	0x1010	<prosody rate="slow">hello there</prosody> friend
+ssml_emphasis	0	en	0x1010	this is <emphasis>very</emphasis> good
+ssml_entities	0	en	0x1010	fish &amp; chips &lt;now&gt;
+ssml_multibyte_words	0	en	0x1010	<s>café über</s> naïve résumé
+ssml_trailing_speak	0	en	0x1010	<speak>Hello there.</speak>
+ssml_sentence_punct	0	en	0x1010	<speak>Hello there. How are you? Fine!</speak>
+plain_hello_world	0	en	0x1000	hello world
+plain_two_sentences	0	en	0x1000	Hello there. How are you?
+plain_numbers	0	en	0x1000	I have 25 apples and 3.5 pears
+plain_abbreviation	0	en	0x1000	Dr. Smith lives on Main St. today
+plain_multi_clause	0	en	0x1000	Well, this is a test; and so is that.
+plain_quotes	0	en	0x1000	He said "hello there" and left.
+plain_newlines	0	en	0x1000	first line\nsecond line\n\nthird line
+plain_multibyte	0	en	0x1000	café über naïve
+plain_single_word	0	en	0x1000	hello
+plain_question	0	en	0x1000	Really? Yes!
+plain_german	0	de	0x1000	Guten Tag. Wie geht es dir?
+plain_french	0	fr	0x1000	Bonjour tout le monde.
+plain_embedded_unknown_letter	0	en	0x1000	a\x015Qb
+plain_embedded_break_z	0	en	0x1000	a\x01500Zb
+plain_embedded_rate	0	en	0x1000	one \x01100S two
+plain_private_use	0	en	0x1000	one\u{E000}two
+plain_private_use_after_dot	0	en	0x1000	one.\u{E000}two
+plain_private_use_boundary	0	en	0x1000	Hello there.\u{E000}How are you?
+ph1_hello	1	en	0x1000	hello
+ph3_hello	3	en	0x1000	hello
+ph1_hello_world	1	en	0x1000	hello world
+ph3_sentence	3	en	0x1000	Hello there. How are you?
+ph1_de	1	de	0x1000	Guten Tag
+ph3_de	3	de	0x1000	Guten Tag
+ph1_it	1	it	0x1000	buongiorno
+ph3_it	3	it	0x1000	buongiorno
+ph3_ssml_mark	3	en	0x1010	Hi <mark name="m1"/> there.
+multi_voice_back	0	en	0x1010	one <voice xml:lang="de">zwei</voice> three <voice xml:lang="fr">quatre</voice> five
+multi_voice_name	0	en	0x1010	<voice name="de">Guten Tag</voice> and hello
+multi_voice_mark	0	en	0x1010	hi <voice xml:lang="de">welt <mark name="in"/> eins</voice> out
+multi_say_as_cardinal	0	en	0x1010	<say-as interpret-as="cardinal">42</say-as> items
+multi_say_as_ordinal	0	en	0x1010	the <say-as interpret-as="ordinal">3</say-as> one
+multi_say_as_date	0	en	0x1010	<say-as interpret-as="date" format="mdy">1/2/2020</say-as> end
+multi_sub	0	en	0x1010	<sub alias="world wide web">WWW</sub> site
+multi_phoneme_tag	0	en	0x1010	say <phoneme alphabet="ipa" ph="həˈləʊ">hello</phoneme> now

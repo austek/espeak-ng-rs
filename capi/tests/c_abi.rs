@@ -116,6 +116,20 @@ fn record_fixtures_from_c() {
         std::fs::create_dir_all(fixture_path("expected")).expect("mkdir");
         std::fs::write(fixture_path(s.fixture), text).expect("write fixture");
     }
+    record_event_transcripts(&out);
+}
+
+/// Writes `tests/fixtures/c_events/<id>.txt` in the workspace root for every
+/// row of `cases.tsv` (id, options, voice, flags, text).
+fn record_event_transcripts(binary: &Path) {
+    let dir = manifest_dir().join("..").join("tests").join("fixtures").join("c_events");
+    let cases = std::fs::read_to_string(dir.join("cases.tsv")).expect("cases.tsv");
+    for line in cases.lines().filter(|l| !l.is_empty()) {
+        let f: Vec<&str> = line.splitn(5, '\t').collect();
+        assert_eq!(f.len(), 5, "bad case row: {line}");
+        let text = run_probe_with(binary, &["evflat", f[1], f[2], f[3], f[4]]);
+        std::fs::write(dir.join(format!("{}.txt", f[0])), text).expect("write transcript");
+    }
 }
 
 #[test]
