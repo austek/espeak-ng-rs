@@ -32,6 +32,8 @@ use wavegen::{Wavegen, EMBEDDED_DEFAULT, EMBED_A, EMBED_P, EMBED_S, EMBED_S2, N_
 pub enum MarkerKind {
     Word,
     Sentence,
+    /// `EMBED_M`: the value is the name's offset in the clause reader's name data.
+    Mark,
 }
 
 /// `DoMarker`'s payload: a source position, a word length and a value.
@@ -78,6 +80,9 @@ pub enum Wcmd {
     Marker(Marker),
 }
 
+/// `EMBED_M`: a named marker.
+pub const EMBED_M: usize = 10;
+
 /// `EMBED_*` number for an embedded command letter.
 pub fn embed_code(letter: char) -> Option<usize> {
     Some(match letter {
@@ -89,6 +94,7 @@ pub fn embed_code(letter: char) -> Option<usize> {
         'T' => 6,
         'I' => 7,
         'Y' => 9,
+        'M' => EMBED_M,
         'B' => 12,
         'F' => 13,
         _ => return None,
@@ -373,6 +379,10 @@ impl<'a> Renderer<'a> {
         }
         let phdata = active_table(self.phdata, &self.switched, self.active.as_deref());
         let mut c = phlist::build_list(codes, phdata, &self.switched, post_pause, start_sentence, self.tr.stress_flags);
+        if let Some(k) = clause.counters {
+            let end = c.list.len().saturating_sub(2);
+            c.list[end].source = Some(crate::translate::SourceIx { ix: k.end_ix, len: 0 });
+        }
         pitches::calc_pitches(&mut c.list, &self.tr, &self.tunes, clause_type, phdata);
         let speeds = speeds_along(&c.list, &mut self.wpm_s, &self.voice);
         lengths::calc_lengths(&mut c.list, &self.tr, &|i| speeds[i.min(speeds.len() - 1)]);

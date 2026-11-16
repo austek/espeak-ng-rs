@@ -194,7 +194,7 @@ impl<'a> Generator<'a> {
             return;
         };
         self.sentence_pending |= p.newword & PHLIST_START_OF_SENTENCE != 0;
-        let Some(src) = p.source else { return };
+        let Some(src) = p.source.filter(|_| p.newword & PHLIST_START_OF_WORD != 0) else { return };
         let pos = u32::from(src.ix) + k.start_char;
         if std::mem::take(&mut self.sentence_pending) {
             self.push(Wcmd::Marker(Marker { kind: MarkerKind::Sentence, pos, len: 0, value: k.sentences as i32 }));
@@ -960,15 +960,15 @@ impl<'a> Generator<'a> {
         for ix in 1..list.len() {
             if !list[ix].embedded.is_empty() {
                 let cmds = list[ix].embedded.clone();
-                self.do_embedded(&cmds);
+                self.do_embedded(&cmds, list[ix].source);
             }
             self.phoneme(list, ix);
         }
         self.end_pitch(true);
     }
 
-    /// `DoEmbedded`.
-    pub fn do_embedded(&mut self, cmds: &[crate::translate::EmbeddedCmd]) {
+    /// `DoEmbedded`; `source` is the carrying phoneme's `sourceix`.
+    pub fn do_embedded(&mut self, cmds: &[crate::translate::EmbeddedCmd], source: Option<crate::translate::SourceIx>) {
         for c in cmds {
             let sign = match c.relative {
                 1 => 0x40,
@@ -990,6 +990,10 @@ impl<'a> Generator<'a> {
                 self.play_icon(c.value);
                 continue;
             }
+            if code == super::EMBED_M {
+                self.mark(c.value, source);
+                continue;
+            }
             if code == super::wavegen::EMBED_S {
                 self.embedded_s2 = super::apply_embedded(self.embedded_s2, sign, c.value, 2000);
                 self.speed.set(2, self.embedded_s2, self.voice);
@@ -998,6 +1002,13 @@ impl<'a> Generator<'a> {
             self.do_pause(10, 0);
             self.push(Wcmd::Embedded { cmd: code as i32 + sign, value: c.value.max(0) });
         }
+    }
+
+    /// `DoEmbedded`'s `EMBED_M`: `DoMarker(espeakEVENT_MARK, (sourceix & 0x7ff) + clause_start_char, 0, value)`.
+    fn mark(&mut self, value: i32, source: Option<crate::translate::SourceIx>) {
+        let Some(k) = self.counters else { return };
+        let pos = source.map_or(0, |s| u32::from(s.ix) & 0x7ff) + k.start_char;
+        self.push(Wcmd::Marker(Marker { kind: MarkerKind::Mark, pos, len: 0, value }));
     }
 
     /// `DoEmbedded`'s `EMBED_I`: a break, then the clip as 16-bit data at amplitude 21.

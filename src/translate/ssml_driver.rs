@@ -2,7 +2,7 @@
 //! translator of the current voice translates it, and a voice change takes effect after the
 //! clause that carried it.
 
-use super::readclause::ssml_tag::{SsmlEnv, SsmlState, N_SPEECH_PARAM, P_CAPITALS, P_PUNCTUATION, P_RATE, P_SSML_BREAK_MUL};
+use super::readclause::ssml_tag::{NameData, SsmlEnv, SsmlState, N_SPEECH_PARAM, P_CAPITALS, P_PUNCTUATION, P_RATE, P_SSML_BREAK_MUL};
 use super::readclause::voice_stack::{BaseVoice, EntryCatalog};
 use super::readclause::{CharMap, ClauseReader, ReaderLang, ReaderOptions, SourceClause, SsmlTags, Terminator};
 use super::{CodeMarker, PhonemeCode, Result, Token, Translator};
@@ -69,6 +69,7 @@ impl MessageCounts {
             start_word: self.words + 1,
             sentences: self.sentences,
             new_sentence: opens,
+            end_ix: ((source.text.len() + 1) & 0x7ff) as u16,
         };
         self.words += codes.iter().filter(|c| c.source.is_some()).count() as u32;
         self.new_sentence = terminator.is_sentence() || (blank && self.new_sentence);
@@ -125,9 +126,15 @@ pub struct SsmlDocument<'a> {
     base: &'a Translator,
     others: Vec<(String, Translator)>,
     pub clauses: Vec<TranslatedClause>,
+    names: NameData,
 }
 
 impl SsmlDocument<'_> {
+    /// The `<mark>` name a marker's value addresses (`namedata + value`).
+    pub fn mark_name(&self, value: i32) -> Option<&str> {
+        self.names.get(usize::try_from(value).ok()?)
+    }
+
     pub fn translator(&self, voice: usize) -> &Translator {
         match voice.checked_sub(1) {
             Some(ix) => &self.others[ix].1,
@@ -203,7 +210,7 @@ impl Translator {
         let mut state = SsmlState::new(self.speech_defaults(settings), self.base_voice(&voices), "");
         state.voice.current_voice_id = state.voice.voice_from_stack(&catalog, 1);
         let mut reader = ClauseReader::new(text, self.reader_options(), SsmlTags::new(state, env));
-        let mut doc = SsmlDocument { base: self, others: Vec::new(), clauses: Vec::new() };
+        let mut doc = SsmlDocument { base: self, others: Vec::new(), clauses: Vec::new(), names: NameData::default() };
         let mut voice = 0;
         let mut carry = ClauseCarry::default();
         while !reader.at_end() {
@@ -217,6 +224,7 @@ impl Translator {
             }
             doc.clauses.push(translated);
         }
+        doc.names = reader.tags_mut().state.names.clone();
         Ok(doc)
     }
 

@@ -764,34 +764,20 @@ impl EspeakNg {
     }
 
     /// The `SampleRate`, `Word`, `Sentence` and `MsgTerminated` events of markup, with the
-    /// word and sentence events as C's `Generate` reports them.  `<mark>` events are still
-    /// placed by interpolation.
+    /// word, sentence and mark events as C's `Generate` reports them.
     fn synth_markup_with_events(&self, text: &str, rate: u32) -> Result<(PcmBuffer, u32, Vec<SynthEvent>)> {
         let (pcm, raw) = self.synth_markup_raw(text)?;
         let raw_len = pcm.len();
         let samples = self.apply_post_fx(pcm);
         let scale = if raw_len == 0 { 1.0 } else { samples.len() as f64 / raw_len as f64 };
         let mut events = vec![sample_rate_event(rate)];
-        events.extend(raw.iter().map(|e| marker_event(e, scale, rate)));
-        let total_ms = (samples.len() as u64 * 1000 / u64::from(rate.max(1))) as u32;
-        let chars = crate::translate::ssml::strip_markup(text).chars().count().max(1);
-        let (_, marks) = crate::translate::ssml::process_markup_with_marks(text);
-        for m in marks {
-            let at = (m.position as u64 * u64::from(total_ms) / chars as u64) as u32;
-            events.push(SynthEvent {
-                kind: EventKind::Mark(m.name),
-                text_position: m.position as u32 + 1,
-                length: 0,
-                audio_position_ms: at,
-                sample: u64::from(at) * u64::from(rate) / 1000,
-            });
-        }
-        events.sort_by_key(|e| e.sample);
+        events.extend(raw.iter().map(|(e, name)| marker_event(e, name.as_deref(), scale, rate)));
         events.push(terminated_event());
         Ok((samples, rate, events))
     }
 
-    fn synth_markup_raw(&self, text: &str) -> Result<(PcmBuffer, Vec<crate::synthesize::cgen::RawEvent>)> {
+    /// The audio and the generator's events, a mark's name resolved from the clause reader.
+    fn synth_markup_raw(&self, text: &str) -> Result<(PcmBuffer, Vec<NamedEvent>)> {
         let translator = self.make_translator()?;
         let mut phdata = self.load_phdata()?;
         crate::translate::select_phoneme_table(&mut phdata, &self.data_dir, self.voice_spec.effective_lang())
@@ -812,7 +798,13 @@ impl EspeakNg {
             .filter_map(|c| c.voice_after.as_deref())
             .filter_map(|id| self.voice_params_for_id(id).map(|p| (id.to_string(), p)))
             .collect();
-        synth.synthesize_clauses_with_events(&doc.clause_codes(), &phdata, &voices, &icons)
+        let (pcm, raw) = synth.synthesize_clauses_with_events(&doc.clause_codes(), &phdata, &voices, &icons)?;
+        let named = raw.into_iter().map(|e| {
+            let name = (e.marker.kind == crate::synthesize::cgen::MarkerKind::Mark)
+                .then(|| doc.mark_name(e.marker.value).unwrap_or_default().to_string());
+            (e, name)
+        });
+        Ok((pcm, named.collect()))
     }
 
     /// Synthesize a plain (icon-free) text run through the normal pipeline.
@@ -1387,11 +1379,15 @@ fn event_at(kind: EventKind, text_position: u32, sample: usize, rate: u32) -> Sy
 }
 
 /// The event for a word or sentence marker; other markers are not reported yet.
-fn marker_event(e: &crate::synthesize::cgen::RawEvent, scale: f64, rate: u32) -> SynthEvent {
+/// A generator event with the `<mark>` name its value addresses.
+type NamedEvent = (crate::synthesize::cgen::RawEvent, Option<String>);
+
+fn marker_event(e: &crate::synthesize::cgen::RawEvent, name: Option<&str>, scale: f64, rate: u32) -> SynthEvent {
     use crate::synthesize::cgen::MarkerKind;
     let kind = match e.marker.kind {
         MarkerKind::Word => EventKind::Word(e.marker.value as u32),
         MarkerKind::Sentence => EventKind::Sentence(e.marker.value as u32),
+        MarkerKind::Mark => EventKind::Mark(name.unwrap_or_default().to_string()),
     };
     let sample = (e.sample as f64 * scale) as usize;
     let mut ev = event_at(kind, e.marker.pos, sample, rate);

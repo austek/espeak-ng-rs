@@ -122,6 +122,8 @@ pub struct ClauseCounters {
     pub sentences: u32,
     /// `new_sentence2`: the clause opens a sentence.
     pub new_sentence: bool,
+    /// `source_index` once `TranslateClause` has consumed the clause's closing NUL: the `sourceix` of its two closing pauses.
+    pub end_ix: u16,
 }
 
 impl ClauseCodes {
