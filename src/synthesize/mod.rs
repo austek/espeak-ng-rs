@@ -464,13 +464,26 @@ impl Synthesizer {
         voices: &std::collections::HashMap<String, VoiceParams>,
         icons: &[Vec<i16>],
     ) -> Result<PcmBuffer> {
+        self.synthesize_clauses_with_events(clauses, phdata, voices, icons).map(|(pcm, _)| pcm)
+    }
+
+    /// As [`synthesize_clauses_with_voices`](Self::synthesize_clauses_with_voices), also
+    /// returning the markers the wave generator reached, with their sample offsets.  Empty
+    /// without a data directory.
+    pub fn synthesize_clauses_with_events(
+        &self,
+        clauses: &[cgen::phlist::ClauseCodes],
+        phdata: &crate::phoneme::PhonemeData,
+        voices: &std::collections::HashMap<String, VoiceParams>,
+        icons: &[Vec<i16>],
+    ) -> Result<(PcmBuffer, Vec<cgen::RawEvent>)> {
         let Some(dir) = self.voice.data_dir.clone() else {
             let codes: Vec<_> = clauses.iter().flat_map(|c| c.codes.iter().cloned()).collect();
-            return self.synthesize_codes(&codes, phdata);
+            return self.synthesize_codes(&codes, phdata).map(|pcm| (pcm, Vec::new()));
         };
         let mut out = Vec::new();
-        cgen::render_clauses(clauses, phdata, &dir, &self.voice, voices, icons, &mut |pcm| out.extend_from_slice(pcm));
-        Ok(out)
+        let events = cgen::render_clauses(clauses, phdata, &dir, &self.voice, voices, icons, &mut |pcm| out.extend_from_slice(pcm));
+        Ok((out, events))
     }
 
     /// Build the MBROLA phoneme list for a clause (`MbrolaTranslate`'s input).

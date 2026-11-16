@@ -80,6 +80,7 @@ jobs:
           --test robustness_ssml_unterminated_tag
           --test c_events
           --test synth_event_fields
+          --test ssml_events
           --test robustness_switch_tables
           --test stress_add_language_table
           --test crash_safety

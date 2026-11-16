@@ -379,7 +379,8 @@ impl<'a> Renderer<'a> {
         self.dump(&c.list);
         let mut g = generate::Generator::new(phdata, &self.voice, &self.tr, self.speed, self.wpm_s2)
             .with_icons(&self.icon_clips)
-            .with_wave_flag(self.wave_flag);
+            .with_wave_flag(self.wave_flag)
+            .with_counters(clause.counters);
         g.generate(&mut c.list);
         self.speed = g.speed;
         self.wpm_s2 = g.embedded_s2_value();
@@ -481,21 +482,22 @@ pub fn render_clauses(
     voices: &std::collections::HashMap<String, VoiceParams>,
     icons: &[Vec<i16>],
     sink: &mut dyn FnMut(&[i16]),
-) -> (Vec<usize>, Vec<usize>) {
+) -> Vec<RawEvent> {
     let mut r = Renderer::new(phdata, data_dir, params);
     r.set_icons(icons);
     let all: Vec<PhonemeCode> = clauses.iter().flat_map(|c| c.codes.iter().cloned()).collect();
     r.switched = switched_tables(&all, data_dir, &params.lang);
     let mut start_sentence = true;
     for c in clauses {
+        let opens_sentence = c.counters.map_or(start_sentence, |k| k.new_sentence);
         let pcm = match c.voice_after.as_ref().and_then(|id| voices.get(id)) {
-            Some(next) => r.clause_then_voice(c, start_sentence, next),
-            None => r.clause(c, start_sentence),
+            Some(next) => r.clause_then_voice(c, opens_sentence, next),
+            None => r.clause(c, opens_sentence),
         };
         start_sentence = c.terminator.is_sentence();
         sink(&pcm);
     }
-    (r.word_marks(), r.sentence_marks())
+    r.events
 }
 
 /// Synthesize a whole code stream; `sink` receives each clause as it is done.

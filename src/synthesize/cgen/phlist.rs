@@ -6,7 +6,7 @@ use crate::phoneme::{
     PH_NASAL, PH_PAUSE, PH_PREVOICE, PH_STRESS, PH_VFRICATIVE, PH_VOWEL, PH_VSTOP,
 };
 use crate::translate::readclause::Terminator;
-use crate::translate::{CodeMarker, EmbeddedCmd, PhonemeCode};
+use crate::translate::{CodeMarker, EmbeddedCmd, PhonemeCode, SourceIx};
 
 pub const SFLAG_SEQCONTINUE: u16 = 0x01;
 pub const SFLAG_EMBEDDED: u16 = 0x02;
@@ -43,6 +43,8 @@ pub struct Ph {
     /// The tone phoneme of a tone-language syllable (C's `tone_ph`).
     pub tone: Option<PhonemeTab>,
     pub tone_env: ToneEnv,
+    /// C `sourceix`: the word this phoneme opens, in the clause source.
+    pub source: Option<SourceIx>,
 }
 
 /// What a tone phoneme's program selects: phondata offsets of its pitch and
@@ -74,6 +76,7 @@ impl Ph {
             deleted_next: false,
             tone: None,
             tone_env: ToneEnv::default(),
+            source: None,
         }
     }
 
@@ -103,12 +106,28 @@ pub struct ClauseCodes {
     /// An SSML `<break>` that ended the clause: its length in ms, and whether
     /// it is wall-clock exact (`time`) rather than in clause units (`strength`).
     pub brk: Option<(i32, bool)>,
+    /// The message-wide counts C reads while generating the clause; `None` for plain text.
+    pub counters: Option<ClauseCounters>,
+}
+
+/// What `TranslateClause` leaves in `clause_start_char`, `clause_start_word` and
+/// `count_sentences` for `Generate`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ClauseCounters {
+    /// `clause_start_char`: added to each word's source index.
+    pub start_char: u32,
+    /// `clause_start_word`: the number of the clause's first word.
+    pub start_word: u32,
+    /// `count_sentences` after the clause.
+    pub sentences: u32,
+    /// `new_sentence2`: the clause opens a sentence.
+    pub new_sentence: bool,
 }
 
 impl ClauseCodes {
     fn plain(codes: Vec<PhonemeCode>, clause_char: Option<char>, brk: Option<(i32, bool)>) -> Self {
         let terminator = clause_char.and_then(|c| Terminator::from_codepoint(c as u32)).unwrap_or(Terminator::PERIOD);
-        ClauseCodes { codes, terminator, eof: false, voice_after: None, brk }
+        ClauseCodes { codes, terminator, eof: false, voice_after: None, brk, counters: None }
     }
 }
 
@@ -176,7 +195,9 @@ pub fn build_list(
     let mut gaps: Vec<(usize, i32)> = Vec::new();
     let mut insert = Insert::None;
     let mut bare: Vec<usize> = Vec::new();
+    let mut word_source: Option<SourceIx> = None;
     for (idx, c) in codes.iter().enumerate() {
+        word_source = c.source.or(word_source);
         match &c.marker {
             Some(CodeMarker::Deleted) => {
                 if newword & PHLIST_START_OF_WORD == 0 {
@@ -261,6 +282,7 @@ pub fn build_list(
         let leading_pause = matches!(c.code, PHON_PAUSE | PHON_PAUSE_NOLINK) && newword & PHLIST_START_OF_CLAUSE != 0;
         let mut p = Ph::new(t.clone(), s, if leading_pause { 0 } else { newword });
         if !leading_pause {
+            p.source = word_source.take();
             newword = 0;
         }
         if before == Insert::Neighbour {

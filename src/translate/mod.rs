@@ -12119,7 +12119,12 @@ fn token_sources(
             if let Some((_, end)) = found {
                 cursor = end;
             }
-            word_source(charix, found.map_or(cursor, |(start, _)| start))
+            let source = word_source(charix, found.map_or(cursor, |(start, _)| start))?;
+            // Punctuation glued to the word ends it, as C's inserted-space count does.
+            let own = found
+                .filter(|&(_, end)| text[end..].chars().next().is_some_and(|c| !c.is_whitespace()))
+                .map_or(usize::MAX, |(start, end)| text[start..end].chars().count());
+            Some(SourceIx { len: source.len.min(own.min(31) as u8), ..source })
         })
         .collect()
 }

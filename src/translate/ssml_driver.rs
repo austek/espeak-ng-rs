@@ -6,7 +6,7 @@ use super::readclause::ssml_tag::{SsmlEnv, SsmlState, N_SPEECH_PARAM, P_CAPITALS
 use super::readclause::voice_stack::{BaseVoice, EntryCatalog};
 use super::readclause::{CharMap, ClauseReader, ReaderLang, ReaderOptions, SourceClause, SsmlTags, Terminator};
 use super::{CodeMarker, PhonemeCode, Result, Token, Translator};
-use crate::synthesize::cgen::phlist::ClauseCodes;
+use crate::synthesize::cgen::phlist::{ClauseCodes, ClauseCounters};
 use crate::voices::{list_catalog, list_voices, select_voice_by_name, VoiceEntry};
 
 /// How the token stream of one translation call is cut into clauses.
@@ -39,6 +39,41 @@ const INTONATION_NONE: u32 = 4;
 pub(crate) struct ClauseCarry {
     pub emphasis: i32,
     pub say_as: super::say_as::SayAs,
+    pub counts: MessageCounts,
+}
+
+/// `count_words`, `count_sentences` and `new_sentence`: kept for the whole message, across
+/// voice changes, and reset only by `InitText`.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct MessageCounts {
+    words: u32,
+    sentences: u32,
+    new_sentence: bool,
+}
+
+impl Default for MessageCounts {
+    fn default() -> Self {
+        MessageCounts { words: 0, sentences: 0, new_sentence: true }
+    }
+}
+
+impl MessageCounts {
+    /// `TranslateClause`'s bookkeeping around one clause.  A clause of blanks is no sentence
+    /// and hands its sentence start on to the next clause.
+    fn clause(&mut self, source: &SourceClause, terminator: Terminator, codes: &[PhonemeCode]) -> ClauseCounters {
+        let blank = source.text.chars().all(char::is_whitespace);
+        let opens = self.new_sentence && !blank;
+        self.sentences += u32::from(opens);
+        let counters = ClauseCounters {
+            start_char: source.start_char.max(0) as u32,
+            start_word: self.words + 1,
+            sentences: self.sentences,
+            new_sentence: opens,
+        };
+        self.words += codes.iter().filter(|c| c.source.is_some()).count() as u32;
+        self.new_sentence = terminator.is_sentence() || (blank && self.new_sentence);
+        counters
+    }
 }
 
 fn single_clause(mut tokens: Vec<Token>) -> Vec<Token> {
@@ -82,6 +117,7 @@ pub struct TranslatedClause {
     pub voice_after: Option<String>,
     /// Index into [`SsmlDocument::voices`] of the voice that translated the clause.
     pub voice: usize,
+    pub counters: ClauseCounters,
 }
 
 /// The clauses of a markup text and the voices that translated them; voice 0 is the base.
@@ -128,6 +164,7 @@ impl SsmlDocument<'_> {
             eof: clause.eof,
             voice_after: clause.voice_after.clone(),
             brk: None,
+            counters: Some(clause.counters),
         }
     }
 
@@ -193,7 +230,8 @@ impl Translator {
         let abbreviated = clause.terminator.dot_after_last_word()
             && codes.iter().any(|c| matches!(c.marker, Some(CodeMarker::AbbreviationDot)));
         let terminator = if abbreviated { terminator.after_abbreviation() } else { terminator };
-        Ok(TranslatedClause { codes, terminator, eof: clause.eof, voice_after: clause.voice_change, voice })
+        let counters = carry.counts.clause(&clause, terminator, &codes);
+        Ok(TranslatedClause { codes, terminator, eof: clause.eof, voice_after: clause.voice_change, voice, counters })
     }
 
     fn speech_defaults(&self, settings: SsmlSettings) -> [i32; N_SPEECH_PARAM] {

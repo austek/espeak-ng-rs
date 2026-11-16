@@ -27,6 +27,10 @@ pub const ANNOUNCED_BRACKET: char = '\u{e028}';
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceClause {
     pub text: String,
+    /// C `clause_start_char`: `count_characters` before the clause was read, at least 0.
+    pub start_char: i32,
+    /// `count_characters` after the clause was read.
+    pub end_char: i32,
     /// Character index of each byte position after a written character, `-1` inside a
     /// multibyte character.
     pub charix: Vec<i32>,

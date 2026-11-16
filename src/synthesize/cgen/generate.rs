@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use super::phlist::{Ph, PHLIST_START_OF_SENTENCE, PHLIST_START_OF_WORD, SFLAG_LENGTHEN, SFLAG_NEXT_PAUSE, SFLAG_SEQCONTINUE};
 use super::speed::Speed;
 use super::voice::{LangSynth, WVoice};
+use super::phlist::ClauseCounters;
 use super::{Env, Marker, MarkerKind, Wcmd};
 use crate::phoneme::{
     PhonemeData, PHON_LENGTHEN, PH_FRICATIVE, PH_LIQUID, PH_LONG, PH_NASAL, PH_NOPAUSE, PH_PAUSE,
@@ -117,6 +118,9 @@ pub struct Generator<'a> {
     embedded_s2: i32,
     icons: Vec<IconClip>,
     icon_base: usize,
+    counters: Option<ClauseCounters>,
+    word_count: u32,
+    sentence_pending: bool,
 }
 
 /// A sound icon's 16-bit samples as `Wcmd::Wave` addresses them: a byte offset past the end of
@@ -153,6 +157,9 @@ impl<'a> Generator<'a> {
             embedded_s2,
             icons: Vec::new(),
             icon_base: phdata.phondata.len(),
+            counters: None,
+            word_count: 0,
+            sentence_pending: false,
         }
     }
 
@@ -171,6 +178,30 @@ impl<'a> Generator<'a> {
     pub fn with_icons(mut self, icons: &[IconClip]) -> Self {
         self.icons = icons.to_vec();
         self
+    }
+
+    /// The message counts that give the word and sentence markers C's positions and numbers.
+    pub fn with_counters(mut self, counters: Option<ClauseCounters>) -> Self {
+        self.counters = counters;
+        self
+    }
+
+    /// `DoMarker(espeakEVENT_SENTENCE)` and `DoMarker(espeakEVENT_WORD)` of `Generate`.
+    fn word_markers(&mut self, p: &Ph) {
+        let Some(k) = self.counters else {
+            let kinds = [(PHLIST_START_OF_SENTENCE, MarkerKind::Sentence), (PHLIST_START_OF_WORD, MarkerKind::Word)];
+            kinds.iter().filter(|(flag, _)| p.newword & flag != 0).for_each(|&(_, kind)| self.push(Wcmd::Marker(Marker::new(kind))));
+            return;
+        };
+        self.sentence_pending |= p.newword & PHLIST_START_OF_SENTENCE != 0;
+        let Some(src) = p.source else { return };
+        let pos = u32::from(src.ix) + k.start_char;
+        if std::mem::take(&mut self.sentence_pending) {
+            self.push(Wcmd::Marker(Marker { kind: MarkerKind::Sentence, pos, len: 0, value: k.sentences as i32 }));
+        }
+        let value = (k.start_word + self.word_count) as i32;
+        self.word_count += 1;
+        self.push(Wcmd::Marker(Marker { kind: MarkerKind::Word, pos, len: src.len, value }));
     }
 
     pub fn embedded_s2_value(&self) -> i32 {
@@ -985,12 +1016,7 @@ impl<'a> Generator<'a> {
             if !(merge || p.ph.phflags & PH_NOPAUSE != 0) {
                 self.last_frame = None;
             }
-            if p.newword & PHLIST_START_OF_SENTENCE != 0 {
-                self.push(Wcmd::Marker(Marker::new(MarkerKind::Sentence)));
-            }
-            if p.newword & PHLIST_START_OF_WORD != 0 {
-                self.push(Wcmd::Marker(Marker::new(MarkerKind::Word)));
-            }
+            self.word_markers(&p);
         }
         self.end_amplitude();
         if p.prepause > 0 && p.ph.phflags & PH_PREVOICE == 0 {

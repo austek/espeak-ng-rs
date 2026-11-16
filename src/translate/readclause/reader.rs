@@ -547,6 +547,8 @@ impl<T: TagProcessor> ClauseReader<T> {
         let tone_override = (s.tone != 0).then_some(s.tone);
         SourceClause {
             text,
+            start_char: s.clause_start,
+            end_char: self.count_characters,
             charix: s.charix,
             terminator,
             tone_override,
