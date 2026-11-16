@@ -11026,7 +11026,7 @@ impl Translator {
         allow_switch: bool,
         track: Option<&mut Vec<TokenCodes>>,
     ) -> Result<Vec<PhonemeCode>> {
-        self.translate_codes_in_mode(text, allow_switch, track, TokenizeMode::Plain, None)
+        self.translate_codes_in_mode(text, allow_switch, track, TokenizeMode::Plain, None, None)
     }
 
     /// One clause as the SSML clause reader ended it (C `TranslateClause` on `source[]`):
@@ -11036,8 +11036,16 @@ impl Translator {
         text: &str,
         no_tonic: bool,
         carry: &mut ClauseCarry,
+        charix: &[i32],
     ) -> Result<Vec<PhonemeCode>> {
-        self.translate_codes_in_mode(text, true, None, TokenizeMode::Clause { no_tonic }, Some(carry))
+        self.translate_codes_in_mode(
+            text,
+            true,
+            None,
+            TokenizeMode::Clause { no_tonic },
+            Some(carry),
+            Some(charix),
+        )
     }
 
     fn translate_codes_in_mode(
@@ -11047,7 +11055,9 @@ impl Translator {
         track: Option<&mut Vec<TokenCodes>>,
         mode: TokenizeMode,
         mut carry: Option<&mut ClauseCarry>,
+        charix: Option<&[i32]>,
     ) -> Result<Vec<PhonemeCode>> {
+        let source_text = text;
         let lang = &self.options.lang;
         // An unknown voice is a *voice* error, not an unimplemented feature:
         // `-v alex` used to report "not yet implemented: … dict not found",
@@ -11174,7 +11184,7 @@ impl Translator {
         // Filled one iteration behind — every `continue` in the loop below would
         // otherwise need its own bookkeeping.
         let mut owners: Vec<usize> = Vec::new();
-        let tracking = track.is_some();
+        let tracking = track.is_some() || charix.is_some();
         let mut owner_now = 0usize;
         // C's `prepause_timeout`: after a `$pause` word, the next two words
         // may not pause again.  Reset at each clause.
@@ -11489,7 +11499,7 @@ impl Translator {
                         {
                             codes.push(PhonemeCode {
                                 code: 0, is_boundary: true, clause_char: Some(*c), marker: None,
-                                voice_table: false,
+                                voice_table: false, source: None,
                             });
                         }
                     }
@@ -11528,7 +11538,7 @@ impl Translator {
                         });
                     if runs_on && !joined && !stream_run && entry.phonemes.iter().any(|&b| b != 0) {
                         codes.push(PhonemeCode {
-                            code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false,
+                            code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false, source: None,
                         });
                     }
                     // `-k`: capital indication before a capitalised word.
@@ -11554,14 +11564,14 @@ impl Translator {
                                     for &b in &cap_codes {
                                         if b != 0 {
                                             codes.push(PhonemeCode {
-                                                code: b, is_boundary: false, clause_char: None, marker: None, voice_table: false
+                                                code: b, is_boundary: false, clause_char: None, marker: None, voice_table: false, source: None
                                             });
                                         }
                                     }
                                 }
                                 if self.options.capitals != 1 {
                                     codes.push(PhonemeCode {
-                                        code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false
+                                        code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false, source: None
                                     }); // END_WORD
                                 }
                             } else if self.options.capitals >= 3 {
@@ -11663,7 +11673,7 @@ impl Translator {
                             codes.insert(
                                 at + n,
                                 PhonemeCode {
-                                    code, is_boundary: false, clause_char: None, marker: None, voice_table: false,
+                                    code, is_boundary: false, clause_char: None, marker: None, voice_table: false, source: None,
                                 },
                             );
                             n += 1;
@@ -11704,7 +11714,7 @@ impl Translator {
                             codes.push(PhonemeCode {
                                 code:         b,
                                 is_boundary:  false,
-                                clause_char:  None, marker: None, voice_table: false
+                                clause_char:  None, marker: None, voice_table: false, source: None
                             });
                         }
                     }
@@ -11720,7 +11730,7 @@ impl Translator {
                         });
                         codes.push(PhonemeCode {
                             code: crate::phoneme::PHON_PAUSE_SHORT,
-                            is_boundary: false, clause_char: None, marker: None, voice_table: false,
+                            is_boundary: false, clause_char: None, marker: None, voice_table: false, source: None,
                         });
                     }
                     // `-g` word gap: a pause phoneme (`_`) after each word.
@@ -11732,7 +11742,7 @@ impl Translator {
                                 ..Default::default()
                             });
                             codes.push(PhonemeCode {
-                                code: pause, is_boundary: false, clause_char: None, marker: None, voice_table: false
+                                code: pause, is_boundary: false, clause_char: None, marker: None, voice_table: false, source: None
                             });
                         }
                     }
@@ -11768,7 +11778,7 @@ impl Translator {
                         codes.push(PhonemeCode {
                             code:         15,
                             is_boundary:  true,
-                            clause_char:  None, marker: None, voice_table: false
+                            clause_char:  None, marker: None, voice_table: false, source: None
                         }); // END_WORD
                     }
                 }
@@ -11781,21 +11791,21 @@ impl Translator {
                         codes.push(PhonemeCode {
                             code:         0,
                             is_boundary:  true,
-                            clause_char:  Some(*punct), marker: None, voice_table: false
+                            clause_char:  Some(*punct), marker: None, voice_table: false, source: None
                         }); // pause + clause
                     } else {
                         // `--punct`: the boundary became a spoken name.  It
                         // absorbed its surrounding whitespace, so bracket it with
                         // END_WORD markers to keep the name a separate word.
-                        codes.push(PhonemeCode { code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false });
+                        codes.push(PhonemeCode { code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false, source: None });
                         for &b in &entry.phonemes {
                             if b != 0 {
                                 codes.push(PhonemeCode {
-                                    code: b, is_boundary: false, clause_char: None, marker: None, voice_table: false
+                                    code: b, is_boundary: false, clause_char: None, marker: None, voice_table: false, source: None
                                 });
                             }
                         }
-                        codes.push(PhonemeCode { code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false });
+                        codes.push(PhonemeCode { code: 15, is_boundary: true, clause_char: None, marker: None, voice_table: false, source: None });
                     }
                 }
             }
@@ -11818,6 +11828,7 @@ impl Translator {
         // `codes` would not survive them — the number of word/clause boundaries
         // before a code does, since no pass adds or removes one.
         let mut groups: Vec<(String, usize)> = Vec::new();
+        let mut word_starts: Vec<(usize, SourceIx)> = Vec::new();
         if tracking {
             owners.resize(codes.len(), owner_now);
             let mut boundaries_before = Vec::with_capacity(codes.len() + 1);
@@ -11838,8 +11849,14 @@ impl Translator {
                     first[o] = Some(i);
                 }
             }
+            let sources = charix.map(|cx| {
+                token_sources(source_text, &tokens, &self.options.number_grammar, cx)
+            });
             for (ix, token) in tokens.iter().enumerate() {
                 let Some(f) = first[ix] else { continue };
+                if let Some(Some(src)) = sources.as_ref().map(|s| s[ix]) {
+                    word_starts.push((boundaries_before[f], src));
+                }
                 let text = token_surface(token, &self.options.number_grammar);
                 if !text.is_empty() {
                     groups.push((text, boundaries_before[f]));
@@ -11940,20 +11957,26 @@ impl Translator {
         // Boundary coordinates back into indices.  A token's codes run from its
         // own first code to the *next* token's, so the separator's boundary and
         // any pause the passes added stay with the word they follow.
+        let positions: Vec<usize> = out
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.is_boundary)
+            .map(|(i, _)| i)
+            .collect();
+        let out_len = out.len();
+        let start_of = |b: usize| -> usize {
+            if b == 0 {
+                0
+            } else {
+                positions.get(b - 1).map(|&i| i + 1).unwrap_or(out_len)
+            }
+        };
+        for (boundary, src) in word_starts {
+            if let Some(code) = out.get_mut(start_of(boundary)).filter(|c| c.source.is_none()) {
+                code.source = Some(src);
+            }
+        }
         if let Some(track) = track {
-            let positions: Vec<usize> = out
-                .iter()
-                .enumerate()
-                .filter(|(_, c)| c.is_boundary)
-                .map(|(i, _)| i)
-                .collect();
-            let start_of = |b: usize| -> usize {
-                if b == 0 {
-                    0
-                } else {
-                    positions.get(b - 1).map(|&i| i + 1).unwrap_or(out.len())
-                }
-            };
             let starts: Vec<usize> = groups.iter().map(|&(_, b)| start_of(b)).collect();
             for (i, (text, _)) in groups.into_iter().enumerate() {
                 let start = starts[i];
@@ -12011,6 +12034,65 @@ pub(crate) struct TokenCodes {
     pub(crate) text: String,
     /// Its codes in the finished clause.
     pub(crate) codes: std::ops::Range<usize>,
+}
+
+/// Byte span of `surface` in `text` at or after `from`, ignoring case and treating every
+/// apostrophe form as the same (the tokenizer normalises them).
+fn locate_surface(text: &str, surface: &str, from: usize) -> Option<(usize, usize)> {
+    const APOSTROPHES: [char; 5] = ['\'', '\u{2019}', '\u{00B4}', '\u{2032}', '\u{0092}'];
+    let same = |a: char, b: char| {
+        a == b
+            || a.to_lowercase().eq(b.to_lowercase())
+            || (APOSTROPHES.contains(&a) && APOSTROPHES.contains(&b))
+    };
+    text.get(from..)?.char_indices().find_map(|(i, _)| {
+        let start = from + i;
+        let mut rest = text[start..].chars();
+        let mut end = start;
+        let all = surface.chars().all(|s| {
+            rest.next().is_some_and(|c| {
+                end += c.len_utf8();
+                same(c, s)
+            })
+        });
+        all.then_some((start, end))
+    })
+}
+
+/// The source index of each token that starts a word, found by walking the clause text
+/// with a cursor.  A token the rewriting passes made up (so absent from the text) takes the
+/// next word at the cursor, as C's `CalcWordLength` does for any word.
+fn token_sources(
+    text: &str,
+    tokens: &[Token],
+    grammar: &NumberGrammar,
+    charix: &[i32],
+) -> Vec<Option<SourceIx>> {
+    let mut cursor = 0;
+    tokens
+        .iter()
+        .map(|token| {
+            if matches!(
+                token,
+                Token::Space
+                    | Token::WordJoin
+                    | Token::Embedded(_)
+                    | Token::DotEndsClause
+                    | Token::ClauseBoundary(_)
+            ) {
+                return None;
+            }
+            let surface = token_surface(token, grammar);
+            if surface.is_empty() {
+                return None;
+            }
+            let found = locate_surface(text, &surface, cursor);
+            if let Some((_, end)) = found {
+                cursor = end;
+            }
+            word_source(charix, found.map_or(cursor, |(start, _)| start))
+        })
+        .collect()
 }
 
 /// The text a token stands for, or `""` for one that is not part of the source
@@ -12197,7 +12279,7 @@ fn insert_word_gaps(
         let at = at - moved;
         codes.insert(
             at,
-            PhonemeCode { code, is_boundary: false, clause_char: None, marker: None, voice_table: false },
+            PhonemeCode { code, is_boundary: false, clause_char: None, marker: None, voice_table: false, source: None },
         );
         codes.insert(at, PhonemeCode { marker: Some(CodeMarker::InsertedPause(0)), ..Default::default() });
         codes.splice(at + 2..at + 2, boundaries);
@@ -13041,7 +13123,7 @@ fn apply_list_editing_instructions(
 /// first. An append lands after the original code and any lengthen marks that
 /// follow it, but between a same-index insert and the original.
 fn splice_list_edits(codes: &mut Vec<PhonemeCode>, edits: Vec<(usize, u8, bool)>) -> Vec<bool> {
-    let plain = |code| PhonemeCode { code, is_boundary: false, clause_char: None, marker: None, voice_table: false };
+    let plain = |code| PhonemeCode { code, is_boundary: false, clause_char: None, marker: None, voice_table: false, source: None };
     let is_lengthen =
         |c: &PhonemeCode| c.code == crate::phoneme::PHON_LENGTHEN && !c.is_boundary;
     let old = std::mem::take(codes);
@@ -13383,6 +13465,32 @@ pub struct PhonemeCode {
     /// A tone phoneme of the clause's own voice inside a stretch spoken in
     /// another language's table, so it is named from the voice's table.
     pub voice_table: bool,
+    /// Where the word this code opens starts in the clause source (C's
+    /// `ph_list2[].sourceix`).  Set on the first code of each word of a clause
+    /// the SSML reader produced; nothing in synthesis reads it yet.
+    pub source: Option<SourceIx>,
+}
+
+/// A word's place in its clause source: C's `sourceix` (bits 0-10) and word length
+/// (bits 11-15) of `ph_list2[].sourceix`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SourceIx {
+    /// The word's first character, counted from the clause start as the reader's `charix` does.
+    pub ix: u16,
+    /// The word's length in characters, capped at 31.
+    pub len: u8,
+}
+
+/// C's `CalcWordLength`: the word starting at or after byte `start` of the clause source.
+/// `None` when only blanks remain.
+pub(crate) fn word_source(charix: &[i32], start: usize) -> Option<SourceIx> {
+    let first = (start..charix.len()).find(|&j| charix[j] > 0)?;
+    let len = charix[first..]
+        .iter()
+        .take_while(|&&c| c != 0)
+        .filter(|&&c| c != -1)
+        .count();
+    Some(SourceIx { ix: (charix[first] & 0x7ff) as u16, len: len.min(31) as u8 })
 }
 
 /// A marker carried alongside the phoneme codes.
@@ -14333,5 +14441,45 @@ mod tests {
         }
         assert_eq!(NumberGrammar::for_lang("en").decimal_separator, '.');
         assert_eq!(NumberGrammar::for_lang("en").group_separator, Some(','));
+    }
+
+    #[test]
+    fn word_source_counts_characters_not_continuation_bytes() {
+        let charix = [1, 2, 3, 4, -1, 0, 6, -1, 7, 8, 9];
+        assert_eq!(word_source(&charix, 0), Some(SourceIx { ix: 1, len: 4 }));
+        assert_eq!(word_source(&charix, 5), Some(SourceIx { ix: 6, len: 4 }));
+    }
+
+    #[test]
+    fn word_source_skips_blanks_and_ends_at_the_text() {
+        let charix = [1, 2, 3, 4, 5, 0, 0, 8, 9, 10, 11, 12];
+        assert_eq!(word_source(&charix, 5), Some(SourceIx { ix: 8, len: 5 }));
+        assert_eq!(word_source(&charix, 12), None);
+    }
+
+    #[test]
+    fn clause_words_carry_their_source_index() {
+        let t = Translator::new_default("en").unwrap();
+        let text = "hello world";
+        let charix: Vec<i32> = (1..=11).map(|i| if i == 6 { 0 } else { i }).collect();
+        let codes = t
+            .translate_clause(text, false, &mut ssml_driver::ClauseCarry::default(), &charix)
+            .unwrap();
+        let sources: Vec<SourceIx> = codes.iter().filter_map(|c| c.source).collect();
+        assert_eq!(
+            sources,
+            [SourceIx { ix: 1, len: 5 }, SourceIx { ix: 7, len: 5 }]
+        );
+    }
+
+    #[test]
+    fn clause_word_source_survives_multibyte_text() {
+        let t = Translator::new_default("en").unwrap();
+        let charix = [1, 2, 3, 4, -1, 0, 6, -1, 7, 8, 9];
+        let codes = t
+            .translate_clause("café über", false, &mut ssml_driver::ClauseCarry::default(), &charix)
+            .unwrap();
+        let sources: Vec<SourceIx> = codes.iter().filter_map(|c| c.source).collect();
+        assert_eq!(sources, [SourceIx { ix: 1, len: 4 }, SourceIx { ix: 6, len: 4 }]);
     }
 }

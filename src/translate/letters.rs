@@ -261,7 +261,7 @@ pub(crate) struct StreamTail {
 }
 
 fn code(b: u8) -> PhonemeCode {
-    PhonemeCode { code: b, is_boundary: false, clause_char: None, marker: None, voice_table: false }
+    PhonemeCode { code: b, is_boundary: false, clause_char: None, marker: None, voice_table: false, source: None }
 }
 
 fn marker(table: &str) -> PhonemeCode {

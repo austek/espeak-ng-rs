@@ -189,7 +189,7 @@ impl Translator {
             None => clause.terminator,
         };
         let no_tonic = u32::from(terminator.intonation()) == INTONATION_NONE;
-        let codes = self.translate_clause(&clause.text, no_tonic, carry)?;
+        let codes = self.translate_clause(&clause.text, no_tonic, carry, &clause.charix)?;
         let abbreviated = clause.terminator.dot_after_last_word()
             && codes.iter().any(|c| matches!(c.marker, Some(CodeMarker::AbbreviationDot)));
         let terminator = if abbreviated { terminator.after_abbreviation() } else { terminator };
