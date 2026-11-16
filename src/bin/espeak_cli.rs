@@ -263,10 +263,16 @@ fn run() -> std::io::Result<()> {
         (cli.split_minutes.filter(|&m| m > 0), cli.wave_out.clone())
     {
         if !cli.stdout_wav {
-            let (pcm, rate, events) = engine.synth_with_events(&text).map_err(|e| {
-                std::io::Error::other(format!("{e}"))
-            })?;
-            return write_split_wavs(&path, &pcm, rate, &events, minutes);
+            let mut chunks: Vec<Vec<i16>> = Vec::new();
+            let mut events = Vec::new();
+            let rate = engine
+                .synth_streaming_with_events(&text, |chunk, _final, ev| {
+                    chunks.push(chunk.to_vec());
+                    events.extend_from_slice(ev);
+                    false
+                })
+                .map_err(|e| std::io::Error::other(format!("{e}")))?;
+            return write_split_wavs(&path, &chunks, rate, &events, minutes);
         }
     }
 
@@ -979,33 +985,20 @@ fn resolved_data_dir(path_arg: Option<&Path>) -> PathBuf {
 /// characters (`out.wav` → `out_01.wav`, `out` → `out_01`).
 fn write_split_wavs(
     path: &Path,
-    pcm: &[i16],
+    chunks: &[Vec<i16>],
     rate: u32,
     events: &[espeak_ng::engine::SynthEvent],
     minutes: u32,
 ) -> std::io::Result<()> {
-    use espeak_ng::engine::EventKind;
-
     let name = path.to_string_lossy().into_owned();
     let (stem, ext) = match name.rfind('.') {
         Some(ix) if name.len() - ix <= 4 => (&name[..ix], &name[ix..]),
         _ => (name.as_str(), ""),
     };
 
+    let pcm: Vec<i16> = chunks.concat();
     let limit = minutes as usize * 60 * rate as usize;
-    let at_sample = |ms: u32| (ms as u64 * rate as u64 / 1000) as usize;
-    let mut cuts = vec![0usize];
-    for e in events {
-        if !matches!(e.kind, EventKind::Sentence(_)) {
-            continue;
-        }
-        let at = at_sample(e.audio_position_ms).min(pcm.len());
-        if at > *cuts.last().unwrap() && at - *cuts.last().unwrap() > limit {
-            cuts.push(at);
-        }
-    }
-    cuts.push(pcm.len());
-
+    let cuts = split_cuts(chunks, &sentence_samples(events), split_buffer_samples(rate), limit);
     for (n, w) in cuts.windows(2).enumerate() {
         let mut buf = Vec::new();
         write_wav_16_mono(&mut buf, &pcm[w[0]..w[1]], rate)
@@ -1013,6 +1006,50 @@ fn write_split_wavs(
         std::fs::write(format!("{stem}_{:02}{ext}", n + 1), &buf)?;
     }
     Ok(())
+}
+
+/// C's 60 ms output buffer in samples (`outbuf_size / 2` for `buflength` 0).
+fn split_buffer_samples(rate: u32) -> usize {
+    let milli = 60 * u64::from(rate);
+    ((milli + 1000 - milli % 1000) / 500 / 2) as usize
+}
+
+fn sentence_samples(events: &[espeak_ng::engine::SynthEvent]) -> Vec<usize> {
+    use espeak_ng::engine::EventKind;
+    let mut samples: Vec<usize> = events
+        .iter()
+        .filter(|e| matches!(e.kind, EventKind::Sentence(_)))
+        .map(|e| e.sample as usize)
+        .collect();
+    samples.sort_unstable();
+    samples
+}
+
+/// Sample offsets (first `0`, last the total) at which `SynthCallback` starts
+/// a new file.  Each clause is delivered as buffers of `size` samples, the last
+/// one short; a SENTENCE event belongs to the buffer holding its sample, and
+/// the file closes before that buffer once the file holds more than `limit`.
+fn split_cuts(chunks: &[Vec<i16>], sentences: &[usize], size: usize, limit: usize) -> Vec<usize> {
+    let size = size.max(1);
+    let mut cuts = vec![0usize];
+    let (mut start, mut in_file) = (0usize, 0usize);
+    for (k, chunk) in chunks.iter().enumerate() {
+        let end = start + chunk.len();
+        let last = k + 1 == chunks.len();
+        for buf in (start..end).step_by(size) {
+            let buf_end = (buf + size).min(end);
+            let hi = if last && buf_end == end { usize::MAX } else { buf_end };
+            let first = sentences.partition_point(|&s| s < buf);
+            if sentences.get(first).is_some_and(|&s| s < hi) && in_file > limit {
+                cuts.push(buf);
+                in_file = 0;
+            }
+            in_file += buf_end - buf;
+        }
+        start = end;
+    }
+    cuts.push(start);
+    cuts
 }
 
 fn write_wav_16_mono(w: &mut Vec<u8>, samples: &[i16], sample_rate: u32) -> std::io::Result<()> {
