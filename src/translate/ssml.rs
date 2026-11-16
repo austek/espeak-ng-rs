@@ -40,15 +40,15 @@
 pub(crate) const SSML_BREAK: char = '\u{E000}';
 
 /// The embedded-command letter that carries an SSML pause length, in
-/// milliseconds (`\x01<ms>Z`).
+/// milliseconds (`\x01<ms><BREAK_LETTER>`).
 ///
 /// In C a `<break>` becomes part of the *clause terminator*, which has no
 /// equivalent in the port's text stream, so the duration travels as an embedded
 /// command instead — the one channel that already survives tokenizing,
-/// translation and phoneme-code assembly in order.  It is not one of upstream's
-/// own command letters (`PSARHTIVYMUBF`), so text written for C can never
-/// collide with it; C itself drops an unknown letter.
-pub(crate) const BREAK_LETTER: char = 'Z';
+/// translation and phoneme-code assembly in order.  It is a private-use
+/// character, not one of upstream's own command letters (`PSARHTIVYMUBF`), so
+/// text written for C can never collide with it.
+pub(crate) const BREAK_LETTER: char = '\u{E001}';
 
 /// Parse an SSML `time` attribute (`"500ms"`, `"2s"`, `"1.5s"`, a bare number of
 /// milliseconds) into milliseconds.  Mirrors C's `attrnumber(attr, 0, 1)`.

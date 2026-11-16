@@ -1857,12 +1857,16 @@ fn native_digit_to_ascii(c: char) -> Option<char> {
 pub const CTRL_EMBEDDED: char = '\u{01}';
 
 /// The command letters accepted after `\x01[±]<value>` — pitch/speed/amplitude/
-/// range/reverb/tone/… (C `EmbeddedCommand`'s `"PSARHTIVYMUBF"`), plus `Z`,
-/// which carries an SSML pause length in milliseconds (see
-/// [`ssml::BREAK_LETTER`]).  C has no equivalent — it packs the pause into the
-/// clause terminator — and drops the letter, so the two never disagree about
-/// text written for either.
-const EMBED_LETTERS: &str = "PSARHTIVYMUBFZ";
+/// range/reverb/tone/… (C `EmbeddedCommand`'s `"PSARHTIVYMUBF"`, matched case-sensitively),
+/// plus [`ssml::BREAK_LETTER`], which carries an SSML pause length in milliseconds.  C has no
+/// equivalent — it packs the pause into the clause terminator — so the port uses a private-use
+/// character that no text written for C can contain.
+const EMBED_LETTERS: &str = "PSARHTIVYMUBF";
+
+/// Whether `letter` follows `\x01[±]<value>` as a command.
+pub(crate) fn is_command_letter(letter: char) -> bool {
+    EMBED_LETTERS.contains(letter) || letter == ssml::BREAK_LETTER
+}
 
 /// A parsed inline embedded command `\x01[+|-]<value><letter>` (C
 /// `EmbeddedCommand`).  `relative`: 0 = absolute, 1 = `+`, -1 = `-`.  A missing
@@ -1888,10 +1892,10 @@ fn read_embedded_command(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -
     while let Some(d) = ahead.next_if(char::is_ascii_digit) {
         digits.push(d);
     }
-    let letter = ahead.next().filter(|l| EMBED_LETTERS.contains(l.to_ascii_uppercase()))?;
+    let letter = ahead.next().filter(|&l| is_command_letter(l))?;
     *chars = ahead;
     Some(EmbeddedCmd {
-        letter: letter.to_ascii_uppercase(),
+        letter,
         value: digits.parse().unwrap_or(-1),
         relative,
     })

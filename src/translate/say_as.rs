@@ -32,7 +32,8 @@ fn command_len(rest: &str) -> Option<usize> {
     let sign = usize::from(matches!(b.get(1), Some(b'+' | b'-')));
     let digits = b[1 + sign..].iter().take_while(|c| c.is_ascii_digit()).count();
     let at = 1 + sign + digits;
-    b.get(at).filter(|c| c.is_ascii_uppercase()).map(|_| at + 1)
+    let letter = rest.get(at..)?.chars().next().filter(|&l| super::is_command_letter(l))?;
+    Some(at + letter.len_utf8())
 }
 
 fn pieces(text: &str) -> Vec<Piece<'_>> {
