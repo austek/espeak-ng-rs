@@ -1,5 +1,6 @@
 //! Safe operations behind the exported functions.
 
+use std::ffi::CString;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
@@ -13,7 +14,7 @@ use espeak_ng::{EspeakNg, VoiceSpec};
 use crate::blocks::{build, buffer_samples, Block};
 use crate::settings::Settings;
 use crate::state::CANCEL;
-use crate::types::{ENDPAUSE, POS_CHARACTER_VALUE, SSML};
+use crate::types::{UriCallback, ENDPAUSE, POS_CHARACTER_VALUE, SSML};
 
 pub const SAMPLE_RATE: i32 = 22050;
 pub const VERSION: &str = "1.53.0";
@@ -104,9 +105,21 @@ pub struct Rendered {
     pub rate: u32,
 }
 
+/// `uri_callback(1, uri, xmlbase)` of the reader; a URI with an interior NUL is refused.
+fn uri_hook(callback: UriCallback) -> espeak_ng::UriHook {
+    Box::new(move |uri, base| {
+        let Ok(uri) = CString::new(uri) else { return 1 };
+        let base = base.and_then(|b| CString::new(b).ok());
+        let base_ptr = base.as_ref().map_or(std::ptr::null(), |b| b.as_ptr());
+        // SAFETY: both pointers are NUL-terminated strings that outlive the call (or null).
+        unsafe { callback(1, uri.as_ptr(), base_ptr) }
+    })
+}
+
 fn engine_for(job: &Job) -> espeak_ng::Result<EspeakNg> {
     let mut engine = job.settings.build_engine()?;
     engine.set_markup(job.flags & SSML != 0);
+    engine.set_uri_callback(crate::state::callbacks().uri.map(uri_hook));
     engine.set_no_final_pause(job.flags & ENDPAUSE == 0);
     Ok(engine)
 }

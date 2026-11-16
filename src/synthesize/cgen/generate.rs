@@ -965,6 +965,9 @@ impl<'a> Generator<'a> {
             self.phoneme(list, ix);
         }
         self.end_pitch(true);
+        if let Some(k) = self.counters {
+            self.push(Wcmd::Marker(Marker { kind: MarkerKind::End, pos: k.end_char, len: 0, value: k.sentences as i32 }));
+        }
     }
 
     /// `DoEmbedded`; `source` is the carrying phoneme's `sourceix`.
@@ -975,6 +978,10 @@ impl<'a> Generator<'a> {
                 -1 => 0x60,
                 _ => 0,
             };
+            if c.letter == 'U' {
+                self.play(c.value);
+                continue;
+            }
             let Some(code) = super::embed_code(c.letter) else { continue };
             if code == EMBED_I {
                 self.play_icon(c.value);
@@ -999,6 +1006,12 @@ impl<'a> Generator<'a> {
         let Some(k) = self.counters else { return };
         let pos = source.map_or(0, |s| u32::from(s.ix) & 0x7ff) + k.start_char;
         self.push(Wcmd::Marker(Marker { kind: MarkerKind::Mark, pos, len: 0, value }));
+    }
+
+    /// `DoEmbedded`'s `EMBED_U`: `DoMarker(espeakEVENT_PLAY, count_characters+1, 0, value)`.
+    fn play(&mut self, value: i32) {
+        let Some(k) = self.counters else { return };
+        self.push(Wcmd::Marker(Marker { kind: MarkerKind::Play, pos: k.end_char + 1, len: 0, value }));
     }
 
     /// `DoEmbedded`'s `EMBED_I`: a break, then the clip as 16-bit data at amplitude 21.

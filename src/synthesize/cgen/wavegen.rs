@@ -28,7 +28,7 @@ const MAX_PITCH_VALUE: i32 = 101;
 const N_FLUTTER: i32 = 0x170;
 const WAVEMULT_MAX: i32 = 103;
 const WAVEMULT_OFFSET: i32 = 51;
-const SAMPLERATE: i32 = 22050;
+pub const SAMPLERATE: i32 = 22050;
 const PHASE_INC_FACTOR: i32 = 0x800_0000 / SAMPLERATE;
 
 pub const EMBED_P: usize = 1;

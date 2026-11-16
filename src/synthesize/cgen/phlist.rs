@@ -119,6 +119,8 @@ pub struct ClauseCounters {
     pub sentences: u32,
     /// `new_sentence2`: the clause opens a sentence.
     pub new_sentence: bool,
+    /// `count_characters` once the clause is read: the position of its END event.
+    pub end_char: u32,
     /// `source_index` once `TranslateClause` has consumed the clause's closing NUL: the `sourceix` of its two closing pauses.
     pub end_ix: u16,
 }

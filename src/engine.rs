@@ -357,7 +357,12 @@ pub struct EspeakNg {
     /// the base-F0 `pitch`, this resamples, so formants shift too (an effect
     /// voice — chipmunk/robot).  Applied to the final PCM.
     post_pitch: f64,
+    /// `espeak_SetUriCallback`: asked about each `<audio src>` of markup.
+    uri_callback: Option<UriHook>,
 }
+
+/// `(uri, xmlbase) -> status` of `espeak_SetUriCallback`; 0 accepts the audio.
+pub type UriHook = Box<dyn Fn(&str, Option<&str>) -> i32 + Send + Sync>;
 
 /// Drop trailing near-silence from a PCM run.  Used when splicing sound icons so
 /// each spliced text run's own end-of-utterance silence doesn't accumulate into
@@ -413,6 +418,7 @@ impl EspeakNg {
             voice_file: None,
             post_tempo: 1.0,
             post_pitch: 1.0,
+            uri_callback: None,
         })
     }
 
@@ -471,6 +477,13 @@ impl EspeakNg {
     /// default.
     pub fn set_markup(&mut self, on: bool) {
         self.markup = on;
+    }
+
+    /// Register the `espeak_SetUriCallback` hook.  With one set, markup `<audio src>`
+    /// asks it instead of loading the file: status 0 reports a `Play` event and
+    /// silences the fallback text.
+    pub fn set_uri_callback(&mut self, callback: Option<UriHook>) {
+        self.uri_callback = callback;
     }
 
     /// Base directory for resolving relative sound-icon paths
@@ -789,7 +802,8 @@ impl EspeakNg {
         let table = std::cell::RefCell::new(self.soundicons.clone());
         let base = self.soundicon_base_dir();
         let load = |path: &str| table.borrow_mut().load_file(path, &base).ok().map(|ix| ix as i32);
-        let doc = translator.translate_ssml_with_sounds(text, settings, &load)?;
+        let uri_hook = self.uri_callback.as_deref().map(|f| f as &crate::translate::readclause::ssml_tag::UriCallback);
+        let doc = translator.translate_ssml_with_hooks(text, settings, &load, uri_hook)?;
         let icons: Vec<Vec<i16>> = (0..table.borrow().len()).map(|ix| table.borrow().samples(ix).to_vec()).collect();
         let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
         let voices: std::collections::HashMap<String, VoiceParams> = doc
@@ -800,8 +814,9 @@ impl EspeakNg {
             .collect();
         let (pcm, raw) = synth.synthesize_clauses_with_events(&doc.clause_codes(), &phdata, &voices, &icons)?;
         let named = raw.into_iter().map(|e| {
-            let name = (e.marker.kind == crate::synthesize::cgen::MarkerKind::Mark)
-                .then(|| doc.mark_name(e.marker.value).unwrap_or_default().to_string());
+            use crate::synthesize::cgen::MarkerKind;
+            let name = matches!(e.marker.kind, MarkerKind::Mark | MarkerKind::Play)
+                .then(||doc.mark_name(e.marker.value).unwrap_or_default().to_string());
             (e, name)
         });
         Ok((pcm, named.collect()))
@@ -1389,6 +1404,9 @@ fn marker_event(e: &crate::synthesize::cgen::RawEvent, name: Option<&str>, scale
         MarkerKind::Word => EventKind::Word(e.marker.value as u32),
         MarkerKind::Sentence => EventKind::Sentence(e.marker.value as u32),
         MarkerKind::Mark => EventKind::Mark(name.unwrap_or_default().to_string()),
+        MarkerKind::Play => EventKind::Play(name.unwrap_or_default().to_string()),
+        MarkerKind::End => EventKind::End(e.marker.value as u32),
+        MarkerKind::SampleRate => EventKind::SampleRate(e.marker.value as u32),
     };
     let sample = (e.sample as f64 * scale) as usize;
     let mut ev = event_at(kind, e.marker.pos, sample, rate);

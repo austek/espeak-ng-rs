@@ -69,6 +69,7 @@ impl MessageCounts {
             start_word: self.words + 1,
             sentences: self.sentences,
             new_sentence: opens,
+            end_char: source.end_char.max(0) as u32,
             end_ix: ((source.text.len() + 1) & 0x7ff) as u16,
         };
         self.words += codes.iter().filter(|c| c.source.is_some()).count() as u32;
@@ -194,6 +195,19 @@ impl Translator {
         settings: SsmlSettings,
         load_sound: &dyn Fn(&str) -> Option<i32>,
     ) -> Result<SsmlDocument<'_>> {
+        self.translate_ssml_with_hooks(text, settings, load_sound, None)
+    }
+
+    /// As [`translate_ssml_with_sounds`](Self::translate_ssml_with_sounds); `uri_callback` is the
+    /// `espeak_SetUriCallback` hook: `<audio src>` goes to it as `(uri, xmlbase)` and a result of 0
+    /// accepts the audio as a PLAY event.
+    pub fn translate_ssml_with_hooks(
+        &self,
+        text: &str,
+        settings: SsmlSettings,
+        load_sound: &dyn Fn(&str) -> Option<i32>,
+        uri_callback: Option<&super::readclause::ssml_tag::UriCallback>,
+    ) -> Result<SsmlDocument<'_>> {
         let voices = list_voices(&self.data_dir);
         let all_voices = list_catalog(&self.data_dir);
         let catalog = EntryCatalog(&all_voices);
@@ -204,7 +218,7 @@ impl Translator {
             n_outbuf: ReaderOptions::default().n_buf,
             pause_factors: &pause_factors,
             load_sound,
-            uri_callback: None,
+            uri_callback,
         };
         let mut state = SsmlState::new(self.speech_defaults(settings), self.base_voice(&voices), "");
         state.voice.current_voice_id = state.voice.voice_from_stack(&catalog, 1);

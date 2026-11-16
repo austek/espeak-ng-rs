@@ -18,9 +18,12 @@ use std::path::Path;
 use espeak_ng::{EspeakNg, EventKind};
 
 const SSML_FLAG: u32 = 0x10;
+/// The probe installs a URI callback that accepts `<audio>` URIs.
+const ACCEPT_URI: u32 = 0x10000;
 
 struct Case {
     id: String,
+    options: u32,
     voice: String,
     flags: u32,
     text: String,
@@ -63,6 +66,7 @@ fn cases() -> Vec<Case> {
             assert_eq!(f.len(), 5, "bad case row: {l}");
             Case {
                 id: f[0].to_string(),
+                options: f[1].parse().expect("options"),
                 voice: f[2].to_string(),
                 flags: u32::from_str_radix(f[3].trim_start_matches("0x"), 16).expect("flags"),
                 text: unescape(f[4]),
@@ -90,6 +94,9 @@ fn engine(case: &Case) -> Option<EspeakNg> {
     }
     let mut e = EspeakNg::builder().voice(&case.voice).data_dir(dir).build().ok()?;
     e.set_markup(case.flags & SSML_FLAG != 0);
+    if case.options & ACCEPT_URI != 0 {
+        e.set_uri_callback(Some(Box::new(|_, _| 0)));
+    }
     Some(e)
 }
 
@@ -111,7 +118,8 @@ fn transcript(case: &Case) -> Option<String> {
     let e = engine(case)?;
     let (pcm, _rate, events) = e.synth_with_events(&case.text).ok()?;
     let mut out = String::new();
-    for ev in &events {
+    // The probe runs C in synchronous mode, which never delivers MSG_TERMINATED.
+    for ev in events.iter().filter(|e| !matches!(e.kind, EventKind::MsgTerminated)) {
         let (ty, value) = line(&ev.kind);
         out.push_str(&format!(
             "ev {ty} {} {} {} {} {value}\n",
@@ -165,6 +173,16 @@ fn known_diff_names_only_recorded_cases() {
     for id in known_diff().keys() {
         assert!(ids.contains(id), "known_diff lists unknown case {id}");
     }
+}
+
+/// Prints the Rust and C transcripts of the case named by `C_EVENTS_CASE`.
+#[test]
+#[ignore]
+fn print_case() {
+    let id = std::env::var("C_EVENTS_CASE").expect("C_EVENTS_CASE");
+    let c = cases().into_iter().find(|c| c.id == id).expect("case");
+    println!("rust:\n{}", transcript(&c).unwrap_or_default());
+    println!("c:\n{}", recorded(&c));
 }
 
 /// Prints the `known_diff.txt` rows for the current Rust output.

@@ -34,6 +34,12 @@ pub enum MarkerKind {
     Sentence,
     /// `EMBED_M`: the value is the name's offset in the clause reader's name data.
     Mark,
+    /// `EMBED_U`: the value is the audio URI's offset in the clause reader's name data.
+    Play,
+    /// End of a clause; the value is `count_sentences`.
+    End,
+    /// `WavegenSetVoice`; the value is the new voice's sample rate.
+    SampleRate,
 }
 
 /// `DoMarker`'s payload: a source position, a word length and a value.
@@ -390,6 +396,8 @@ impl<'a> Renderer<'a> {
         self.wavegen.run(&g.queue, &g.frames, wave_data, &mut on_marker);
         if let Some(next) = self.pending_wvoice.take() {
             self.wavegen.change_voice(next);
+            let marker = Marker { kind: MarkerKind::SampleRate, pos: 0, len: 0, value: wavegen::SAMPLERATE };
+            self.events.push(RawEvent { marker, sample: base + self.wavegen.out.len() });
         }
         self.wavegen.finish();
         let pcm = std::mem::take(&mut self.wavegen.out);
