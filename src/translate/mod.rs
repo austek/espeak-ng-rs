@@ -6729,8 +6729,7 @@ fn is_dotted_letters(word: &str) -> bool {
 fn join_spaced_letter_dots(
     tokens: &mut Vec<Token>,
     lists_phrase: &dyn Fn(&[Token], usize) -> Option<usize>,
-    hands_over: &dyn Fn(char) -> bool,
-    word_hands_over: &dyn Fn(&str) -> bool,
+    hands_over: &dyn Fn(&str) -> bool,
 ) {
     let mut ix = 0;
     while ix < tokens.len() {
@@ -6745,11 +6744,7 @@ fn join_spaced_letter_dots(
             continue;
         };
         let single_token = run.last == ix && !run.possessive;
-        let handed = match &tokens[ix] {
-            Token::Word(w) if single_token => word_hands_over(w),
-            _ => run.letters.chars().next().is_some_and(hands_over),
-        };
-        let spelled = !handed;
+        let spelled = !hands_over(&run.letters);
         if spelled && single_token {
             ix += 1;
             continue;
@@ -7675,8 +7670,7 @@ fn split_abandoned_words(
     let abandoned = |word: &str| {
         (!word.is_ascii() || options.letter_bits_offset == 0)
             && word.chars().count() > 1
-            && !(is_dotted_letters(word)
-                && word.chars().find_map(char_script).is_some_and(|sc| native_scripts(&options.lang).contains(&sc)))
+            && !is_dotted_letters(word)
             && !dict_lists_word(word, dict, options)
             && {
                 let lower = lowercase_for_lang(word, &options.lang);
@@ -8251,8 +8245,35 @@ fn spelling_stress_with_pauses(letters: &[u8], control: u8, n_chars: usize, spel
         };
         out.extend(kept);
     }
-    out.push(PHON_PAUSE_NOLINK);
+    if control >= 2 {
+        out.push(PHON_PAUSE_NOLINK);
+    }
     out
+}
+
+/// C `SpeakIndividualLetters` for a word spelled by `spell_word == 1`, where a letter the voice
+/// has no name for is spoken by the language of its script.
+fn spell_word_letters_or_foreign(
+    word: &str,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+    alts: &letters::AltLangs,
+) -> Option<Vec<u8>> {
+    let other_script = word.chars().any(|c| {
+        letters::alphabet_from_char(u32::from(c)).is_some_and(|a| a.offset != dict.voice_letter_bits_offset)
+    });
+    let by_names = || spell_word_letters(word, dict, phdata, stress_opts, options);
+    let items = || spell_characters(word, 1, dict, phdata, stress_opts, options, alts);
+    let by_items = || {
+        if dict.voice_letter_bits_offset == 0 {
+            crate::dictionary::rules::while_spelling_characters(items)
+        } else {
+            items()
+        }
+    };
+    if other_script { by_items().or_else(by_names) } else { by_names().or_else(by_items) }
 }
 
 /// A character's name for `<say-as>` spelling: the private-use form of an ASCII character
@@ -9604,7 +9625,10 @@ pub(crate) fn build_translate_entries(
                     }) {
                         wr.phonemes.remove(0);
                     }
-                if let Some(items) = spell_aborted_switch(&wr.phonemes, word_script, dict, phdata, stress_opts, options, alts) {
+                if let Some(items) = Some(word_script)
+                    .filter(|w| !is_dotted_letters(w))
+                    .and_then(|w| spell_aborted_switch(&wr.phonemes, w, dict, phdata, stress_opts, options, alts))
+                {
                     entries.push(TranslateEntry {
                         phonemes: letters::encode(&items),
                         dict_flags: 0,
@@ -9713,7 +9737,8 @@ pub(crate) fn build_translate_entries(
                     .flatten();
                 if skip_words == 0 && dot_follows && is_single_letter_word(&lower) && !dotted_abbrev::overflows(tokens, token_ix) {
                     // C's `CheckDottedAbbrev`: a lone letter before a dot word is spelled.
-                    if let Some(spelled) = spell_word_letters(&lower, dict, phdata, stress_opts, options) {
+                    if let Some(spelled) = spell_word_letters_or_foreign(&lower, dict, phdata, stress_opts, options, alts) {
+                        spelled_with_switch = spelled.contains(&crate::phoneme::PHON_SWITCH);
                         wr.phonemes = spelled;
                         wr.found_in_list = false;
                         wr.dict_flags = 0;
@@ -9722,9 +9747,10 @@ pub(crate) fn build_translate_entries(
                 } else if lower.contains('.') && (!wr.found_in_list || (skip_words == 0 && is_dotted_letters(&lower) && !dict_lists_word(word, dict, options))) {
                     // Single letters joined by dots (`e.g`, `U.S.A`) are one
                     // word that no list names; it is spelled out.
-                    if let Some(spelled) = spell_word_letters(
-                        &lower.replace('.', ""), dict, phdata, stress_opts, options,
+                    if let Some(spelled) = spell_word_letters_or_foreign(
+                        &lower.replace('.', ""), dict, phdata, stress_opts, options, alts,
                     ) {
+                        spelled_with_switch = spelled.contains(&crate::phoneme::PHON_SWITCH);
                         wr.phonemes = spelled;
                         spelled_by_letters = true;
                     }
@@ -11091,22 +11117,31 @@ impl Translator {
         tokens = announce_clause_punctuation(tokens, &self.options);
         suppress_abbreviation_periods(&mut tokens);
         let alts = letters::AltLangs::new(&self.data_dir);
-        let first_letter_hands_over = |c: char| {
-            let voice = letters::Ctx { dict, phdata, stress: stress_opts, options: &self.options };
-            let env = letters::LetterEnv { voice, tr: voice, alts: &alts };
-            matches!(letters::translate_letter(&env, c), letters::LetterOut::HandOver(_))
-        };
-        let word_hands_over = |word: &str| {
+        let run_hands_over = |word: &str| {
             let letters = lowercase_for_lang(&word.replace('.', ""), lang);
-            spell_word_letters(&letters, dict, phdata, stress_opts, &self.options)
-                .is_none_or(|ph| ph.contains(&crate::phoneme::PHON_SWITCH))
+            let first = letters.chars().next().map(String::from).unwrap_or_default();
+            let switched_by_rules = word_to_phonemes(&first, dict, phdata, stress_opts, &self.options)
+                .phonemes
+                .first()
+                == Some(&crate::phoneme::PHON_SWITCH);
+            let explicit_rule = || {
+                let voice = letters::Ctx { dict, phdata, stress: stress_opts, options: &self.options };
+                let env = letters::LetterEnv { voice, tr: voice, alts: &alts };
+                let c = first.chars().next().unwrap_or(' ');
+                crate::dictionary::rules::while_spelling_characters(|| {
+                    matches!(letters::translate_letter(&env, c), letters::LetterOut::HandOver(_))
+                })
+            };
+            switched_by_rules
+                && (dict.voice_letter_bits_offset > 0 || explicit_rule())
+                && spell_word_letters(&letters, dict, phdata, stress_opts, &self.options)
+                    .is_none_or(|ph| ph.contains(&crate::phoneme::PHON_SWITCH))
         };
         join_dot_hyphen(&mut tokens);
         join_spaced_letter_dots(
             &mut tokens,
             &|tokens, ix| list_takes_phrase(tokens, ix, dict, lang, start_emphasis),
-            &first_letter_hands_over,
-            &word_hands_over,
+            &run_hands_over,
         );
         if number_grammar.c_numbers != 0 {
             apply_time_reading(&mut tokens);
