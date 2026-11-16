@@ -167,7 +167,7 @@ fn mark_events_are_emitted() {
     let Ok(mut e) = EspeakNg::new("en") else { eprintln!("[SKIP] no en data"); return };
     e.set_markup(true);
     let text = r#"hello <mark name="m1"/> world <mark name="done"/>"#;
-    let Ok((samples, _rate, events)) = e.synth_with_events(text) else {
+    let Ok((samples, rate, events)) = e.synth_with_events(text) else {
         eprintln!("[SKIP] synth failed");
         return;
     };
@@ -177,9 +177,13 @@ fn mark_events_are_emitted() {
         _ => None,
     }).collect();
     assert_eq!(marks, vec!["m1", "done"], "mark names/order");
-    // A message-terminated event is still present.
-    assert!(events.iter().any(|e| matches!(e.kind, EventKind::MsgTerminated)));
-    // Events are in non-decreasing audio order and within the clip.
-    let end = events.last().unwrap().audio_position_ms;
-    assert!(events.iter().all(|e| e.audio_position_ms <= end));
+    // The sample rate opens the list and the zeroed message-terminated event
+    // closes it, as in C's retrieval mode.
+    assert!(matches!(events.first().unwrap().kind, EventKind::SampleRate(_)));
+    let last = events.last().unwrap();
+    assert_eq!(last.kind, EventKind::MsgTerminated);
+    assert_eq!((last.text_position, last.audio_position_ms, last.sample), (0, 0, 0));
+    // Marks fall within the clip.
+    let end_ms = samples.len() as u32 * 1000 / rate;
+    assert!(events.iter().all(|e| e.audio_position_ms <= end_ms));
 }

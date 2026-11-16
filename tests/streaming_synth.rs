@@ -121,7 +121,7 @@ fn streaming_events_match_the_buffered_path() {
     }
     // One `Sentence` event opens the utterance and one opens each clause after
     // a boundary — the trailing `.` closes a fifth, empty clause.
-    let sentences = final_events.iter().filter(|e| e.kind == EventKind::Sentence).count();
+    let sentences = final_events.iter().filter(|e| matches!(e.kind, EventKind::Sentence(_))).count();
     assert!(sentences >= 4, "one Sentence event per clause: {final_events:?}");
 }
 

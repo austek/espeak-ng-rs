@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: `SynthEvent` and `EventKind` carry the fields of C's
+  `espeak_EVENT`.** The values follow espeak-ng's own event transcripts:
+  - `SynthEvent.text_position` is `u32` and counts characters from 1 (it was a
+    0-based byte offset). `SynthEvent` gains `length: u32` (characters; 0 where
+    unknown) and `sample: u64`, and is `#[non_exhaustive]`.
+  - `EventKind::Word(n)` counts words across the message from 1 (it was
+    0-based). `Sentence` becomes `Sentence(n)` and `End` becomes `End(n)`, both
+    numbered from 1 as C numbers them.
+  - New kinds `SampleRate(hz)`, always the first event, and `Play(uri)`.
+  - `MsgTerminated` stays the last event with every position zero, as C's
+    retrieval mode delivers it. Read the total duration from the PCM length,
+    not from its `audio_position_ms`.
+  - Word `length`, SSML mark and play positions and per-clause `End` events
+    still differ from C and are tracked by `tests/c_events.rs`.
+  - The C ABI crate reads the new fields; its callback transcripts are
+    unchanged.
+
 ## [0.2.0] - 2026-09-05
 
 ### Added

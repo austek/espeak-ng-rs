@@ -996,7 +996,7 @@ fn write_split_wavs(
     let at_sample = |ms: u32| (ms as u64 * rate as u64 / 1000) as usize;
     let mut cuts = vec![0usize];
     for e in events {
-        if e.kind != EventKind::Sentence {
+        if !matches!(e.kind, EventKind::Sentence(_)) {
             continue;
         }
         let at = at_sample(e.audio_position_ms).min(pcm.len());

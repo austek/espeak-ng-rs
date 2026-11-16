@@ -30,11 +30,12 @@ fn two_words_get_ordered_word_events() {
         .collect();
     assert_eq!(words.len(), 2, "expected one Word event per spoken word: {events:?}");
 
-    // Word indices are 0,1 and source positions land on "hello"@0, "world"@6.
-    assert_eq!(words[0].kind, EventKind::Word(0));
-    assert_eq!(words[1].kind, EventKind::Word(1));
-    assert_eq!(words[0].text_position, 0);
-    assert_eq!(words[1].text_position, 6);
+    // Word numbers are 1,2 and source positions count characters from 1:
+    // "hello"@1, "world"@7 (C's transcript of this text).
+    assert_eq!(words[0].kind, EventKind::Word(1));
+    assert_eq!(words[1].kind, EventKind::Word(2));
+    assert_eq!(words[0].text_position, 1);
+    assert_eq!(words[1].text_position, 7);
 
     // Audio times: word 0 at/near the start, word 1 strictly later but before
     // the audio ends.
@@ -43,10 +44,12 @@ fn two_words_get_ordered_word_events() {
     let total_ms = pcm.len() as u32 * 1000 / rate;
     assert!(words[1].audio_position_ms < total_ms, "word start must be within the audio");
 
-    // Bracketed by Sentence … MsgTerminated.
-    assert_eq!(events.first().map(|e| &e.kind), Some(&EventKind::Sentence));
-    assert!(events.iter().any(|e| e.kind == EventKind::MsgTerminated));
-    assert!(events.iter().any(|e| e.kind == EventKind::End));
+    // Opens with the sample rate and the first sentence, closes with End and
+    // MsgTerminated.
+    assert_eq!(events.first().map(|e| &e.kind), Some(&EventKind::SampleRate(rate)));
+    assert_eq!(events.get(1).map(|e| &e.kind), Some(&EventKind::Sentence(1)));
+    assert_eq!(events.last().map(|e| &e.kind), Some(&EventKind::MsgTerminated));
+    assert!(events.iter().any(|e| e.kind == EventKind::End(1)));
 }
 
 #[test]
@@ -57,7 +60,7 @@ fn single_word_gets_one_word_event() {
     assert_eq!(words, 1, "single word → one Word event: {events:?}");
     assert_eq!(
         events.iter().find(|e| matches!(e.kind, EventKind::Word(_))).unwrap().text_position,
-        0
+        1
     );
 }
 
@@ -66,7 +69,8 @@ fn multi_clause_emits_multiple_sentence_events() {
     let Some(e) = engine("en") else { return };
     let (_pcm, _rate, events) = e.synth_with_events("Hello there. How are you?").expect("synth");
 
-    let sentences: Vec<_> = events.iter().filter(|ev| ev.kind == EventKind::Sentence).collect();
+    let sentences: Vec<_> =
+        events.iter().filter(|ev| matches!(ev.kind, EventKind::Sentence(_))).collect();
     assert!(sentences.len() >= 2, "two clauses → ≥2 Sentence events: {events:?}");
     assert_eq!(sentences[0].audio_position_ms, 0, "first sentence at the start");
     assert!(sentences[1].audio_position_ms > 0, "second sentence starts later");
@@ -75,7 +79,7 @@ fn multi_clause_emits_multiple_sentence_events() {
     // Sentence marker landing at or before its clause's first Word.
     let times: Vec<u32> = events
         .iter()
-        .filter(|e| !matches!(e.kind, EventKind::End | EventKind::MsgTerminated))
+        .filter(|e| !matches!(e.kind, EventKind::End(_) | EventKind::MsgTerminated))
         .map(|e| e.audio_position_ms)
         .collect();
     assert!(times.windows(2).all(|w| w[0] <= w[1]), "events out of audio order: {times:?}");

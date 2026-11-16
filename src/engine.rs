@@ -229,31 +229,51 @@ pub enum Gender {
 /// returned as a `Vec<SynthEvent>` alongside the PCM samples from
 /// [`EspeakNg::synth`].
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct SynthEvent {
     /// The type of event.
     pub kind: EventKind,
-    /// Character offset in the input text where this event originates.
-    pub text_position: usize,
-    /// Time offset within the generated audio in milliseconds.
+    /// Position in the input text, counted in characters from 1 as C's
+    /// `text_position` is.  0 for events with no source (`SampleRate`,
+    /// `MsgTerminated`).
+    pub text_position: u32,
+    /// Length in characters of the word or sentence the event covers
+    /// (`espeak_EVENT.length`); 0 where it is not known.
+    pub length: u32,
+    /// Time offset within the generated audio in milliseconds
+    /// (`audio_position`).
     pub audio_position_ms: u32,
+    /// Position within the generated audio in samples
+    /// (`sample`).
+    pub sample: u64,
 }
 
 /// The kind of a [`SynthEvent`], mirroring `espeak_EVENT_TYPE`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EventKind {
-    /// Start of a word.  Payload is the word index within the sentence.
+    /// Start of a word.  Payload is the word number within the message,
+    /// counting from 1.
     Word(u32),
-    /// Start of a sentence.
-    Sentence,
-    /// End of the current sentence or clause.
-    End,
-    /// End of the entire synthesis request.
+    /// Start of a sentence.  Payload is the sentence number within the
+    /// message, counting from 1.
+    Sentence(u32),
+    /// End of a sentence.  Payload is the number of sentences so far.
+    End(u32),
+    /// End of the entire synthesis request.  Delivered last with every
+    /// position zeroed, as C's retrieval mode does; use the PCM length for
+    /// the total duration.
     MsgTerminated,
     /// A phoneme boundary (only produced when phoneme events are enabled).
     Phoneme(String),
     /// An SSML `<mark name="…"/>` reference point was reached.  Payload is the
     /// mark name.  Mirrors `espeak_EVENT_MARK`.
     Mark(String),
+    /// An SSML `<audio src="…">` was played.  Payload is the source URI.
+    /// Mirrors `espeak_EVENT_PLAY`.
+    Play(String),
+    /// The sample rate of the audio that follows, in Hz.  Mirrors
+    /// `espeak_EVENT_SAMPLERATE`; always the first event.
+    SampleRate(u32),
 }
 
 // ---------------------------------------------------------------------------
@@ -810,7 +830,7 @@ impl EspeakNg {
         if !self.soundicons.is_empty() || self.markup {
             let (samples, _) = self.synth(text)?;
             let end_ms = ms(samples.len());
-            let mut events = Vec::new();
+            let mut events = vec![sample_rate_event(rate)];
             if self.markup {
                 let (_segs, marks) = crate::translate::ssml::process_markup_with_marks(text);
                 let total = crate::translate::ssml::strip_markup(text).chars().count().max(1);
@@ -818,16 +838,14 @@ impl EspeakNg {
                     let at = (m.position as u64 * end_ms as u64 / total as u64) as u32;
                     events.push(SynthEvent {
                         kind: EventKind::Mark(m.name),
-                        text_position: m.position,
+                        text_position: m.position as u32 + 1,
+                        length: 0,
                         audio_position_ms: at,
+                        sample: u64::from(at) * u64::from(rate) / 1000,
                     });
                 }
             }
-            events.push(SynthEvent {
-                kind: EventKind::MsgTerminated,
-                text_position: text.len(),
-                audio_position_ms: end_ms,
-            });
+            events.push(terminated_event());
             return Ok((samples, rate, events));
         }
 
@@ -847,11 +865,18 @@ impl EspeakNg {
         };
         // Marks were recorded against the pre-scaling buffer; the final length
         // is already in post-fx samples.
-        let mark_ms = |s: usize| ms((s as f64 * time_scale) as usize);
+        let mark_sample = |s: usize| (s as f64 * time_scale) as usize;
         let word_offsets = word_char_offsets(text);
-        let end_ms = ms(samples.len());
 
-        let events = build_events(text, &word_offsets, &word_marks, &sentence_marks, mark_ms, end_ms);
+        let events = build_events(
+            text,
+            &word_offsets,
+            &word_marks,
+            &sentence_marks,
+            mark_sample,
+            rate,
+            samples.len(),
+        );
         Ok((samples, rate, events))
     }
 
@@ -909,8 +934,7 @@ impl EspeakNg {
         F: FnMut(&[i16], bool, &[SynthEvent]) -> bool,
     {
         let rate = self.sample_rate();
-        let ms = |s: usize| (s as u64 * 1000 / rate.max(1) as u64) as u32;
-        let post_fx = (self.post_tempo - 1.0).abs() > 1e-3 || (self.post_pitch - 1.0).abs() > 1e-3;
+        let post_fx =(self.post_tempo - 1.0).abs() > 1e-3 || (self.post_pitch - 1.0).abs() > 1e-3;
 
         // The same cases `synth_streaming` can't split, plus anything needing
         // the post-fx pass over the whole buffer.
@@ -946,10 +970,16 @@ impl EspeakNg {
             return Ok(rate);
         }
 
-        let end_ms = ms(emitted + tail.len());
         let word_offsets = word_char_offsets(text);
-        let events =
-            build_events(text, &word_offsets, &word_marks, &sentence_marks, ms, end_ms);
+        let events = build_events(
+            text,
+            &word_offsets,
+            &word_marks,
+            &sentence_marks,
+            |s| s,
+            rate,
+            emitted + tail.len(),
+        );
         callback(&tail, true, &events);
         Ok(rate)
     }
@@ -1310,47 +1340,71 @@ fn variant_scaled_pitch(base_hz: u32, variant: &crate::voices::VariantParams) ->
     }
 }
 
-/// Byte offsets of each word start in `text` — a word being a maximal run of
-/// alphanumeric/apostrophe characters.  Used to give `EventKind::Word` events a
-/// best-effort source `text_position` (paired with spoken words by index).
-/// Assemble the `Sentence` / `Word` / `End` / `MsgTerminated` event list from
-/// the sample offsets recorded during synthesis.
+/// An event at `sample` with no length; `ms` follows from the sample rate.
+fn event_at(kind: EventKind, text_position: u32, sample: usize, rate: u32) -> SynthEvent {
+    SynthEvent {
+        kind,
+        text_position,
+        length: 0,
+        audio_position_ms: (sample as u64 * 1000 / u64::from(rate.max(1))) as u32,
+        sample: sample as u64,
+    }
+}
+
+fn sample_rate_event(rate: u32) -> SynthEvent {
+    event_at(EventKind::SampleRate(rate), 0, 0, rate)
+}
+
+/// C's `espeakEVENT_MSG_TERMINATED` in retrieval mode: every position zero.
+fn terminated_event() -> SynthEvent {
+    event_at(EventKind::MsgTerminated, 0, 0, 1)
+}
+
+/// Assemble the `SampleRate` / `Sentence` / `Word` / `End` / `MsgTerminated`
+/// event list from the sample offsets recorded during synthesis.
+/// `word_offsets` are byte offsets in `text`, paired with the spoken words by
+/// index; the events carry 1-based character positions.
 fn build_events(
     text: &str,
     word_offsets: &[usize],
     word_marks: &[usize],
     sentence_marks: &[usize],
-    mark_ms: impl Fn(usize) -> u32,
-    end_ms: u32,
+    mark_sample: impl Fn(usize) -> usize,
+    rate: u32,
+    total_samples: usize,
 ) -> Vec<SynthEvent> {
+    let chars = text.chars().count() as u32;
+    let char_pos = |byte: usize| text.get(..byte).map_or(chars, |s| s.chars().count() as u32) + 1;
+    let at = |kind, pos, start| event_at(kind, pos, mark_sample(start), rate);
     let mut events = Vec::with_capacity(word_marks.len() + sentence_marks.len() + 3);
-    // Sentence 0 begins at the start; each later clause boundary opens another.
-    events.push(SynthEvent { kind: EventKind::Sentence, text_position: 0, audio_position_ms: 0 });
-    for &start in sentence_marks {
-        events.push(SynthEvent {
-            kind: EventKind::Sentence,
-            text_position: 0,
-            audio_position_ms: mark_ms(start),
-        });
-    }
+    events.push(sample_rate_event(rate));
+    // The first sentence begins at the start; each later clause boundary opens another.
+    let sentences = std::iter::once(0).chain(sentence_marks.iter().copied());
+    let mut body: Vec<SynthEvent> = sentences.map(|s| at(EventKind::Sentence(0), 1, s)).collect();
     for (i, &start) in word_marks.iter().enumerate() {
-        events.push(SynthEvent {
-            kind: EventKind::Word(i as u32),
-            text_position: word_offsets.get(i).copied().unwrap_or(text.len()),
-            audio_position_ms: mark_ms(start),
-        });
+        let pos = word_offsets.get(i).map_or(chars, |&b| char_pos(b));
+        body.push(at(EventKind::Word(i as u32 + 1), pos, start));
     }
-    // Keep events in audio order (Sentence markers interleaved with words).
-    events.sort_by_key(|e| e.audio_position_ms);
-    events.push(SynthEvent { kind: EventKind::End, text_position: text.len(), audio_position_ms: end_ms });
-    events.push(SynthEvent {
-        kind: EventKind::MsgTerminated,
-        text_position: text.len(),
-        audio_position_ms: end_ms,
-    });
+    // Audio order, with each Sentence ahead of the words that start with it.
+    body.sort_by_key(|e| e.sample);
+    let mut sentence = 0;
+    for i in 0..body.len() {
+        if matches!(body[i].kind, EventKind::Sentence(_)) {
+            sentence += 1;
+            let next = body[i..].iter().find(|e| matches!(e.kind, EventKind::Word(_)));
+            body[i].text_position = next.map_or(1, |w| w.text_position);
+            body[i].kind = EventKind::Sentence(sentence);
+        }
+    }
+    events.extend(body);
+    events.push(event_at(EventKind::End(sentence), chars, total_samples, rate));
+    events.push(terminated_event());
     events
 }
 
+/// Byte offsets of each word start in `text` — a word being a maximal run of
+/// alphanumeric/apostrophe characters.  Used to give `EventKind::Word` events a
+/// best-effort source `text_position` (paired with spoken words by index).
 fn word_char_offsets(text: &str) -> Vec<usize> {
     let mut offsets = Vec::new();
     let mut in_word = false;

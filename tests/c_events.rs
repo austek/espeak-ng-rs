@@ -96,26 +96,26 @@ fn engine(case: &Case) -> Option<EspeakNg> {
 fn line(kind: &EventKind) -> (u8, String) {
     match kind {
         EventKind::Word(n) => (1, format!("num={n}")),
-        EventKind::Sentence => (2, "num=0".into()),
+        EventKind::Sentence(n) => (2, format!("num={n}")),
         EventKind::Mark(name) => (3, format!("name={name}")),
-        EventKind::End => (5, "num=0".into()),
+        EventKind::Play(uri) => (4, format!("name={uri}")),
+        EventKind::End(n) => (5, format!("num={n}")),
         EventKind::MsgTerminated => (6, "num=0".into()),
         EventKind::Phoneme(p) => (7, format!("ph=[{p}]")),
+        EventKind::SampleRate(r) => (8, format!("num={r}")),
     }
 }
 
-/// The Rust transcript in the C line format; `len` is 0 and `sample` derives
-/// from the millisecond position because the Rust events carry neither.
+/// The Rust transcript in the C line format.
 fn transcript(case: &Case) -> Option<String> {
     let e = engine(case)?;
-    let (pcm, rate, events) = e.synth_with_events(&case.text).ok()?;
+    let (pcm, _rate, events) = e.synth_with_events(&case.text).ok()?;
     let mut out = String::new();
     for ev in &events {
         let (ty, value) = line(&ev.kind);
-        let sample = u64::from(ev.audio_position_ms) * u64::from(rate) / 1000;
         out.push_str(&format!(
-            "ev {ty} {} 0 {} {sample} {value}\n",
-            ev.text_position, ev.audio_position_ms
+            "ev {ty} {} {} {} {} {value}\n",
+            ev.text_position, ev.length, ev.audio_position_ms, ev.sample
         ));
     }
     out.push_str(&format!("samples={}\n", pcm.len()));

@@ -37,8 +37,9 @@ fn is_word_char(c: char) -> bool {
     c.is_alphanumeric() || c == '\''
 }
 
-fn char_index(text: &str, byte: usize) -> usize {
-    text.get(..byte.min(text.len())).map_or(0, |s| s.chars().count())
+fn byte_offset(text: &str, pos: u32) -> usize {
+    let skip = (pos as usize).saturating_sub(1);
+    text.char_indices().nth(skip).map_or(text.len(), |(b, _)| b)
 }
 
 fn word_length(text: &str, byte: usize) -> i32 {
@@ -65,17 +66,16 @@ pub fn clause_end_positions(text: &str) -> Vec<i32> {
 }
 
 fn text_events(text: &str, events: &[SynthEvent], rate: u32) -> Vec<Ev> {
-    let mut sentence = 0;
     let mut out: Vec<Ev> = events
         .iter()
         .filter_map(|e| {
             let sample = ms_to_sample(e.audio_position_ms, rate);
-            let pos = char_index(text, e.text_position) as i32 + 1;
+            let pos = e.text_position as i32;
             match &e.kind {
                 EventKind::Word(i) => Some(Ev {
-                    kind: EvKind::Word(*i as i32 + 1),
+                    kind: EvKind::Word(*i as i32),
                     position: pos,
-                    length: word_length(text, e.text_position),
+                    length: word_length(text, byte_offset(text, e.text_position)),
                     sample,
                 }),
                 EventKind::Mark(name) => Some(Ev {
@@ -84,9 +84,8 @@ fn text_events(text: &str, events: &[SynthEvent], rate: u32) -> Vec<Ev> {
                     length: 0,
                     sample,
                 }),
-                EventKind::Sentence => {
-                    sentence += 1;
-                    Some(Ev { kind: EvKind::Sentence(sentence), position: 1, length: 0, sample })
+                EventKind::Sentence(n) => {
+                    Some(Ev { kind: EvKind::Sentence(*n as i32), position: pos, length: 0, sample })
                 }
                 _ => None,
             }
@@ -177,6 +176,13 @@ mod tests {
     #[test]
     fn clause_ends_follow_terminators() {
         assert_eq!(clause_end_positions("Hello world, this is a test. Second one."), vec![13, 29, 40]);
+    }
+
+    #[test]
+    fn one_based_character_positions_map_to_byte_offsets() {
+        assert_eq!(byte_offset("café über", 1), 0);
+        assert_eq!(byte_offset("café über", 6), 6);
+        assert_eq!(byte_offset("café über", 99), "café über".len());
     }
 
     #[test]
