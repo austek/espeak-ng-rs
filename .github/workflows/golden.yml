@@ -327,6 +327,7 @@ jobs:
           --test embedded_unknown_letter
           --test embedded_command_case
           --test ssml_break_not_user_text
+          --test embedded_sign_before_unknown_letter
           --test ssml_say_as_characters_digit_groups
           --test dotted_abbrev_check
           --test dotted_abbrev_blank_before_dot

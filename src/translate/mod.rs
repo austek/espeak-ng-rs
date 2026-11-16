@@ -2067,6 +2067,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut chars = text.chars().peekable();
     let mut before: Option<char> = None;
+    let mut blank_run = 0usize;
 
     while let Some(c) = chars.next() {
         let previous = before.replace(c);
@@ -2076,13 +2077,18 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
         // `\x01[±]<value><letter>` — keep it as a token so the change applies
         // from here on rather than to the whole utterance.  Without a command
         // letter only the `\x01` is blanked, as C does.
+        let mut blanks = 1;
         let c = if c == CTRL_EMBEDDED {
             match read_embedded_command(&mut chars) {
                 Some(cmd) => {
                     tokens.push(Token::Embedded(cmd));
                     continue;
                 }
-                None => ' ',
+                None => {
+                    // C breaks the word before it, so a `\x01` after a non-blank adds a second blank.
+                    blanks += usize::from(previous.is_some_and(|p| !p.is_whitespace()));
+                    ' '
+                }
             }
         } else {
             c
@@ -2091,7 +2097,9 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // Collapse runs of whitespace into a single Space token.
             while chars.peek().map(|c| c.is_whitespace()).unwrap_or(false) {
                 chars.next();
+                blanks += 1;
             }
+            blank_run = if matches!(tokens.last(), Some(Token::Space)) { blank_run + blanks } else { blanks };
             tokens.push(Token::Space);
         } else if c == '['&& chars.peek() == Some(&'[') {
             // Inline phonemes: [[ mnemonics ]] — read verbatim to the closing ]].
@@ -2241,6 +2249,15 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             if dot_ends {
                 tokens.push(Token::DotEndsClause);
             }
+        } else if c == '-'
+            && minus_precedes_number(&chars)
+            && blank_run >= 2
+            && word_before_blanks(&tokens)
+        {
+            // After a word and two or more blanks C does not read `-5` as a sign: the
+            // rules see one word break (`_) - (_D`), not two (`__) - (_D`).
+            // `hyphen_after_blanks` finds this token again.
+            tokens.push(Token::Punctuation('-'));
         } else if c == '-'
             && minus_precedes_number(&chars)
             && matches!(
@@ -7129,6 +7146,32 @@ pub(crate) fn closes_after_mark(text: &str) -> bool {
 /// Whether a digit directly follows a leading `-`, so the hyphen is a unary
 /// minus (`-5`).  A currency symbol in between (`-$5`) is not: C drops the sign.
 /// Takes a clone of the tokenizer iterator positioned just past the `-`.
+/// The last token that is no blank, when it is a word.
+fn last_word(tokens: &[Token]) -> Option<&str> {
+    match tokens.iter().rev().find(|t| !matches!(t, Token::Space)) {
+        Some(Token::Word(w)) => Some(w),
+        _ => None,
+    }
+}
+
+fn word_before_blanks(tokens: &[Token]) -> bool {
+    last_word(tokens).is_some()
+}
+
+fn word_before(tokens: &[Token], ix: usize) -> Option<&str> {
+    last_word(&tokens[..ix])
+}
+
+/// The hyphen token the tokenizer leaves between a word's blanks and a number
+/// (see `word_before_blanks`): C reads it with the word's own end as rule context.
+fn hyphen_after_blanks(tokens: &[Token], ix: usize) -> bool {
+    matches!(tokens.get(ix), Some(Token::Punctuation('-')))
+        && matches!(tokens.get(ix + 1), Some(Token::Number(_)))
+        && ix > 0
+        && matches!(tokens[ix - 1], Token::Space)
+        && word_before_blanks(&tokens[..ix])
+}
+
 fn minus_precedes_number<I>(chars: &std::iter::Peekable<I>) -> bool
 where
     I: Iterator<Item = char> + Clone,
@@ -10008,14 +10051,16 @@ pub(crate) fn build_translate_entries(
             }
             Token::Operator(c) | Token::Punctuation(c)
                 if matches!(token, Token::Operator(_))
+                    || hyphen_after_blanks(tokens, token_ix)
                     || is_spoken_symbol(*c)
                     || punct_covers(options, *c)
                     || dict_names_symbol(dict, *c, options.dict_condition)
                     || (!is_clause_punctuation(*c) && english_word(*c, false).is_some()) =>
             {
+                let blank_hyphen = hyphen_after_blanks(tokens, token_ix);
                 // Technical symbols read as their name by default (# $ % & * + / = @ ~),
                 // as does any character the dictionary names (see `dict_names_symbol`).
-                let mode = if matches!(token, Token::Operator(_)) {
+                let mode = if matches!(token, Token::Operator(_)) || blank_hyphen {
                     SymbolName::Operator
                 } else if punct_covers(options, *c) && !is_spoken_symbol(*c) {
                     SymbolName::Announce
@@ -10035,6 +10080,9 @@ pub(crate) fn build_translate_entries(
                         at_clause_end: at_end[token_ix],
                         at_clause_start: at_start[token_ix],
                         next_word: next_word_opening(tokens, token_ix + 1, &options.lang),
+                        prev_tail: word_before(tokens, token_ix)
+                            .filter(|_| blank_hyphen)
+                            .map_or([0; 8], |w| word_tail(Some(&lowercase_for_lang(w, &options.lang)))),
                         ..PosExpect::default()
                     },
                 );
