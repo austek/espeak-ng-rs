@@ -21,10 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `MsgTerminated` stays the last event with every position zero, as C's
     retrieval mode delivers it. Read the total duration from the PCM length,
     not from its `audio_position_ms`.
-  - Word `length`, SSML mark and play positions and per-clause `End` events
-    still differ from C and are tracked by `tests/c_events.rs`.
-  - The C ABI crate reads the new fields; its callback transcripts are
-    unchanged.
+  - Plain-text word positions are heuristic (the input is scanned for word
+    starts and paired with spoken words by index), and plain-text word `length`
+    is 0. Remaining differences from C are tracked by `tests/c_events.rs`.
+  - The C ABI crate delivers each event's `sample`, `text_position` and
+    `length` as the engine reports them, sets `END` `num` to the number of
+    sentences so far, and keeps a sentence at the position the engine gave
+    it. A word whose `length` is 0 is measured in the text, as before.
 
 ## [0.2.0] - 2026-09-05
 

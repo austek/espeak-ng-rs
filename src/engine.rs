@@ -835,9 +835,10 @@ impl EspeakNg {
     ///
     /// For the plain-text path this yields a `Sentence` event, one
     /// [`EventKind::Word`] per spoken word (with its start time in the audio and a
-    /// best-effort source `text_position`), and `End`/`MsgTerminated`.  When
-    /// sound icons or SSML markup are present the runs are spliced, so only
-    /// message-level events are produced.
+    /// best-effort source `text_position`), and `End`/`MsgTerminated`.  With
+    /// SSML markup the events come from the clause generator, as C's do.  When
+    /// sound icons are present the runs are spliced, so only message-level
+    /// events (and, with markup, interpolated `Mark` events) are produced.
     ///
     /// # Note on `text_position`
     /// The audio timing is exact; the source char offset is derived by scanning
@@ -1378,10 +1379,10 @@ fn event_at(kind: EventKind, text_position: u32, sample: usize, rate: u32) -> Sy
     }
 }
 
-/// The event for a word or sentence marker; other markers are not reported yet.
 /// A generator event with the `<mark>` name its value addresses.
 type NamedEvent = (crate::synthesize::cgen::RawEvent, Option<String>);
 
+/// The event for a word, sentence or mark marker.
 fn marker_event(e: &crate::synthesize::cgen::RawEvent, name: Option<&str>, scale: f64, rate: u32) -> SynthEvent {
     use crate::synthesize::cgen::MarkerKind;
     let kind = match e.marker.kind {

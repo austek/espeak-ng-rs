@@ -2101,7 +2101,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             }
             blank_run = if matches!(tokens.last(), Some(Token::Space)) { blank_run + blanks } else { blanks };
             tokens.push(Token::Space);
-        } else if c == '['&& chars.peek() == Some(&'[') {
+        } else if c == '[' && chars.peek() == Some(&'[') {
             // Inline phonemes: [[ mnemonics ]] — read verbatim to the closing ]].
             chars.next(); // consume second '['
             let mut content = String::new();
