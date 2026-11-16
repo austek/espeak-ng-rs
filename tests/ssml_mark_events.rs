@@ -77,6 +77,49 @@ fn mark_in_a_nested_paragraph() {
     assert_eq!(got, ["32 0 753 16617 in"]);
 }
 
+// A clause with no word reads its mark from the dummy phoneme `TranslateWord2` adds for the
+// empty word (`sourceix` 0), so the position is the clause's first character.
+#[test]
+fn mark_in_a_clause_without_words_takes_the_clause_start() {
+    let Some(got) = marks("one, <mark name=\"end\"/>") else { return };
+    assert_eq!(got, ["5 0 479 10564 end"]);
+}
+
+#[test]
+fn mark_alone_is_at_the_text_start() {
+    let Some(got) = marks("<mark name=\"only\"/>") else { return };
+    assert_eq!(got, ["0 0 0 0 only"]);
+}
+
+#[test]
+fn mark_between_blanks_is_at_the_text_start() {
+    let Some(got) = marks("<speak> <mark name=\"only\"/> </speak>") else { return };
+    assert_eq!(got, ["0 0 0 0 only"]);
+}
+
+#[test]
+fn mark_after_a_break_takes_the_clause_start() {
+    let Some(got) = marks("one <break time=\"100ms\"/> <mark name=\"end\"/>") else { return };
+    assert_eq!(got, ["24 0 342 7547 end"]);
+}
+
+#[test]
+fn mark_after_a_voice_takes_the_clause_start() {
+    let Some(got) = marks("one <voice name=\"de\">zwei</voice> <mark name=\"end\"/>") else { return };
+    assert_eq!(got, ["32 0 721 15912 end"]);
+}
+
+// The words' pre-pause phonemes carry the mark (`sourceix` 0) before the word's own first
+// phoneme.
+#[test]
+fn mark_before_say_as_characters_sits_on_the_pre_pause() {
+    let Some(got) = marks("<speak>call <mark name=\"s\"/><say-as interpret-as=\"characters\">abc</say-as> now</speak>")
+    else {
+        return;
+    };
+    assert_eq!(got, ["0 0 303 6688 s"]);
+}
+
 #[test]
 fn mark_in_another_voice() {
     let Some(got) = marks("hi <voice xml:lang=\"de\">welt <mark name=\"in\"/> eins</voice> out") else { return };

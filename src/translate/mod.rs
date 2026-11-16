@@ -7490,6 +7490,19 @@ fn lift_switch_markers(tail: &mut [PhonemeCode]) -> usize {
     tail.iter().filter(|c| c.marker.is_some()).count()
 }
 
+/// Moves the embedded commands before a word ahead of the separators after them and returns
+/// how many moved.  C hands them to the first phoneme `TranslateWord2` adds for the word, which
+/// is its pre-pause (`sourceix` 0) when it has one.
+fn lift_embedded_before_pause(codes: &mut [PhonemeCode], at: usize) -> usize {
+    let tail = &mut codes[at..];
+    let is_embedded = |c: &PhonemeCode| matches!(c.marker, Some(CodeMarker::Embedded(_)));
+    if !tail.iter().all(|c| c.is_boundary || c.marker.is_some()) {
+        return 0;
+    }
+    tail.sort_by_key(|c| !is_embedded(c));
+    tail.iter().filter(|c| is_embedded(c)).count()
+}
+
 /// A spelled word that opens with its own pause, after which C starts the word.
 fn paused_stream(e: &TranslateEntry) -> bool {
     e.kind == TranslateEntryKind::Stream && e.phonemes.first() == Some(&crate::phoneme::PHON_PAUSE)
@@ -11726,6 +11739,7 @@ impl Translator {
                             .take_while(|c| c.marker.is_none() && c.code == crate::phoneme::PHON_PAUSE)
                             .count();
                         pre_pause = (pre_pause as usize).saturating_sub(pending) as _;
+                        let at = if pre_pause > 0 { at + lift_embedded_before_pause(&mut codes, at) } else { at };
                         let mut n = 0;
                         while pre_pause > 0 {
                             let code = if pre_pause > 1 {
