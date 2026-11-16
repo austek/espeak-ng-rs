@@ -281,21 +281,6 @@ impl<'a> Renderer<'a> {
         self.events.iter().filter(|e| e.marker.kind == kind).map(|e| e.sample).collect()
     }
 
-    /// Synthesize one clause; returns the samples it produced.
-    /// The clause pause (ms) for an SSML `<break>`, as `ProcessSsmlTag` packs it.
-    fn break_pause(&self, ms: i32, exact: bool) -> i32 {
-        let mut value = if exact {
-            let v = (ms * 256) / (self.speed.clause_pause_factor * 10);
-            if v < 200 { (ms * 256) / (self.speed.pause_factor * 10) } else { v }
-        } else {
-            ms / 10
-        };
-        if value > 0xfff {
-            value = (value / 32).min(0xfff) * 32;
-        }
-        value * 10
-    }
-
     /// `TranslateClause`'s pause: a clause with no words only makes up the
     /// previous pause, and the last clause of the text without words, or with
     /// no end pause wanted, keeps just 10 ms.
@@ -368,15 +353,11 @@ impl<'a> Renderer<'a> {
     pub fn clause(&mut self, clause: &ClauseCodes, start_sentence: bool) -> Vec<i16> {
         let codes = &clause.codes;
         let base_pause = clause.terminator.pause_ms() as i32;
-        let mut clause_type = clause.terminator.intonation() as usize;
+        let clause_type = clause.terminator.intonation() as usize;
         let empty = codes
             .iter()
             .all(|c| c.marker.is_none() && (c.code == 0 || c.code == crate::phoneme::PHON_END_WORD));
-        let mut post_pause = self.clause_pause(base_pause, empty, clause.eof);
-        if let Some((ms, exact)) = clause.brk {
-            post_pause = self.break_pause(ms, exact);
-            clause_type = 4;
-        }
+        let post_pause = self.clause_pause(base_pause, empty, clause.eof);
         let phdata = active_table(self.phdata, &self.switched, self.active.as_deref());
         let mut c = phlist::build_list(codes, phdata, &self.switched, post_pause, start_sentence, self.tr.stress_flags);
         if let Some(k) = clause.counters {
@@ -524,7 +505,7 @@ pub fn render(
     let mut start_sentence = true;
     for c in &clauses {
         let pcm = r.clause(c, start_sentence);
-        start_sentence = c.brk.is_none() && c.terminator.is_sentence();
+        start_sentence = c.terminator.is_sentence();
         sink(&pcm);
     }
     (r.word_marks(), r.sentence_marks())

@@ -170,7 +170,6 @@ impl SsmlDocument<'_> {
             terminator: clause.terminator,
             eof: clause.eof,
             voice_after: clause.voice_after.clone(),
-            brk: None,
             counters: Some(clause.counters),
         }
     }

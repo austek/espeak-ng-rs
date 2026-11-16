@@ -975,16 +975,6 @@ impl<'a> Generator<'a> {
                 -1 => 0x60,
                 _ => 0,
             };
-            if c.letter == crate::translate::ssml::BREAK_LETTER {
-                if c.relative == 1 {
-                    self.do_pause(c.value.max(0), 0);
-                } else {
-                    self.end_pitch(true);
-                    self.push(Wcmd::Pause(c.value.max(0) * SAMPLERATE / 1000));
-                    self.last_frame = None;
-                }
-                continue;
-            }
             let Some(code) = super::embed_code(c.letter) else { continue };
             if code == EMBED_I {
                 self.play_icon(c.value);

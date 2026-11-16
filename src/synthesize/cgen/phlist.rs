@@ -103,9 +103,6 @@ pub struct ClauseCodes {
     pub eof: bool,
     /// The voice id to switch to once this clause is generated.
     pub voice_after: Option<String>,
-    /// An SSML `<break>` that ended the clause: its length in ms, and whether
-    /// it is wall-clock exact (`time`) rather than in clause units (`strength`).
-    pub brk: Option<(i32, bool)>,
     /// The message-wide counts C reads while generating the clause; `None` for plain text.
     pub counters: Option<ClauseCounters>,
 }
@@ -127,34 +124,20 @@ pub struct ClauseCounters {
 }
 
 impl ClauseCodes {
-    fn plain(codes: Vec<PhonemeCode>, clause_char: Option<char>, brk: Option<(i32, bool)>) -> Self {
+    fn plain(codes: Vec<PhonemeCode>, clause_char: Option<char>) -> Self {
         let terminator = clause_char.and_then(|c| Terminator::from_codepoint(c as u32)).unwrap_or(Terminator::PERIOD);
-        ClauseCodes { codes, terminator, eof: false, voice_after: None, brk, counters: None }
-    }
-}
-
-fn take_break(cur: &mut Vec<PhonemeCode>) -> Option<(i32, bool)> {
-    let pos = cur.iter().rposition(|c| {
-        matches!(&c.marker, Some(CodeMarker::Embedded(e)) if e.letter == crate::translate::ssml::BREAK_LETTER)
-    })?;
-    if cur[pos + 1..].iter().any(|c| c.code != 0 && !c.is_boundary && c.code != PHON_END_WORD) {
-        return None;
-    }
-    match cur.remove(pos).marker {
-        Some(CodeMarker::Embedded(e)) => Some((e.value.max(0), e.relative == 1)),
-        _ => None,
+        ClauseCodes { codes, terminator, eof: false, voice_after: None, counters: None }
     }
 }
 
 /// Split the code stream into clauses.
 pub fn split_clauses(codes: &[PhonemeCode]) -> Vec<ClauseCodes> {
     let mut out = Vec::new();
-    let mut cur = Vec::new();
+    let mut cur: Vec<PhonemeCode> = Vec::new();
     for c in codes {
         if c.code == 0 && c.is_boundary && c.marker.is_none() {
-            let brk = take_break(&mut cur);
             let abbreviated = cur.iter().any(|k| matches!(k.marker, Some(CodeMarker::AbbreviationDot)));
-            let mut clause = ClauseCodes::plain(std::mem::take(&mut cur), c.clause_char, brk);
+            let mut clause = ClauseCodes::plain(std::mem::take(&mut cur), c.clause_char);
             if abbreviated {
                 clause.terminator = clause.terminator.after_abbreviation();
             }
@@ -164,10 +147,10 @@ pub fn split_clauses(codes: &[PhonemeCode]) -> Vec<ClauseCodes> {
         }
     }
     if cur.iter().any(|c| c.code != 0 || c.marker.is_some()) {
-        out.push(ClauseCodes::plain(cur, None, None));
+        out.push(ClauseCodes::plain(cur, None));
     }
     if out.is_empty() {
-        out.push(ClauseCodes::plain(Vec::new(), None, None));
+        out.push(ClauseCodes::plain(Vec::new(), None));
     }
     if let Some(last) = out.last_mut() {
         last.eof = true;

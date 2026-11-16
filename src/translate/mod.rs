@@ -1857,15 +1857,12 @@ fn native_digit_to_ascii(c: char) -> Option<char> {
 pub const CTRL_EMBEDDED: char = '\u{01}';
 
 /// The command letters accepted after `\x01[±]<value>` — pitch/speed/amplitude/
-/// range/reverb/tone/… (C `EmbeddedCommand`'s `"PSARHTIVYMUBF"`, matched case-sensitively),
-/// plus [`ssml::BREAK_LETTER`], which carries an SSML pause length in milliseconds.  C has no
-/// equivalent — it packs the pause into the clause terminator — so the port uses a private-use
-/// character that no text written for C can contain.
+/// range/reverb/tone/… (C `EmbeddedCommand`'s `"PSARHTIVYMUBF"`, matched case-sensitively).
 const EMBED_LETTERS: &str = "PSARHTIVYMUBF";
 
 /// Whether `letter` follows `\x01[±]<value>` as a command.
 pub(crate) fn is_command_letter(letter: char) -> bool {
-    EMBED_LETTERS.contains(letter) || letter == ssml::BREAK_LETTER
+    EMBED_LETTERS.contains(letter)
 }
 
 /// A parsed inline embedded command `\x01[+|-]<value><letter>` (C
@@ -6477,13 +6474,7 @@ pub(crate) fn parse_inline_phonemes(content: &str, phdata: &PhonemeData) -> Vec<
 /// `--ipa`/`-x` path.  `<voice>` language spans are read in `lang` (audio voice
 /// switching is not yet wired).
 pub fn ssml_to_speech_text(text: &str, lang: &str) -> String {
-    ssml_to_speech_text_opts(text, lang, 100)
-}
-
-/// [`ssml_to_speech_text`] with the `--ssml-break` percentage
-/// (`espeakSSML_BREAK_MUL`) applied to every `<break time=…>`.
-pub fn ssml_to_speech_text_opts(text: &str, lang: &str, ssml_break: u32) -> String {
-    ssml::process_markup_opts(text, ssml_break)
+    ssml::process_markup_with_marks(text)
         .0
         .into_iter()
         .map(|s| interpret_segment_text(&s.text, s.interpret, lang))
