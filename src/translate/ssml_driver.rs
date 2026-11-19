@@ -91,6 +91,11 @@ fn closing_pause_ix(source: &SourceClause, codes: &[PhonemeCode]) -> u16 {
     }
 }
 
+/// Character of the [`Token::ClauseBoundary`] that ends a clause the reader or the length
+/// limit cut, and that the driver adds when a clause text has none of its own.  The tokenizer
+/// never maps it from text, where it is an ordinary private-use character as in C.
+pub(crate) const TAG_CLAUSE_END: char = '\u{E002}';
+
 fn single_clause(mut tokens: Vec<Token>) -> Vec<Token> {
     let last = tokens.iter().rposition(|t| !matches!(t, Token::Space));
     let closing = last.filter(|&i| matches!(tokens[i], Token::ClauseBoundary(_)));
@@ -103,7 +108,7 @@ fn single_clause(mut tokens: Vec<Token>) -> Vec<Token> {
         }
     }
     if closing.is_none() {
-        tokens.push(Token::ClauseBoundary(super::ssml::SSML_BREAK));
+        tokens.push(Token::ClauseBoundary(TAG_CLAUSE_END));
     }
     tokens
 }

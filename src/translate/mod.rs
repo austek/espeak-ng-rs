@@ -1065,7 +1065,7 @@ impl Default for LangOptions {
 /// "all punctuation" (`--punct` with no argument); the SSML clause-break
 /// sentinel is never announced.
 fn punct_covers(opts: &LangOptions, c: char) -> bool {
-    if c == ssml::SSML_BREAK {
+    if c == ssml_driver::TAG_CLAUSE_END {
         return false;
     }
     match &opts.punct {
@@ -1934,7 +1934,7 @@ fn merge_full_stop_into_tag_boundary(tokens: Vec<Token>) -> Vec<Token> {
     let tag_follows = |rest: &[Token]| {
         rest.iter()
             .find(|t| !matches!(t, Token::Space | Token::Embedded(_)))
-            .is_some_and(|t| matches!(t, Token::ClauseBoundary(c) if *c == ssml::SSML_BREAK))
+            .is_some_and(|t| matches!(t, Token::ClauseBoundary(c) if *c == ssml_driver::TAG_CLAUSE_END))
     };
     let drop: Vec<bool> = (0..tokens.len())
         .map(|i| matches!(tokens[i], Token::ClauseBoundary('.')) && tag_follows(&tokens[i + 1..]))
@@ -2016,7 +2016,7 @@ fn split_overlong_clauses(tokens: Vec<Token>) -> Vec<Token> {
                 after_space = true;
                 out.push(token);
                 if used > CLAUSE_SOFT_BYTES {
-                    out.push(Token::ClauseBoundary(ssml::SSML_BREAK));
+                    out.push(Token::ClauseBoundary(ssml_driver::TAG_CLAUSE_END));
                     used = 0;
                 }
             }
@@ -2025,7 +2025,7 @@ fn split_overlong_clauses(tokens: Vec<Token>) -> Vec<Token> {
                 for (piece, ends) in clause_pieces(&word, &mut used) {
                     out.push(Token::Word(piece));
                     if ends {
-                        out.push(Token::ClauseBoundary(ssml::SSML_BREAK));
+                        out.push(Token::ClauseBoundary(ssml_driver::TAG_CLAUSE_END));
                         after_space = true;
                     }
                 }
@@ -2035,7 +2035,7 @@ fn split_overlong_clauses(tokens: Vec<Token>) -> Vec<Token> {
                 for (piece, ends) in clause_pieces(&digits, &mut used) {
                     out.push(Token::Number(NumberToken::Cardinal(piece)));
                     if ends {
-                        out.push(Token::ClauseBoundary(ssml::SSML_BREAK));
+                        out.push(Token::ClauseBoundary(ssml_driver::TAG_CLAUSE_END));
                         after_space = true;
                     }
                 }
@@ -2050,7 +2050,7 @@ fn split_overlong_clauses(tokens: Vec<Token>) -> Vec<Token> {
                 used += c.len_utf8();
                 out.push(token);
                 if used > CLAUSE_SOFT_BYTES {
-                    out.push(Token::ClauseBoundary(ssml::SSML_BREAK));
+                    out.push(Token::ClauseBoundary(ssml_driver::TAG_CLAUSE_END));
                     used = 0;
                     after_space = true;
                 }
@@ -10027,7 +10027,7 @@ pub(crate) fn build_translate_entries(
                 prev_word = None;
                 entries.push(TranslateEntry {
                     phonemes:   Vec::new(),
-                    dict_flags: if matches!(*punct, '.' | ssml::SSML_BREAK) { abbreviation_flags(&entries) } else { 0 },
+                    dict_flags: if matches!(*punct, '.' | ssml_driver::TAG_CLAUSE_END) { abbreviation_flags(&entries) } else { 0 },
                     kind:       TranslateEntryKind::ClauseBoundary,
                     word_lower: None,
                     word_group: None, spelled: false,

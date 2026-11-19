@@ -33,11 +33,8 @@
 //!   eSpeak phoneme mnemonics (the default `alphabet="espeak"`); IPA input is
 //!   not yet transliterated.
 
-/// Character of the [`Token::ClauseBoundary`](crate::translate::Token::ClauseBoundary)
-/// that stands for an SSML break (`<break/>`, `</p>`, `</s>`), and the one this
-/// module's text walker writes there.  The tokenizer does not map it: in text it
-/// is an ordinary private-use character, as in C.
-pub(crate) const SSML_BREAK: char = '\u{E002}';
+/// The clause-end boundary this module's text walker writes for a break.
+pub(crate) const SSML_BREAK: char = super::ssml_driver::TAG_CLAUSE_END;
 
 /// Whether a `<break time>` value is one C's `attrnumber(attr, 0, 1)` reads:
 /// a non-negative number with an optional `ms` or `s` unit.
