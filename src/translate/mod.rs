@@ -8778,9 +8778,13 @@ fn normalized_hour(h: &str) -> String {
 
 /// The word after a colon as it stands in C's clause buffer: a `.` plus digits right after
 /// it stay part of the word.
-fn word_after_colon(tokens: &[Token], at: usize, digits: &str) -> String {
+fn word_after_colon(tokens: &[Token], at: usize, digits: &str, clause_text: bool) -> String {
     match (tokens.get(at + 1), tokens.get(at + 2)) {
+        // The reader keeps a full stop in front of an SSML tag in the clause text.
+        (Some(Token::ClauseBoundary('.')), _) if clause_text => format!("{digits}."),
         (Some(Token::Punctuation('.')), Some(Token::Number(n))) => format!("{digits}.{}", n.surface()),
+        // A dot that does not end the clause stays on the number, so no blank follows the digits.
+        (Some(Token::Punctuation('.')), _) => format!("{digits}."),
         _ => digits.to_string(),
     }
 }
@@ -8798,7 +8802,7 @@ fn colon_word(before: &str, after: &str) -> Vec<Token> {
     vec![Token::DigitColon { before: before.to_string(), after: after.to_string() }, Token::Space]
 }
 
-fn apply_time_reading(tokens: &mut Vec<Token>) {
+fn apply_time_reading(tokens: &mut Vec<Token>, clause_text: bool) {
     // A cardinal token whose surface is exactly two digits (a minute/second).
     let two_digit = |t: Option<&Token>| -> Option<String> {
         match t {
@@ -8827,7 +8831,7 @@ fn apply_time_reading(tokens: &mut Vec<Token>) {
                 let h_norm = if h.len() <= 2 { normalized_hour(&h) } else { h.clone() };
                 out.push(Token::Number(NumberToken::Cardinal(h_norm)));
                 out.push(Token::Space);
-                out.extend(colon_word(&h, &word_after_colon(tokens, minute_at, &minute)));
+                out.extend(colon_word(&h, &word_after_colon(tokens, minute_at, &minute, clause_text)));
                 let seconds_follow = colon_run_end(tokens, minute_at + 1)
                     .and_then(|e| two_digit(tokens.get(e)))
                     .is_some();
@@ -8837,7 +8841,7 @@ fn apply_time_reading(tokens: &mut Vec<Token>) {
                 if let Some(e) = colon_run_end(tokens, j) {
                     if let Some(sec) = two_digit(tokens.get(e)) {
                         out.push(Token::Space);
-                        out.extend(colon_word(&minute, &word_after_colon(tokens, e, &sec)));
+                        out.extend(colon_word(&minute, &word_after_colon(tokens, e, &sec, clause_text)));
                         out.push(Token::Number(NumberToken::Cardinal(sec)));
                         j = e + 1;
                     }
@@ -8854,7 +8858,7 @@ fn apply_time_reading(tokens: &mut Vec<Token>) {
                 _ => None,
             };
             let after = match tokens.get(end) {
-                Some(Token::Number(n)) => Some(word_after_colon(tokens, end, &n.surface())),
+                Some(Token::Number(n)) => Some(word_after_colon(tokens, end, &n.surface(), clause_text)),
                 _ => None,
             };
             out.push(Token::Space);
@@ -11280,7 +11284,7 @@ impl Translator {
             &run_hands_over,
         );
         if number_grammar.c_numbers != 0 {
-            apply_time_reading(&mut tokens);
+            apply_time_reading(&mut tokens, number_grammar.clause_text);
         }
         apply_dash_reading(&mut tokens, lang);
         apply_decades(&mut tokens, lang);

@@ -359,6 +359,7 @@ jobs:
           --test punct_within_word
           --test url_scheme_phrase
           --test dotted_initials_letter_after_dot
+          --test ssml_time_dot_before_tag
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config
