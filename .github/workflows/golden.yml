@@ -79,6 +79,7 @@ jobs:
           --test robustness_final_long_stress
           --test robustness_ssml_unterminated_tag
           --test c_events
+          --test soundicon
           --test cli_stdout_wav
           --test synth_event_fields
           --test ssml_events

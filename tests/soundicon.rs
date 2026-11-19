@@ -125,3 +125,42 @@ fn ssml_audio_missing_file_speaks_fallback() {
     // `CLAUSE_NONE`: no tonic fall and no clause pause.
     assert_eq!(fallback.len(), 8744);
 }
+
+/// A 3.2 s icon, as long as the speech around it.
+fn write_long_icon(name: &str) -> std::path::PathBuf {
+    let tone: Vec<i16> = (0..70_560).map(|i| ((i % 100) as i16 - 50) * 100).collect();
+    let path = std::env::temp_dir().join(name);
+    std::fs::write(&path, make_wav(&tone)).unwrap();
+    path
+}
+
+fn mark_event(events: &[espeak_ng::SynthEvent]) -> &espeak_ng::SynthEvent {
+    events.iter().find(|e| matches!(e.kind, espeak_ng::EventKind::Mark(_))).expect("mark event")
+}
+
+/// The icon is rendered between two text runs that are synthesised on their own, so a mark in
+/// the last run sits at: everything before that run (the whole audio less the run's own length)
+/// plus the mark's offset in that run.
+#[test]
+fn mark_after_an_icon_counts_the_icon_audio() {
+    let Some(mut eng) = engine() else { return };
+    eng.set_markup(true);
+    let tail = " eight <mark name=\"m\"/> nine";
+    let (tail_pcm, _, tail_events) = eng.synth_with_events(tail).expect("tail");
+    let in_tail = mark_event(&tail_events).sample;
+    let text = format!("one two three four five six seven #{tail}");
+    let (no_icon_pcm, _, no_icon_events) = eng.synth_with_events(&text).expect("no icon");
+    assert!(!no_icon_pcm.is_empty());
+
+    let icon = write_long_icon("espeak_rs_it_long_mark.wav");
+    eng.add_soundicon('#', &icon).expect("register icon");
+    let (pcm, _, events) = eng.synth_with_events(&text).expect("icon synth");
+    let _ = std::fs::remove_file(&icon);
+
+    let mark = mark_event(&events);
+    assert_eq!(mark.sample, pcm.len() as u64 - tail_pcm.len() as u64 + in_tail);
+    assert!(mark.sample > 70_560, "the 3.2 s icon comes before the mark: {}", mark.sample);
+    assert_eq!(mark.audio_position_ms, (mark.sample * 1000 / 22_050) as u32);
+    assert_eq!(mark.text_position, mark_event(&no_icon_events).text_position);
+    assert_eq!(pcm, eng.synth(&text).expect("synth").0);
+}

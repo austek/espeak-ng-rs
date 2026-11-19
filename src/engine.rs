@@ -729,38 +729,65 @@ impl EspeakNg {
             return Ok((self.apply_post_fx(pcm), rate));
         }
 
-        // Split into speakable runs and punctuation sound-icon events, then render each:
-        // text runs go through the normal pipeline; icons are spliced in with a
-        // 10 ms lead-in pause (mirroring C's `DoPause(10)` before `EMBED_I`).
+        let (out, _) = self.synth_spliced(text, rate)?;
+        Ok((self.apply_post_fx(out), rate))
+    }
+
+    /// Split into speakable runs and punctuation sound-icon events, then render each:
+    /// text runs go through the normal pipeline; icons are spliced in with a
+    /// 10 ms lead-in pause (mirroring C's `DoPause(10)` before `EMBED_I`).  The `Mark`
+    /// events of markup runs come back at their sample in the spliced audio, before the
+    /// post-fx pass, and at their position in `text`.
+    fn synth_spliced(&self, text: &str, rate: u32) -> Result<(PcmBuffer, Vec<SynthEvent>)> {
+        use crate::synthesize::cgen::MarkerKind;
         let mut table = self.soundicons.clone();
         let base = self.soundicon_base_dir();
         let pieces = crate::soundicon::split_pieces(text, &mut table, &base);
         let pause = rate as usize / 100;
 
         let mut out: PcmBuffer = Vec::new();
+        let mut marks: Vec<SynthEvent> = Vec::new();
+        let mut chars_before = 0u32;
         let n_pieces = pieces.len();
         for (pi, piece) in pieces.into_iter().enumerate() {
             let is_last = pi + 1 == n_pieces;
             match piece {
                 crate::soundicon::Piece::Text(t) => {
-                    if !t.trim().is_empty() {
-                        let mut s = if self.markup { self.synth_markup(&t)? } else { self.synth_text(&t)? };
-                        // Each text run carries its own end-of-utterance trailing
-                        // silence; drop it for non-final runs so splicing icons in
-                        // doesn't accumulate long internal gaps.
-                        if !is_last {
-                            trim_trailing_silence(&mut s);
-                        }
-                        out.extend_from_slice(&s);
+                    let piece_start = chars_before;
+                    chars_before += t.chars().count() as u32;
+                    if t.trim().is_empty() {
+                        continue;
                     }
+                    let start = out.len() as u64;
+                    let mut s = if self.markup {
+                        let (pcm, raw) = self.synth_markup_raw(&t)?;
+                        marks.extend(raw.iter().filter(|(e, _)| e.marker.kind == MarkerKind::Mark).map(|(e, name)| {
+                            let mut ev = marker_event(e, name.as_deref(), 1.0, rate);
+                            ev.sample += start;
+                            ev.audio_position_ms = (ev.sample * 1000 / u64::from(rate.max(1))) as u32;
+                            ev.text_position += piece_start;
+                            ev
+                        }));
+                        pcm
+                    } else {
+                        self.synth_text(&t)?
+                    };
+                    // Each text run carries its own end-of-utterance trailing
+                    // silence; drop it for non-final runs so splicing icons in
+                    // doesn't accumulate long internal gaps.
+                    if !is_last {
+                        trim_trailing_silence(&mut s);
+                    }
+                    out.extend_from_slice(&s);
                 }
                 crate::soundicon::Piece::Icon(idx) => {
+                    chars_before += 1;
                     out.extend(std::iter::repeat_n(0i16, pause));
                     out.extend(crate::soundicon::scale_icon_samples(table.samples(idx)));
                 }
             }
         }
-        Ok((self.apply_post_fx(out), rate))
+        Ok((out, marks))
     }
 
     /// Apply the post-synthesis libsonic tempo/pitch scaling to a rendered PCM
@@ -918,7 +945,8 @@ impl EspeakNg {
     /// best-effort source `text_position`), and `End`/`MsgTerminated`.  With
     /// SSML markup the events come from the clause generator, as C's do.  When
     /// sound icons are present the runs are spliced, so only message-level
-    /// events (and, with markup, `Mark` events scaled to the spliced audio) are produced.
+    /// events (and, with markup, the `Mark` events at their sample in the spliced audio) are
+    /// produced.
     ///
     /// # Note on `text_position`
     /// The audio timing is exact; the source char offset is derived by scanning
@@ -927,25 +955,23 @@ impl EspeakNg {
     pub fn synth_with_events(&self, text: &str) -> Result<(PcmBuffer, u32, Vec<SynthEvent>)> {
         let rate = self.sample_rate();
 
-        // Icon/markup splicing reorders audio; word-level timing isn't tracked
-        // through it, so fall back to a message-terminated event only — plus any
-        // SSML `<mark>` events, taken from the markup render and scaled to the
-        // spliced audio's length.
+        // Icon splicing reorders audio; word-level timing isn't tracked through it, so
+        // fall back to a message-terminated event only — plus the SSML `<mark>` events of
+        // each text run, placed where the run sits in the spliced audio.
         if self.markup && self.soundicons.is_empty() {
             return self.synth_markup_with_events(text, rate);
         }
-        if !self.soundicons.is_empty() || self.markup {
-            let (samples, _) = self.synth(text)?;
+        if !self.soundicons.is_empty() {
+            let (raw, marks) = self.synth_spliced(text, rate)?;
+            let raw_len = raw.len();
+            let samples = self.apply_post_fx(raw);
+            let scale = if raw_len == 0 { 1.0 } else { samples.len() as f64 / raw_len as f64 };
             let mut events = vec![sample_rate_event(rate)];
-            if self.markup {
-                let (marked, _, reader_events) = self.synth_markup_with_events(text, rate)?;
-                let scale = samples.len() as f64 / marked.len().max(1) as f64;
-                events.extend(reader_events.into_iter().filter(|e| matches!(e.kind, EventKind::Mark(_))).map(|mut e| {
-                    e.sample = (e.sample as f64 * scale) as u64;
-                    e.audio_position_ms = (e.sample * 1000 / u64::from(rate.max(1))) as u32;
-                    e
-                }));
-            }
+            events.extend(marks.into_iter().map(|mut e| {
+                e.sample = (e.sample as f64 * scale) as u64;
+                e.audio_position_ms = (e.sample * 1000 / u64::from(rate.max(1))) as u32;
+                e
+            }));
             events.push(terminated_event());
             return Ok((samples, rate, events));
         }
