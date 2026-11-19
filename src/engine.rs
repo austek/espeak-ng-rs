@@ -826,7 +826,32 @@ impl EspeakNg {
 
     /// As `synth_markup_raw`, the audio kept as one chunk per clause.
     fn synth_markup_chunks(&self, text: &str) -> Result<(Vec<PcmBuffer>, Vec<NamedEvent>)> {
-        let translator = self.make_translator()?;
+        let parts = self.render_markup(text, None)?;
+        Ok((parts.chunks, parts.named))
+    }
+
+    /// Synthesize markup clause by clause with what the C API reports besides the audio: the
+    /// events, the phoneme string of each clause (`espeak_SetPhonemeTrace`) and the clause the
+    /// reader was in at each URI callback.  No post-fx, as in
+    /// [`synth_streaming_with_events`](Self::synth_streaming_with_events).
+    ///
+    /// # Errors
+    /// As [`synth`](Self::synth).
+    pub fn synth_markup_clauses(&self, text: &str, trace: Option<PhonemeTrace>) -> Result<MarkupSynthesis> {
+        let rate = self.sample_rate();
+        let parts = self.render_markup(text, trace)?;
+        let mut events = vec![sample_rate_event(rate)];
+        events.extend(parts.named.iter().map(|(e, name)| marker_event(e, name.as_deref(), 1.0, rate)));
+        events.push(terminated_event());
+        Ok(MarkupSynthesis { chunks: parts.chunks, events, phoneme_lines: parts.lines, uri_clauses: parts.uri_clauses })
+    }
+
+    fn render_markup(&self, text: &str, trace: Option<PhonemeTrace>) -> Result<MarkupParts> {
+        let mut translator = self.make_translator()?;
+        if let Some(t) = trace.as_ref().filter(|t| t.ipa) {
+            translator.options.ipa_separator = t.separator;
+            translator.options.ipa_tie = t.tie;
+        }
         let mut phdata = self.load_phdata()?;
         crate::translate::select_phoneme_table(&mut phdata, &self.data_dir, self.voice_spec.effective_lang())
             .map_err(|_| Error::VoiceNotFound(self.voice_spec.effective_lang().to_string()))?;
@@ -854,7 +879,12 @@ impl EspeakNg {
                 .then(||doc.mark_name(e.marker.value).unwrap_or_default().to_string());
             (e, name)
         });
-        Ok((pcm, named.collect()))
+        let lines = match &trace {
+            Some(t) if t.ipa => doc.ipa_lines(false)?,
+            Some(t) => doc.mnemonic_lines(t.separator, t.tie)?,
+            None => Vec::new(),
+        };
+        Ok(MarkupParts { chunks: pcm, named: named.collect(), lines, uri_clauses: doc.uri_clauses.clone() })
     }
 
     /// Synthesize a plain (icon-free) text run through the normal pipeline.
@@ -1400,6 +1430,33 @@ fn event_at(kind: EventKind, text_position: u32, sample: usize, rate: u32) -> Sy
         audio_position_ms: (sample as u64 * 1000 / u64::from(rate.max(1))) as u32,
         sample: sample as u64,
     }
+}
+
+/// The form of the phoneme line of each clause (`espeak_SetPhonemeTrace`'s mode).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PhonemeTrace {
+    pub ipa: bool,
+    pub separator: Option<char>,
+    pub tie: Option<char>,
+}
+
+/// Markup synthesized clause by clause; see [`EspeakNg::synth_markup_clauses`].
+#[derive(Debug, Clone)]
+pub struct MarkupSynthesis {
+    /// The audio of each clause.
+    pub chunks: Vec<PcmBuffer>,
+    pub events: Vec<SynthEvent>,
+    /// One phoneme line per clause; empty without a [`PhonemeTrace`].
+    pub phoneme_lines: Vec<String>,
+    /// The clause the reader was in at each URI callback, in call order.
+    pub uri_clauses: Vec<usize>,
+}
+
+struct MarkupParts {
+    chunks: Vec<PcmBuffer>,
+    named: Vec<NamedEvent>,
+    lines: Vec<String>,
+    uri_clauses: Vec<usize>,
 }
 
 /// A generator event with the `<mark>` name its value addresses.

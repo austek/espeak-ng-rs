@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering;
 use std::sync::OnceLock;
 
 use crate::ops::{self, Job};
-use crate::delivery::{deliver, trace_only, Target, Trace};
+use crate::delivery::{deliver, Flow, Target, Trace};
 use crate::phonemes;
 use crate::ptr::*;
 use crate::settings::Settings;
@@ -181,26 +181,45 @@ fn synthesize(req: Request, uid_out: *mut c_uint, user_data: *mut c_void) -> c_i
         position_type: req.position_type,
         buflength_ms,
     };
-    let rendered = match ops::render(&job) {
-        Ok(r) => r,
-        Err(e) => return error_status(&e),
-    };
     let callbacks = state::callbacks();
+    let plain_text = req_flags & SSML == 0;
+    let target = callbacks.synth.map(|callback| Target { callback, uid, user_data, retrieval, plain_text });
     let print = trace_mode & 0xf != 0;
-    let lines = if print || callbacks.phoneme.is_some() {
-        ops::phoneme_lines(&lookup, &rendered.text, req_flags, trace_mode)
-    } else {
-        Vec::new()
-    };
-    let trace = Trace { lines, print, stream: trace_stream, callback: callbacks.phoneme };
-    match callbacks.synth {
-        Some(callback) => {
-            let plain_text = req_flags & SSML == 0;
-            deliver(&Target { callback, uid, user_data, retrieval, plain_text }, &rendered.clauses, &trace);
+    let wants_lines = print || callbacks.phoneme.is_some();
+    let mut known: Vec<i32> = Vec::new();
+    let mut from = 0;
+    loop {
+        let rendered = match ops::render(&job, &known, wants_lines.then_some(trace_mode)) {
+            Ok(r) => r,
+            Err(e) => return error_status(&e),
+        };
+        let lines = match &rendered.markup {
+            Some(markup) => markup.lines.clone(),
+            None if wants_lines => ops::phoneme_lines(&lookup, &rendered.text, trace_mode),
+            None => Vec::new(),
+        };
+        let trace = Trace { lines, print, stream: trace_stream, callback: callbacks.phoneme };
+        let mut before = |k: usize| answer_uri_calls(&rendered, &mut known, k, callbacks.uri);
+        match deliver(target.as_ref(), &rendered.clauses, &trace, from, &mut before) {
+            Flow::Done => return ENS_OK,
+            Flow::Restart(k) => from = k,
         }
-        None => trace_only(&trace),
     }
-    ENS_OK
+}
+
+/// Call the URI callback for the `<audio>` tags the reader met in clauses up to `k`, as C does
+/// while it reads a clause.  The rendering assumed the callback accepts each one; true when one
+/// refused, which means the clauses from `k` on must be rendered again.
+fn answer_uri_calls(rendered: &ops::Rendered, known: &mut Vec<i32>, k: usize, uri: Option<UriCallback>) -> bool {
+    let (Some(markup), Some(callback)) = (&rendered.markup, uri) else { return false };
+    while let Some(call) = markup.uri_calls.get(known.len()).filter(|c| c.clause <= k) {
+        let reply = ops::call_uri(callback, &call.uri, call.base.as_deref());
+        known.push(reply);
+        if reply != 0 {
+            return true;
+        }
+    }
+    false
 }
 
 unsafe fn synth_text(

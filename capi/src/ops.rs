@@ -100,40 +100,75 @@ pub struct Job {
     pub buflength_ms: i32,
 }
 
+/// A `<audio src>` the reader handed to the URI callback.
+#[derive(Clone, Debug)]
+pub struct UriCall {
+    /// The clause the reader was in.
+    pub clause: usize,
+    pub uri: String,
+    pub base: Option<String>,
+}
+
+/// What only markup has: a phoneme line per clause and the reader's URI callbacks.
+pub struct MarkupReport {
+    pub lines: Vec<String>,
+    pub uri_calls: Vec<UriCall>,
+}
+
 pub struct Rendered {
     /// The buffers of each clause, in order.
     pub clauses: Vec<Vec<Block>>,
     /// The text that was spoken, after `position` skipping.
     pub text: String,
+    pub markup: Option<MarkupReport>,
 }
 
-/// The phoneme string of each clause, as C prints it to the trace stream and
-/// hands it to the phoneme callback.  Markup is not interpreted here, so an
-/// SSML request has no lines.
-pub fn phoneme_lines(settings: &Settings, text: &str, flags: u32, mode: i32) -> Vec<String> {
-    if flags & SSML != 0 {
-        return Vec::new();
-    }
+/// The phoneme string of each clause of plain text, as C prints it to the trace
+/// stream and hands it to the phoneme callback.
+pub fn phoneme_lines(settings: &Settings, text: &str, mode: i32) -> Vec<String> {
     crate::phonemes::clauses(settings, text, mode)
         .map(|clauses| clauses.into_iter().map(|c| c.phonemes).collect())
         .unwrap_or_default()
 }
 
-/// `uri_callback(1, uri, xmlbase)` of the reader; a URI with an interior NUL is refused.
-fn uri_hook(callback: UriCallback) -> espeak_ng::UriHook {
+/// `espeak_SetPhonemeTrace`'s mode as the engine's trace format.
+pub fn trace_format(mode: i32) -> espeak_ng::PhonemeTrace {
+    let glyph = char::from_u32(((mode >> 8) & 0xffff) as u32).filter(|&c| c != '\0');
+    let tie = mode & crate::phonemes::PHONEMES_TIE != 0;
+    espeak_ng::PhonemeTrace {
+        ipa: mode & crate::phonemes::PHONEMES_IPA != 0,
+        separator: glyph.filter(|_| !tie),
+        tie: glyph.filter(|_| tie),
+    }
+}
+
+/// `uri_callback(1, uri, xmlbase)`; a URI with an interior NUL is refused.
+pub fn call_uri(callback: UriCallback, uri: &str, base: Option<&str>) -> i32 {
+    let Ok(uri) = CString::new(uri) else { return 1 };
+    let base = base.and_then(|b| CString::new(b).ok());
+    let base_ptr = base.as_ref().map_or(std::ptr::null(), |b| b.as_ptr());
+    // SAFETY: both pointers are NUL-terminated strings that outlive the call (or null).
+    unsafe { callback(1, uri.as_ptr(), base_ptr) }
+}
+
+type UriLog = std::sync::Arc<std::sync::Mutex<Vec<(String, Option<String>)>>>;
+
+/// The reader's URI hook: it records each call and answers from `known` (the replies the C
+/// callback gave already), accepting any later one until the callback is asked in its turn.
+fn recording_hook(known: Vec<i32>, log: UriLog) -> espeak_ng::UriHook {
     Box::new(move |uri, base| {
-        let Ok(uri) = CString::new(uri) else { return 1 };
-        let base = base.and_then(|b| CString::new(b).ok());
-        let base_ptr = base.as_ref().map_or(std::ptr::null(), |b| b.as_ptr());
-        // SAFETY: both pointers are NUL-terminated strings that outlive the call (or null).
-        unsafe { callback(1, uri.as_ptr(), base_ptr) }
+        let mut calls = log.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let reply = known.get(calls.len()).copied().unwrap_or(0);
+        calls.push((uri.to_string(), base.map(str::to_string)));
+        reply
     })
 }
 
-fn engine_for(job: &Job) -> espeak_ng::Result<EspeakNg> {
+fn engine_for(job: &Job, known: &[i32], log: &UriLog) -> espeak_ng::Result<EspeakNg> {
     let mut engine = job.settings.build_engine()?;
     engine.set_markup(job.flags & SSML != 0);
-    engine.set_uri_callback(crate::state::callbacks().uri.map(uri_hook));
+    let wants_uri = crate::state::callbacks().uri.is_some();
+    engine.set_uri_callback(wants_uri.then(|| recording_hook(known.to_vec(), log.clone())));
     engine.set_no_final_pause(job.flags & ENDPAUSE == 0);
     Ok(engine)
 }
@@ -145,9 +180,15 @@ fn skipped(job: &Job) -> String {
     }
 }
 
-pub fn render(job: &Job) -> espeak_ng::Result<Rendered> {
-    let engine = engine_for(job)?;
+/// Render the job.  For markup, `trace` asks for the phoneme line of each clause and `known` are
+/// the replies the URI callback gave so far.
+pub fn render(job: &Job, known: &[i32], trace: Option<i32>) -> espeak_ng::Result<Rendered> {
+    let log = UriLog::default();
+    let engine = engine_for(job, known, &log)?;
     let text = skipped(job);
+    if job.flags & SSML != 0 {
+        return render_markup(job, &engine, text, trace, &log);
+    }
     let mut chunks: Vec<Vec<i16>> = Vec::new();
     let mut events = Vec::new();
     let rate = engine.synth_streaming_with_events(&text, |chunk, _final, ev| {
@@ -157,7 +198,21 @@ pub fn render(job: &Job) -> espeak_ng::Result<Rendered> {
     })?;
     let size = buffer_samples(job.buflength_ms, rate);
     let events: Vec<Ev> = events.iter().map(Ev::from).collect();
-    Ok(Rendered { clauses: build(&chunks, &events, size), text })
+    Ok(Rendered { clauses: build(&chunks, &events, size), text, markup: None })
+}
+
+fn render_markup(job: &Job, engine: &EspeakNg, text: String, trace: Option<i32>, log: &UriLog) -> espeak_ng::Result<Rendered> {
+    let done = engine.synth_markup_clauses(&text, trace.map(trace_format))?;
+    let size = buffer_samples(job.buflength_ms, engine.sample_rate());
+    let events: Vec<Ev> = done.events.iter().map(Ev::from).collect();
+    let logged = log.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let uri_calls = logged
+        .iter()
+        .zip(&done.uri_clauses)
+        .map(|((uri, base), &clause)| UriCall { clause, uri: uri.clone(), base: base.clone() })
+        .collect();
+    let markup = MarkupReport { lines: done.phoneme_lines, uri_calls };
+    Ok(Rendered { clauses: build(&done.chunks, &events, size), text, markup: Some(markup) })
 }
 
 /// Compile `<lang>_list`/`<lang>_rules` from `source` (default: the data

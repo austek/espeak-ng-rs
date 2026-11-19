@@ -141,26 +141,48 @@ fn lines_before(trace: &Trace, k: usize, n: usize) -> &[String] {
     &trace.lines[from..to]
 }
 
-/// The trace of a request that has no synth callback.
-pub fn trace_only(trace: &Trace) {
-    trace.lines.iter().for_each(|line| emit(trace, line));
+/// How a delivery ended.
+pub enum Flow {
+    /// Every clause went out (or the callback or `espeak_Cancel` stopped it early).
+    Done,
+    /// `before` asked to start over at this clause with a fresh rendering.
+    Restart(usize),
 }
 
-/// Deliver every clause's blocks, then the end-of-data call.  Returns true
-/// when the callback or `espeak_Cancel` stopped the synthesis early.
-pub fn deliver(t: &Target, clauses: &[Vec<Block>], trace: &Trace) -> bool {
-    for (k, blocks) in clauses.iter().enumerate() {
+/// Deliver the clauses from `from` on: `before(k)` runs while the reader is in clause `k`,
+/// then the clause's trace line and blocks go out; the end-of-data call closes a request
+/// that has a synth callback (`target`).  `before` returns true to restart at `k`.
+pub fn deliver(
+    target: Option<&Target>,
+    clauses: &[Vec<Block>],
+    trace: &Trace,
+    from: usize,
+    before: &mut dyn FnMut(usize) -> bool,
+) -> Flow {
+    for (k, blocks) in clauses.iter().enumerate().skip(from) {
+        if before(k) {
+            return Flow::Restart(k);
+        }
         lines_before(trace, k, clauses.len()).iter().for_each(|line| emit(trace, line));
+        let Some(t) = target else { continue };
         for block in blocks {
             if CANCEL.load(Ordering::SeqCst) || deliver_block(t, block) {
-                return true;
+                return Flow::Done;
             }
         }
     }
-    let mut end = c_events(t, &[], &mut Vec::new());
-    let stopped = call(t, None, &mut end);
-    if t.retrieval {
-        terminated(t);
+    if clauses.is_empty() {
+        trace.lines.iter().for_each(|line| emit(trace, line));
     }
-    stopped
+    if before(clauses.len()) {
+        return Flow::Restart(clauses.len());
+    }
+    if let Some(t) = target {
+        let mut end = c_events(t, &[], &mut Vec::new());
+        call(t, None, &mut end);
+        if t.retrieval {
+            terminated(t);
+        }
+    }
+    Flow::Done
 }

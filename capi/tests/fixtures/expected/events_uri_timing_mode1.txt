@@ -1,0 +1,69 @@
+uri type=1 uri=a.wav base=(null)
+cb 0 samples=1324 wav=data
+  ev type=8 uid=1 pos=0 len=0 apos=0 ud=UD
+  ev type=2 uid=1 pos=8 len=0 apos=0 num=1 ud=UD
+  ev type=1 uid=1 pos=8 len=2 apos=0 num=1 ud=UD
+cb 1 samples=1324 wav=data
+cb 2 samples=1324 wav=data
+cb 3 samples=1324 wav=data
+cb 4 samples=734 wav=data
+  ev type=4 uid=1 pos=29 len=0 apos=273 name=a.wav ud=UD
+  ev type=5 uid=1 pos=28 len=0 apos=273 ud=UD
+cb 5 samples=0 wav=data
+  ev type=5 uid=1 pos=41 len=0 apos=273 ud=UD
+uri type=1 uri=b.wav base=(null)
+cb 6 samples=1324 wav=data
+  ev type=1 uid=1 pos=45 len=4 apos=273 num=2 ud=UD
+cb 7 samples=1324 wav=data
+cb 8 samples=1324 wav=data
+cb 9 samples=1324 wav=data
+cb 10 samples=1324 wav=data
+cb 11 samples=1324 wav=data
+  ev type=1 uid=1 pos=50 len=8 apos=621 num=3 ud=UD
+cb 12 samples=1324 wav=data
+cb 13 samples=1324 wav=data
+cb 14 samples=1324 wav=data
+cb 15 samples=1324 wav=data
+cb 16 samples=1324 wav=data
+cb 17 samples=1324 wav=data
+cb 18 samples=1324 wav=data
+cb 19 samples=1324 wav=data
+cb 20 samples=1324 wav=data
+  ev type=1 uid=1 pos=59 len=4 apos=1119 num=4 ud=UD
+cb 21 samples=1324 wav=data
+cb 22 samples=1324 wav=data
+cb 23 samples=1324 wav=data
+  ev type=1 uid=1 pos=64 len=2 apos=1335 num=5 ud=UD
+cb 24 samples=1324 wav=data
+cb 25 samples=1324 wav=data
+cb 26 samples=1324 wav=data
+  ev type=1 uid=1 pos=67 len=4 apos=1492 num=6 ud=UD
+cb 27 samples=1324 wav=data
+cb 28 samples=1324 wav=data
+  ev type=1 uid=1 pos=72 len=6 apos=1620 num=7 ud=UD
+cb 29 samples=1324 wav=data
+cb 30 samples=1324 wav=data
+cb 31 samples=1324 wav=data
+cb 32 samples=1324 wav=data
+cb 33 samples=1324 wav=data
+cb 34 samples=681 wav=data
+  ev type=4 uid=1 pos=99 len=0 apos=1985 name=b.wav ud=UD
+  ev type=5 uid=1 pos=98 len=0 apos=1985 ud=UD
+cb 35 samples=1324 wav=data
+  ev type=1 uid=1 pos=101 len=3 apos=1985 num=8 ud=UD
+cb 36 samples=1324 wav=data
+cb 37 samples=1324 wav=data
+cb 38 samples=1324 wav=data
+cb 39 samples=1324 wav=data
+cb 40 samples=1324 wav=data
+cb 41 samples=1324 wav=data
+cb 42 samples=1324 wav=data
+cb 43 samples=1324 wav=data
+cb 44 samples=1170 wav=data
+  ev type=5 uid=1 pos=111 len=0 apos=2579 ud=UD
+cb 45 samples=154 wav=data
+  ev type=5 uid=1 pos=112 len=0 apos=2586 ud=UD
+cb 46 samples=-1 wav=null
+cb 47 samples=-1 wav=null
+  ev type=6 uid=1 pos=0 len=0 apos=0 ud=UD
+synth=0 uid=1 samples=57023 fnv=73bb474265913551

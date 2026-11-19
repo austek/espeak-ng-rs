@@ -146,6 +146,8 @@ pub struct SsmlDocument<'a> {
     others: Vec<(String, Translator)>,
     pub clauses: Vec<TranslatedClause>,
     names: NameData,
+    /// The clause the reader was in at each URI callback, in call order.
+    pub uri_clauses: Vec<usize>,
 }
 
 impl SsmlDocument<'_> {
@@ -241,10 +243,17 @@ impl Translator {
         let mut state = SsmlState::new(self.speech_defaults(settings), self.base_voice(&voices), "");
         state.voice.current_voice_id = state.voice.voice_from_stack(&catalog, 1);
         let mut reader = ClauseReader::new(text, self.reader_options(), SsmlTags::new(state, env));
-        let mut doc = SsmlDocument { base: self, others: Vec::new(), clauses: Vec::new(), names: NameData::default() };
+        let mut doc = SsmlDocument {
+            base: self,
+            others: Vec::new(),
+            clauses: Vec::new(),
+            names: NameData::default(),
+            uri_clauses: Vec::new(),
+        };
         let mut voice = 0;
         let mut carry = ClauseCarry::default();
         while !reader.at_end() {
+            reader.tags_mut().state.reading_clause = doc.clauses.len();
             let clause = reader.next_clause(&ClauseLang(doc.translator(voice)));
             let translated = doc.translator(voice).translate_source_clause(clause, voice, &mut carry)?;
             if let Some(id) = &translated.voice_after {
@@ -256,6 +265,7 @@ impl Translator {
             doc.clauses.push(translated);
         }
         doc.names = reader.tags_mut().state.names.clone();
+        doc.uri_clauses = std::mem::take(&mut reader.tags_mut().state.uri_clauses);
         Ok(doc)
     }
 

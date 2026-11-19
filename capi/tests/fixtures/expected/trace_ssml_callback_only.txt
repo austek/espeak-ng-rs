@@ -1,0 +1,26 @@
+phoneme-cb [h'aI D'e@]
+cb 0 samples=1324 wav=data
+  ev type=8 uid=0 pos=0 len=0 apos=0 ud=(null)
+  ev type=2 uid=0 pos=8 len=0 apos=0 num=1 ud=(null)
+  ev type=1 uid=0 pos=8 len=2 apos=0 num=1 ud=(null)
+cb 1 samples=1324 wav=data
+cb 2 samples=1324 wav=data
+cb 3 samples=1324 wav=data
+  ev type=1 uid=0 pos=11 len=5 apos=230 num=2 ud=(null)
+cb 4 samples=1324 wav=data
+cb 5 samples=1324 wav=data
+cb 6 samples=1324 wav=data
+cb 7 samples=1324 wav=data
+cb 8 samples=1324 wav=data
+cb 9 samples=1324 wav=data
+cb 10 samples=1324 wav=data
+cb 11 samples=1324 wav=data
+cb 12 samples=1324 wav=data
+cb 13 samples=1324 wav=data
+cb 14 samples=1046 wav=data
+  ev type=5 uid=0 pos=23 len=0 apos=888 ud=(null)
+phoneme-cb []
+cb 15 samples=154 wav=data
+  ev type=5 uid=0 pos=24 len=0 apos=895 ud=(null)
+cb 16 samples=-1 wav=null
+samples=19736

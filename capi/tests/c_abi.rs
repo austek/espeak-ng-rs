@@ -59,6 +59,9 @@ fn closing_quote_scenarios() -> Vec<Scenario> {
 
 const MARK_TEXT: &str = r#"One <mark name="a"/> two. Three, four."#;
 const AUDIO_TEXT: &str = r#"Hi <audio src="a.wav">there</audio> you."#;
+/// The URI callback runs while the reader is in the clause that holds the tag, after the
+/// buffers of the clauses before it.
+const URI_TEXT: &str = r#"<speak>Hi <audio src="a.wav">there</audio>. Next sentence here is long enough. <audio src="b.wav"/> end.</speak>"#;
 const VOICE_TEXT: &str = r#"<speak>Hi <voice name="de">Hallo Welt.</voice> bye.</speak>"#;
 
 /// One scenario per event kind and delivery path, recorded from C.  The last
@@ -66,7 +69,10 @@ const VOICE_TEXT: &str = r#"<speak>Hi <voice name="de">Hallo Welt.</voice> bye.<
 /// plus 0x100 to use `espeak_ng_SetPhonemeEvents` and 0x200 for a URI
 /// callback that refuses.
 fn event_scenarios() -> Vec<Scenario> {
-    let rows: [(&str, &str, &str, &str, &str, &str); 11] = [
+    let rows: [(&str, &str, &str, &str, &str, &str); 14] = [
+        ("uri_timing_mode1", "1", "en", "0x1010", URI_TEXT, "0"),
+        ("uri_timing_mode2", "2", "en", "0x1010", URI_TEXT, "0"),
+        ("uri_timing_refused", "1", "en", "0x1010", URI_TEXT, "512"),
         ("mark_mode1", "1", "en", "0x1010", MARK_TEXT, "0"),
         ("mark_mode2", "2", "en", "0x1010", MARK_TEXT, "0"),
         ("play_accepted", "1", "en", "0x1010", AUDIO_TEXT, "0"),
@@ -94,10 +100,36 @@ fn trace_scenarios() -> Vec<Scenario> {
         ("ipa_de_callback", "2", "de", "Guten Tag. Wie geht es dir?", "1"),
         ("callback_only", "0", "en", "Hi. Bye.", "1"),
     ];
-    rows.iter()
+    let mut list: Vec<Scenario> = rows
+        .iter()
         .map(|(name, mode, voice, text, callback)| {
             let fixture: &'static str = Box::leak(format!("expected/trace_{name}.txt").into_boxed_str());
             Scenario { fixture, args: args(&["trace", mode, voice, "0x1000", text, callback]) }
+        })
+        .collect();
+    list.extend(ssml_trace_scenarios());
+    list
+}
+
+const SSML_TRACE_TEXT: &str = "<speak>Hi there.</speak>";
+const SSML_TRACE_CLAUSES: &str = r#"<speak>Hi <voice name="de">Hallo Welt.</voice> bye. <break time="200ms"/> Done now.</speak>"#;
+
+/// The trace of markup: one line per clause, empty clauses included, in every mode.
+fn ssml_trace_scenarios() -> Vec<Scenario> {
+    let rows: [(&str, &str, &str, &str, &str, &str); 8] = [
+        ("ssml_mode0", "0", "en", "0x1010", SSML_TRACE_TEXT, "0"),
+        ("ssml_mode1", "1", "en", "0x1010", SSML_TRACE_TEXT, "0"),
+        ("ssml_mode1_callback", "1", "en", "0x1010", SSML_TRACE_TEXT, "1"),
+        ("ssml_mode2", "2", "en", "0x1010", SSML_TRACE_TEXT, "0"),
+        ("ssml_mode3_callback", "3", "en", "0x1010", SSML_TRACE_TEXT, "1"),
+        ("ssml_callback_only", "0", "en", "0x1010", SSML_TRACE_TEXT, "1"),
+        ("ssml_clauses_mode1", "1", "en", "0x1010", SSML_TRACE_CLAUSES, "1"),
+        ("ssml_clauses_ipa", "2", "en", "0x1010", SSML_TRACE_CLAUSES, "0"),
+    ];
+    rows.iter()
+        .map(|(name, mode, voice, flags, text, callback)| {
+            let fixture: &'static str = Box::leak(format!("expected/trace_{name}.txt").into_boxed_str());
+            Scenario { fixture, args: args(&["trace", mode, voice, flags, text, callback]) }
         })
         .collect()
 }
@@ -173,7 +205,25 @@ event_kind_tests! {
     phoneme_trace_prints_one_line_per_clause => "expected/trace_mnemonics.txt",
     phoneme_trace_in_ipa_with_the_phoneme_callback => "expected/trace_ipa_de_callback.txt",
     phoneme_callback_without_a_trace => "expected/trace_callback_only.txt",
+    uri_callback_runs_with_its_clause_in_retrieval_mode => "expected/events_uri_timing_mode1.txt",
+    uri_callback_runs_with_its_clause_in_synchronous_mode => "expected/events_uri_timing_mode2.txt",
+    uri_callback_runs_with_its_clause_when_it_refuses => "expected/events_uri_timing_refused.txt",
+    ssml_trace_mode0 => "expected/trace_ssml_mode0.txt",
+    ssml_trace_mode1 => "expected/trace_ssml_mode1.txt",
+    ssml_trace_mode1_callback => "expected/trace_ssml_mode1_callback.txt",
+    ssml_trace_mode2 => "expected/trace_ssml_mode2.txt",
+    ssml_trace_mode3_callback => "expected/trace_ssml_mode3_callback.txt",
+    ssml_phoneme_callback_without_a_trace => "expected/trace_ssml_callback_only.txt",
+    ssml_trace_one_line_per_clause => "expected/trace_ssml_clauses_mode1.txt",
+    ssml_trace_in_ipa_per_clause => "expected/trace_ssml_clauses_ipa.txt",
 }
+
+/// Fixtures the recorder leaves alone: they predate the probe's current form.
+const KEEP_RECORDED: &[&str] = &[
+    "expected/events_retrieval.txt",
+    "expected/events_no_final_pause.txt",
+    "expected/events_sync_de.txt",
+];
 
 /// Records the expectations from the reference C library.  Needs
 /// `CAPI_C_BUILD` (the C build directory) and `CAPI_C_INCLUDE` (its include
@@ -194,7 +244,7 @@ fn record_fixtures_from_c() {
     extra.extend(libs.iter().map(String::as_str));
     extra.extend(["-lm", "-lpthread", "-lstdc++"]);
     compile_c(&manifest_dir().join("tests/c/probe.c"), &out, &extra);
-    for s in scenarios() {
+    for s in scenarios().into_iter().filter(|s| !KEEP_RECORDED.contains(&s.fixture)) {
         let text = run_scenario(&out, &s);
         std::fs::create_dir_all(fixture_path("expected")).expect("mkdir");
         std::fs::write(fixture_path(s.fixture), text).expect("write fixture");

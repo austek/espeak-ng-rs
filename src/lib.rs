@@ -198,7 +198,8 @@ pub use soundicon::{SoundIcon, SoundIconTable};
 ///
 /// Re-exported from [`engine`] for convenience.
 pub use engine::{EspeakNg, Builder, Parameter, VoiceSpec, VoiceSpecBuilder, Gender,
-                 SynthEvent, EventKind, OutputMode, TextToPhonemesOptions, UriHook};
+                 SynthEvent, EventKind, OutputMode, TextToPhonemesOptions, UriHook,
+                 PhonemeTrace, MarkupSynthesis};
 
 // ---------------------------------------------------------------------------
 // Convenience functions

@@ -164,6 +164,10 @@ pub struct SsmlState {
     pub names: NameData,
     pub option_punctuation: i32,
     pub option_capitals: i32,
+    /// The clause the reader is in, for [`uri_clauses`](Self::uri_clauses).
+    pub reading_clause: usize,
+    /// The clause the reader was in at each URI callback, in call order.
+    pub uri_clauses: Vec<usize>,
 }
 
 impl SsmlState {
@@ -187,6 +191,8 @@ impl SsmlState {
             names: NameData::default(),
             option_punctuation: defaults[P_PUNCTUATION],
             option_capitals: defaults[P_CAPITALS],
+            reading_clause: 0,
+            uri_clauses: Vec::new(),
         }
     }
 
@@ -452,6 +458,7 @@ fn audio_source(st: &mut SsmlState, env: &SsmlEnv, sp: usize, src: &str, out: &m
         }
         Some(callback) => {
             let ix = st.names.add(src);
+            st.uri_clauses.push(st.reading_clause);
             if callback(src, st.xmlbase.as_deref()) == 0 {
                 out.push_str(&format!("\u{1}{ix}U"));
                 st.param_stack[sp].parameter[P_SILENCE] = 1;

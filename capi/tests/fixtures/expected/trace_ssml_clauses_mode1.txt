@@ -1,0 +1,67 @@
+h'aI
+phoneme-cb [h'aI]
+cb 0 samples=1324 wav=data
+  ev type=8 uid=0 pos=0 len=0 apos=0 ud=(null)
+  ev type=2 uid=0 pos=8 len=0 apos=0 num=1 ud=(null)
+  ev type=1 uid=0 pos=8 len=2 apos=0 num=1 ud=(null)
+cb 1 samples=1324 wav=data
+cb 2 samples=1324 wav=data
+cb 3 samples=1324 wav=data
+cb 4 samples=734 wav=data
+  ev type=5 uid=0 pos=26 len=0 apos=273 ud=(null)
+  ev type=8 uid=0 pos=0 len=0 apos=273 ud=(null)
+h'alo: v'Elt
+phoneme-cb [h'alo: v'Elt]
+cb 5 samples=1324 wav=data
+  ev type=1 uid=0 pos=28 len=5 apos=273 num=2 ud=(null)
+cb 6 samples=1324 wav=data
+cb 7 samples=1324 wav=data
+cb 8 samples=1324 wav=data
+cb 9 samples=1324 wav=data
+  ev type=1 uid=0 pos=34 len=4 apos=534 num=3 ud=(null)
+cb 10 samples=1324 wav=data
+cb 11 samples=1324 wav=data
+cb 12 samples=1324 wav=data
+cb 13 samples=1324 wav=data
+cb 14 samples=1324 wav=data
+cb 15 samples=1324 wav=data
+cb 16 samples=203 wav=data
+  ev type=5 uid=0 pos=45 len=0 apos=943 ud=(null)
+  ev type=8 uid=0 pos=0 len=0 apos=943 ud=(null)
+b'aI
+phoneme-cb [b'aI]
+cb 17 samples=1324 wav=data
+  ev type=1 uid=0 pos=48 len=3 apos=943 num=4 ud=(null)
+cb 18 samples=1324 wav=data
+cb 19 samples=1324 wav=data
+cb 20 samples=1324 wav=data
+cb 21 samples=1324 wav=data
+cb 22 samples=1324 wav=data
+cb 23 samples=1324 wav=data
+cb 24 samples=528 wav=data
+  ev type=5 uid=0 pos=72 len=0 apos=1387 ud=(null)
+d'Vn n'aU
+phoneme-cb [d'Vn n'aU]
+cb 25 samples=1324 wav=data
+  ev type=1 uid=0 pos=75 len=4 apos=1387 num=5 ud=(null)
+cb 26 samples=1324 wav=data
+cb 27 samples=1324 wav=data
+cb 28 samples=1324 wav=data
+  ev type=1 uid=0 pos=80 len=3 apos=1574 num=6 ud=(null)
+cb 29 samples=1324 wav=data
+cb 30 samples=1324 wav=data
+cb 31 samples=1324 wav=data
+cb 32 samples=1324 wav=data
+cb 33 samples=1324 wav=data
+cb 34 samples=1324 wav=data
+cb 35 samples=1324 wav=data
+cb 36 samples=1324 wav=data
+cb 37 samples=1324 wav=data
+cb 38 samples=1123 wav=data
+  ev type=5 uid=0 pos=90 len=0 apos=2218 ud=(null)
+
+phoneme-cb []
+cb 39 samples=154 wav=data
+  ev type=5 uid=0 pos=91 len=0 apos=2225 ud=(null)
+cb 40 samples=-1 wav=null
+samples=49082
