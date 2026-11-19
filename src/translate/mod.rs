@@ -2510,14 +2510,22 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     chars.next();
                     prev_char = next;
                 } else if next == '\'' && grammar.apostrophe & 2 == 0 && is_char_plus_apostrophe(&word, grammar) {
-                    // A single letter and its apostrophe are a word that takes the word after
-                    // them: C skips the blank that follows the apostrophe.
+                    // A single letter and its apostrophe are a word that takes what follows
+                    // them: C skips the blank behind the apostrophe, whatever comes after it,
+                    // and then reads a dash that stood between blanks as a pause.
                     chars.next();
                     word.push('\'');
                     prev_char = '\'';
-                    let mut after = chars.clone();
-                    if after.next() == Some(' ') && after.next().is_some_and(is_word_letter) {
+                    let mut behind = chars.clone();
+                    let spaced_dash = (behind.next(), behind.next(), behind.next()) == (Some(' '), Some('-'), Some(' '));
+                    if chars.clone().next() == Some(' ') && !spaced_dash {
                         chars.next();
+                        if chars.clone().next() == Some('.') {
+                            chars.next();
+                            word.push('.');
+                            word_break = true;
+                            break;
+                        }
                     }
                 } else if grammar.word_punct.contains(&next)
                     && word_punct_stays(next, chars.clone().skip(1))
@@ -2672,6 +2680,12 @@ where
     let after2 = la.next();
     after.map(|c| c.is_lowercase()).unwrap_or(false)
         && after2.map(|c| c.is_alphabetic()).unwrap_or(false)
+}
+
+/// A mark that follows a word's apostrophe without a blank stays in the word in C (`σ'(`), and
+/// `Unpronouncable` takes a word with such a character in it for pronounceable.
+fn punctuation_glued_to_apostrophe(word: &str, next: Option<&Token>) -> bool {
+    word.ends_with('\'') && matches!(next, Some(Token::Punctuation(c)) if c.is_ascii_punctuation() || is_bracket(*c))
 }
 
 /// C's `char_plus_apostrophe` test: `word` is one letter of the language's set.
@@ -9888,7 +9902,7 @@ pub(crate) fn build_translate_entries(
                         wr.dict_flags = 0;
                         spelled_by_letters = true;
                     }
-                } else if lower.contains('.') && (!wr.found_in_list || (skip_words == 0 && is_dotted_letters(&lower) && !dict_lists_word(word, dict, options))) {
+                } else if lower.contains('.') && !lower.ends_with("'.") && (!wr.found_in_list || (skip_words == 0 && is_dotted_letters(&lower) && !dict_lists_word(word, dict, options))) {
                     // Single letters joined by dots (`e.g`, `U.S.A`) are one
                     // word that no list names; it is spelled out.
                     if let Some(spelled) = spell_word_letters_or_foreign(
@@ -9927,6 +9941,7 @@ pub(crate) fn build_translate_entries(
                 else if !wr.found_in_list
                     && !dict_knows_word(&lower, dict)
                     && !dict_lists_word(word, dict, options)
+                    && !punctuation_glued_to_apostrophe(&lower, tokens.get(token_ix + 1))
                     && is_unpronounceable(&lower, &next_word, dict, options)
                 {
                     if let Some((letters, rest, encoded)) =
