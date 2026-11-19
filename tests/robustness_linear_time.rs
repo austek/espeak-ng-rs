@@ -45,6 +45,12 @@ fn one_megabyte_of_punctuation_and_short_words_is_linear() {
 }
 
 #[test]
+fn irish_capitals_inside_one_endless_word_are_linear() {
+    let (elapsed, _) = run_fill("camel", "aB", 4_000_000, "ga");
+    assert!(elapsed < Duration::from_secs(15), "took {elapsed:?}");
+}
+
+#[test]
 fn language_switched_words_load_their_data_once() {
     for (name, unit) in [("arabic", "مرحبا "), ("hindi", "नमस्ते "), ("korean", "한국어 ")] {
         let (elapsed, _) = run_fill(name, unit, 200_000, "en");

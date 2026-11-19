@@ -2706,7 +2706,9 @@ fn irish_prefix_keeps_capital(word: impl IntoIterator<Item = char>, capital: cha
         ("b", 'p'), ("bh", 'f'), ("d", 't'), ("g", 'c'), ("h", 'A'), ("m", 'b'),
         ("n", 'd'), ("n", 'g'), ("t", 's'), ("t", 'A'), ("n", 'A'),
     ];
-    let word: String = word.into_iter().flat_map(char::to_lowercase).collect();
+    // No prefix is longer than two letters, so a longer word cannot match; the cap keeps a
+    // word of any length from costing more than a few letters.
+    let word: String = word.into_iter().take(3).flat_map(char::to_lowercase).collect();
     let capital = capital.to_lowercase().next().unwrap_or(capital);
     let vowel = "aeiouy".contains(crate::dictionary::rules::fold_accent(capital));
     PREFIXES.iter().any(|&(prefix, last)| word == prefix && (capital == last || (last == 'A' && vowel)))
@@ -13304,22 +13306,27 @@ pub(crate) const NO_STRESS_LEVEL: u8 = u8::MAX;
 /// (unstressed) level — Portuguese `ser` is `sˈɨɹ`, not `sˈeɹ`.
 fn promote_clause_tonics(codes: &mut Vec<PhonemeCode>, phdata: &PhonemeData, lang: &str, stress_flags: u32) {
     let (no_dim, adjacent_dim) = (stress_flags & 0x02 != 0, stress_flags & 0x08 != 0);
-    let mut own = own_language_mask(codes, lang);
+    let own = own_language_mask(codes, lang);
+    // One pass into a new list: a splice per clause would move the whole tail every time.
+    let mut out: Vec<PhonemeCode> = Vec::with_capacity(codes.len() + 16);
+    let mut copied = 0;
     let mut start = 0;
     while start < codes.len() {
-        let mut end = codes[start..]
+        let end = codes[start..]
             .iter()
             .position(|c| c.is_boundary && c.code == 0)
             .map_or(codes.len(), |p| start + p);
         let clause = &codes[start..end];
         if let Some(p) = tonic_position(clause, &own[start..end], phdata, no_dim, adjacent_dim) {
-            let (first, vowel) = promote_vowel(codes, start + p);
-            let vowel_own = own[vowel];
-            own.splice(first..vowel, [vowel_own, vowel_own]);
-            end = end + 2 - (vowel - first);
+            let (first, promoted) = promoted_stress(codes, start + p);
+            out.extend_from_slice(&codes[copied..first]);
+            out.extend(promoted);
+            copied = start + p;
         }
         start = end + 1;
     }
+    out.extend_from_slice(&codes[copied..]);
+    *codes = out;
 }
 
 /// Which codes belong to the clause's own phoneme table, i.e. are outside any
@@ -13411,21 +13418,18 @@ fn diminish_adjacent_unstressed(
     out
 }
 
-/// Puts a primary-stress mark before `vowel`, replacing the marks already
-/// there; returns the replaced range `(first, vowel)`.
-fn promote_vowel(codes: &mut Vec<PhonemeCode>, vowel: usize) -> (usize, usize) {
+/// The primary-stress mark that goes before `vowel` in place of the marks already there, and
+/// where those marks start.
+fn promoted_stress(codes: &[PhonemeCode], vowel: usize) -> (usize, [PhonemeCode; 2]) {
     let is_stress = |c: &PhonemeCode| matches!(c.code, 2..=7 | PHON_STRESS_TONIC) && !c.is_boundary;
     let first = (0..vowel).rev().take_while(|&i| is_stress(&codes[i])).last().unwrap_or(vowel);
     let original = if first < vowel { codes[vowel - 1].code } else { 0 };
     let source = codes[first..vowel].iter().find_map(|c| c.source);
-    codes.splice(
-        first..vowel,
-        [
-            PhonemeCode { marker: Some(CodeMarker::PromotedTonic(original)), source, ..Default::default() },
-            PhonemeCode { code: PHON_STRESS_P, ..Default::default() },
-        ],
-    );
-    (first, vowel)
+    let promoted = [
+        PhonemeCode { marker: Some(CodeMarker::PromotedTonic(original)), source, ..Default::default() },
+        PhonemeCode { code: PHON_STRESS_P, ..Default::default() },
+    ];
+    (first, promoted)
 }
 
 /// C keeps the lengthener as a flag on the phoneme before it, so `a::` is `a:`.
