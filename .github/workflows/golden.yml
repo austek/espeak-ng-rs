@@ -261,6 +261,7 @@ jobs:
           --test letters2
           --test symbol_table_removed
           --test symbol_english_switch
+          --test symbol_run_words
           --test clause_tonic_unstressed_words
           --test clause_leading_punctuation
           --test cmn_phrase_entries

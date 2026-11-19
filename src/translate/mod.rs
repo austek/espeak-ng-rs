@@ -9470,6 +9470,79 @@ fn symbol_run_end(tokens: &[Token], at: usize) -> Option<usize> {
     Some(at + tokens[at..].iter().take(CLAUSE_SOURCE_BYTES).take_while(|t| symbol_char(t).is_some()).count())
 }
 
+/// The unstressed reading of one symbol of a run: C's rules first, then `LookupLetter` with a
+/// next byte of -1, which takes the character's own list entry.  `None` when the character
+/// needs another language, which re-translates the whole word in C.
+fn run_symbol_reading(
+    c: char,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+    english_word: &dyn Fn(char) -> Option<String>,
+) -> Option<Vec<u8>> {
+    let key = c.to_string();
+    let buf = format!(" {key} \0");
+    let (mut vowels, mut stressed) = (0, 0);
+    let by_rules = translate_rules_phdata(
+        dict, buf.as_bytes(), 1, 0, 0, &dict.letter_bits, options.dict_condition, &mut vowels, &mut stressed, Some(phdata),
+    );
+    let by_list = PosExpect { defer_stress: true, ..PosExpect::default() };
+    let wr = if !crate::dictionary::rules::last_call_left_symbol_unmatched() {
+        let phonemes = by_rules.phonemes.into_iter().take_while(|&b| b != 0).collect::<Vec<u8>>();
+        if phonemes.first() == Some(&crate::phoneme::PHON_SWITCH) {
+            return None;
+        }
+        return Some(phonemes);
+    } else if lookup(dict, &key, &LookupCtx { lookup_symbol: true, dict_condition: options.dict_condition, ..Default::default() })
+        .is_some_and(|r| r.flags1.found() && !r.phonemes.is_empty())
+    {
+        word_to_phonemes_pos(&key, dict, phdata, stress_opts, options, by_list)
+    } else if has_underscore_name(dict, c, options.dict_condition)
+        || primary_bcp47_subtag(&options.lang) == "en"
+    {
+        return Some(Vec::new());
+    } else {
+        return english_word(c).is_none().then(Vec::new);
+    };
+    if wr.phonemes.first() == Some(&crate::phoneme::PHON_SWITCH) {
+        return None;
+    }
+    Some(wr.phonemes.into_iter().take_while(|&b| b != 0).collect())
+}
+
+/// How C translates a word made of symbols such as the `://` of a URL: the list entry of the
+/// whole run, else the readings of its characters joined into one word that is stressed as a
+/// whole.  `None` when a character needs another language.
+fn symbol_run_word(
+    run: &str,
+    dict: &Dictionary,
+    phdata: &PhonemeData,
+    stress_opts: &StressOpts,
+    options: &LangOptions,
+    expect: PosExpect,
+    english_word: &dyn Fn(char) -> Option<String>,
+) -> WordResult {
+    let listed = word_to_phonemes_pos(run, dict, phdata, stress_opts, options, expect);
+    let ctx = LookupCtx { lookup_symbol: true, dict_condition: options.dict_condition, ..Default::default() };
+    if lookup(dict, run, &ctx).is_some_and(|r| r.flags1.found()) {
+        return listed;
+    }
+    let mut phonemes = Vec::new();
+    for c in run.chars() {
+        let Some(reading) = run_symbol_reading(c, dict, phdata, stress_opts, options, english_word) else {
+            let phonemes = vec![crate::phoneme::PHON_SWITCH, b'e', b'n', 0];
+            return WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() };
+        };
+        phonemes.extend(reading);
+    }
+    if !phonemes.is_empty() {
+        phonemes.push(0);
+        set_word_stress(&mut phonemes, phdata, stress_opts, Some(0), -1, 0);
+    }
+    WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() }
+}
+
 /// [`follow_emphasis`] with the word at `at` as bit 0.
 fn word_emphasis_mask(tokens: &[Token], emphasized: &[bool], at: usize) -> u32 {
     let own = u32::from(emphasized.get(at).copied().unwrap_or(false));
@@ -9609,6 +9682,20 @@ pub(crate) fn build_translate_entries(
             }
         }
         let in_swallowed_run = token_ix < swallowed_run_end;
+        let mut run_word = (!in_swallowed_run)
+            .then(|| symbol_run_end(tokens, token_ix))
+            .flatten()
+            .filter(|&end| end - token_ix > 1)
+            .map(|end| {
+                let run: String = tokens[token_ix..end].iter().filter_map(symbol_char).collect();
+                let expect = PosExpect {
+                    at_clause_end: at_end[token_ix],
+                    at_clause_start: at_start[token_ix],
+                    ..PosExpect::default()
+                };
+                let wr = symbol_run_word(&run, dict, phdata, stress_opts, options, expect, &|c| english_word(c, false));
+                (run, wr)
+            });
         swallowed[token_ix] = (matches!(token, Token::Word(_) | Token::Punctuation('.'))
             && skip_words > 0
             && dot_removed_at != Some(token_ix))
@@ -9625,6 +9712,21 @@ pub(crate) fn build_translate_entries(
                     word_group: None,
                     spelled: false,
                 });
+            }
+            _ if run_word.is_some() => {
+                if let Some((run, wr)) = run_word.take() {
+                    swallowed_run_end = token_ix + run.chars().count();
+                    let kind = if wr.phonemes.is_empty() { TranslateEntryKind::Other } else { TranslateEntryKind::Word };
+                    entries.push(TranslateEntry {
+                        phonemes: wr.phonemes,
+                        dict_flags: wr.dict_flags,
+                        found_in_list: wr.found_in_list,
+                        kind,
+                        word_lower: Some(run),
+                        word_group: None,
+                        spelled: false,
+                    });
+                }
             }
             Token::Punctuation('.') if dot_removed_at == Some(token_ix) => {
                 entries.push(TranslateEntry {

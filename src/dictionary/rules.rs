@@ -1042,6 +1042,7 @@ pub struct RulesResult {
 }
 
 thread_local! {
+    static SYMBOL_UNMATCHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static UNCOVERED_BRACKET_WORDS: std::cell::RefCell<std::collections::HashSet<String>> =
         std::cell::RefCell::new(std::collections::HashSet::new());
     static RECORDING: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
@@ -1173,6 +1174,7 @@ pub fn translate_rules_ext(
     let mut out_stem_ph_len = 0usize; // length of stem phonemes when suffix rule fired
     let mut spellword = false;
     let mut aborted = false;
+    SYMBOL_UNMATCHED.with(|u| u.set(false));
     let mut any_alpha = 0u32;
 
     // word_buf is indexed with word_start pointing to the first char.
@@ -1477,6 +1479,9 @@ pub fn translate_rules_ext(
             pending_del_fwd = match1.del_fwd;
         }
 
+        if match1.points == 0 && !is_alpha(wc) && !(0x300..=0x36f).contains(&wc) {
+            SYMBOL_UNMATCHED.with(|u| u.set(true));
+        }
         // Advance position.
         if match1.points == 0 && !group_exists {
             // C: `p += (wc_bytes-1)`.  A group match moves by its own length,
@@ -1506,6 +1511,12 @@ pub fn translate_rules_ext(
         spellword,
         aborted,
     }
+}
+
+/// Whether the last [`translate_rules_ext`] call on this thread met a character that is neither
+/// a letter nor a combining accent and that no rule read: C asks `LookupLetter` for its name.
+pub(crate) fn last_call_left_symbol_unmatched() -> bool {
+    SYMBOL_UNMATCHED.with(std::cell::Cell::get)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
