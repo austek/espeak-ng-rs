@@ -551,6 +551,15 @@ pub struct NumberGrammar {
     /// apostrophe belongs to the word only *between* two letters, which is what
     /// keeps `don't` whole while `hello'` is just "hello".
     pub apostrophe: u8,
+    /// C's `char_plus_apostrophe`: a single letter of this set followed by an apostrophe is a
+    /// word of its own that keeps the apostrophe and the word after it (el `σ' αυτό`, eo `l' homo`).
+    pub char_plus_apostrophe: &'static [char],
+    /// C's `UpperCaseInWord` for Irish: a capital after an eclipsis or lenition prefix
+    /// (`bPlean`, `tAthair`) does not start a new word.
+    pub irish_prefix_capitals: bool,
+    /// The characters besides the apostrophe in C's `punct_within_word`: the middle dot of
+    /// Catalan (`col·legi`) and the comma of Lojban (`lo,e`).
+    pub word_punct: &'static [char],
     /// Treat a capital letter as a *stress marker* rather than a word break
     /// (espeak `LOPT_CAPS_IN_WORD`).  The first capital in a word inserts a
     /// primary-stress mark `ˈ` before it and the word stays whole (`bAstu` →
@@ -917,9 +926,18 @@ impl NumberGrammar {
         // English (comma-group/period-decimal) and Arabic-style (comma-group)
         // keep a space as an ordinary separator.
         grammar.space_group = grammar.decimal_separator == ',';
-        // Irish keeps lenition prefixes ("tAthair", "nGael") whole — the only
-        // language whose `UpperCaseInWord` suppresses the CamelCase split.
-        grammar.caps_word_split = lang != "ga";
+        grammar.caps_word_split = true;
+        grammar.irish_prefix_capitals = lang == "ga";
+        grammar.char_plus_apostrophe = match lang {
+            "el" => &['σ'],
+            "eo" | "io" => &['l'],
+            _ => &[],
+        };
+        grammar.word_punct = match primary_bcp47_subtag(lang) {
+            "ca" => &['\u{b7}'],
+            "jbo" => &[','],
+            _ => &[],
+        };
         // Lojban writes the stressed syllable with capitals (`LOPT_CAPS_IN_WORD`)
         // — a capital marks stress instead of splitting the word.
         grammar.caps_mark_stress = lang == "jbo";
@@ -969,8 +987,9 @@ impl NumberGrammar {
             "shn" | "yue" => BREAK_INDIVIDUAL,
             _ => BREAK_THOUSANDS,
         };
-        // C `LOPT_APOSTROPHE`: Hebrew keeps a word-final apostrophe.
-        grammar.apostrophe = if lang == "he" { 2 } else { 0 };
+        // C `LOPT_APOSTROPHE`: Hebrew and Esperanto (its voice file's `apostrophe 2`) keep a
+        // word-final apostrophe.
+        grammar.apostrophe = if matches!(lang, "he" | "eo") { 2 } else { 0 };
         // C `NUM_1900`: 1900–1999 read as "nineteen hundred …".
         grammar.year_1900 = matches!(
             lang,
@@ -1017,6 +1036,9 @@ impl Default for NumberGrammar {
             portuguese_cardinals: false,
             year_1900: false,
             apostrophe: 0,
+            char_plus_apostrophe: &[],
+            irish_prefix_capitals: false,
+            word_punct: &[],
             caps_word_split: true,
             caps_mark_stress: false,
             dutch_ij: false,
@@ -2459,6 +2481,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 } else if grammar.caps_word_split
                     && prev_char.is_lowercase()
                     && next.is_uppercase()
+                    && !(grammar.irish_prefix_capitals && irish_prefix_keeps_capital(word.chars(), next))
                 {
                     // lowercase→uppercase: CamelCase word boundary.  Leave `next`
                     // for the outer loop to start the following word (`CamelCase`
@@ -2485,6 +2508,22 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     // Tone digit belongs to the syllable (`ni3`), not to a number.
                     word.push(next);
                     chars.next();
+                    prev_char = next;
+                } else if next == '\'' && grammar.apostrophe & 2 == 0 && is_char_plus_apostrophe(&word, grammar) {
+                    // A single letter and its apostrophe are a word that takes the word after
+                    // them: C skips the blank that follows the apostrophe.
+                    chars.next();
+                    word.push('\'');
+                    prev_char = '\'';
+                    let mut after = chars.clone();
+                    if after.next() == Some(' ') && after.next().is_some_and(is_word_letter) {
+                        chars.next();
+                    }
+                } else if grammar.word_punct.contains(&next)
+                    && word_punct_stays(next, chars.clone().skip(1))
+                {
+                    chars.next();
+                    word.push(next);
                     prev_char = next;
                 } else if next == '\''
                     && !(grammar.apostrophe & 2 != 0
@@ -2633,6 +2672,30 @@ where
     let after2 = la.next();
     after.map(|c| c.is_lowercase()).unwrap_or(false)
         && after2.map(|c| c.is_alphabetic()).unwrap_or(false)
+}
+
+/// C's `char_plus_apostrophe` test: `word` is one letter of the language's set.
+fn is_char_plus_apostrophe(word: &str, grammar: &NumberGrammar) -> bool {
+    let mut letters = word.chars();
+    matches!((letters.next(), letters.next()), (Some(c), None) if grammar.char_plus_apostrophe.contains(&c))
+}
+
+/// Whether the `punct_within_word` character `c`, followed by `after`, stays in the word: a
+/// comma ends the clause when a blank, bracket or the end of the text follows it.
+fn word_punct_stays(c: char, mut after: impl Iterator<Item = char>) -> bool {
+    c != ',' || after.next().is_some_and(|n| !readclause::ctype::is_blank(n) && !is_bracket(n))
+}
+
+/// C's `UCase_ga`: the eclipsis and lenition prefixes whose capital letter stays in the word.
+fn irish_prefix_keeps_capital(word: impl IntoIterator<Item = char>, capital: char) -> bool {
+    const PREFIXES: [(&str, char); 11] = [
+        ("b", 'p'), ("bh", 'f'), ("d", 't'), ("g", 'c'), ("h", 'A'), ("m", 'b'),
+        ("n", 'd'), ("n", 'g'), ("t", 's'), ("t", 'A'), ("n", 'A'),
+    ];
+    let word: String = word.into_iter().flat_map(char::to_lowercase).collect();
+    let capital = capital.to_lowercase().next().unwrap_or(capital);
+    let vowel = "aeiouy".contains(crate::dictionary::rules::fold_accent(capital));
+    PREFIXES.iter().any(|&(prefix, last)| word == prefix && (capital == last || (last == 'A' && vowel)))
 }
 
 /// Whether the clause reader keeps `c` inside a word: C's `IsAlpha` over its own Unicode tables.

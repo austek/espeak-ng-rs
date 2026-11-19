@@ -28,6 +28,9 @@ pub(crate) struct CutOptions {
     pub caps_in_word: bool,
     pub caps_word_split: bool,
     pub apostrophe: u8,
+    pub char_plus_apostrophe: &'static [char],
+    pub irish_prefix_capitals: bool,
+    pub word_punct: &'static [char],
     pub decimal_sep: char,
     pub dutch_ij: bool,
 }
@@ -102,6 +105,9 @@ impl super::Translator {
             caps_in_word: g.caps_mark_stress,
             caps_word_split: g.caps_word_split,
             apostrophe: g.apostrophe,
+            char_plus_apostrophe: g.char_plus_apostrophe,
+            irish_prefix_capitals: g.irish_prefix_capitals,
+            word_punct: g.word_punct,
             decimal_sep: g.decimal_separator,
             dutch_ij: g.dutch_ij,
         };
@@ -425,7 +431,7 @@ impl Cut<'_> {
                 if char_inserted != 0 {
                     next_in = char_inserted;
                 }
-                let within = |x: u32| x == u32::from('\'') || x == 0x2019 || (o.lang == "ca" && x == 0xb7);
+                let within = |x: u32| x == u32::from('\'') || x == 0x2019 || char::from_u32(x).is_some_and(|x| o.word_punct.contains(&x));
                 if !alpha(c) && !is_space(c) && !within(c) && alpha(prev_out) {
                     let tone_digit = tone_numbers && is_digit09(c) && !is_digit09(next_in);
                     let zwj = c == 0x200d && emoji(prev_out) && emoji(next_in);
@@ -513,7 +519,10 @@ impl Cut<'_> {
                                 syllable_marked = true;
                             }
                         } else if lower(prev_in) {
-                            if prev_out != 0x20 && o.caps_word_split {
+                            let word = sbuf[cur.start.min(sbuf.len())..].iter().filter_map(|&x| char::from_u32(x));
+                            let keeps = o.irish_prefix_capitals
+                                && char::from_u32(c).is_some_and(|capital| super::irish_prefix_keeps_capital(word, capital));
+                            if prev_out != 0x20 && o.caps_word_split && !keeps {
                                 c = 0x20;
                                 space_inserted = true;
                                 prev_in_save = c;
@@ -574,6 +583,11 @@ impl Cut<'_> {
                     let kept = (o.apostrophe & 1 != 0 && alpha(next_in)) || (o.apostrophe & 2 != 0 && alpha(prev_in));
                     if in_word || kept {
                         single_quoted = false;
+                    } else if char::from_u32(prev_in).is_some_and(|p| o.char_plus_apostrophe.contains(&p)) && prev_out2 == 0x20 {
+                        single_quoted = false;
+                        if next_in == 0x20 {
+                            source_index += 1;
+                        }
                     } else if prev_out == u32::from('s') && !single_quoted {
                         c = 0x20;
                     } else {
