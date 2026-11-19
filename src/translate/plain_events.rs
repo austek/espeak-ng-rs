@@ -80,6 +80,7 @@ fn closes_clause(code: &PhonemeCode) -> bool {
 
 fn plain_clauses(codes: &[PhonemeCode], text: &str, reads: &[ClauseRead]) -> Vec<ClauseCodes> {
     let closings: Vec<Option<(u32, bool)>> = codes.iter().filter(|c| closes_clause(c)).map(closing_mark).collect();
+    let marks: Vec<Option<char>> = codes.iter().filter(|c| closes_clause(c)).map(|c| c.clause_char).collect();
     let bytes: Vec<usize> = text.char_indices().map(|(i, _)| i).chain(std::iter::once(text.len())).collect();
     let total = bytes.len() as u32 - 1;
     let mut tally = Tally { sentences: 0, words: 0, new_sentence: true, start_char: 0 };
@@ -111,7 +112,7 @@ fn plain_clauses(codes: &[PhonemeCode], text: &str, reads: &[ClauseRead]) -> Vec
             sentences: tally.sentences,
             new_sentence: opens,
             end_char: end,
-            end_ix: ((span.len() + 1 + eof_pad) & 0x7ff) as u16,
+            end_ix: ((span.len() - unwritten_mark_bytes(span, marks.get(i).copied().flatten()) + 1 + eof_pad) & 0x7ff) as u16,
         });
         tally.words += read.map_or_else(|| clause.codes.iter().filter(|c| c.source.is_some()).count() as u32, |r| r.cut.len() as u32);
         tally.new_sentence = clause.terminator.is_sentence() || (blank && tally.new_sentence);
@@ -119,6 +120,12 @@ fn plain_clauses(codes: &[PhonemeCode], text: &str, reads: &[ClauseRead]) -> Vec
         tally.start_char = end;
     }
     clauses
+}
+
+/// `ReadClause` ends the clause before it writes the closing mark, so a mark of more than one
+/// byte leaves its extra bytes out of the clause buffer that `source_index` counts.
+fn unwritten_mark_bytes(span: &str, mark: Option<char>) -> usize {
+    mark.filter(|m| span.ends_with(*m)).map_or(0, |m| m.len_utf8() - 1)
 }
 
 /// Makes the word positions relative to the clause start, as the reader's `charix` is, and
