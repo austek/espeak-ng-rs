@@ -11802,14 +11802,24 @@ impl Translator {
                         // clause and right after its first word, so it needs at
                         // least two words before it and one after.
                         if entry.dict_flags & FLAG_PREPAUSE != 0 {
-                            let before = tokens[..token_ix]
+                            // Dotted initials are one token here but several words in C
+                            // (`a . b . c .`), so the word before `and` is not the first one.
+                            let c_words = |t: &Token| match t {
+                                Token::Word(w) if is_dotted_letters(w.trim_end_matches('.')) => 2,
+                                _ => 1,
+                            };
+                            let two_before = tokens[..token_ix]
                                 .iter()
                                 .rev()
                                 .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
                                 .filter(|t| is_word(t) || matches!(t, Token::Punctuation('.')))
-                                .take(2)
-                                .count();
-                            if before >= 2 && after >= 1 && prepause_timeout == 0 {
+                                .map(c_words)
+                                .scan(0, |seen, n| {
+                                    *seen += n;
+                                    Some(*seen)
+                                })
+                                .any(|seen| seen >= 2);
+                            if two_before && after >= 1 && prepause_timeout == 0 {
                                 pre_pause = 4;
                                 prepause_timeout = 3;
                             }
