@@ -515,6 +515,23 @@ impl Synthesizer {
         Ok((held, events))
     }
 
+    /// As [`synthesize_clauses_with_events`](Self::synthesize_clauses_with_events), with the audio
+    /// kept as one chunk per clause, the way C hands each clause's buffers to the callback.
+    pub fn synthesize_clauses_chunked(
+        &self,
+        clauses: &[cgen::phlist::ClauseCodes],
+        phdata: &crate::phoneme::PhonemeData,
+        voices: &std::collections::HashMap<String, VoiceParams>,
+        icons: &[Vec<i16>],
+    ) -> Result<(Vec<PcmBuffer>, Vec<cgen::RawEvent>)> {
+        let Some(dir) = self.voice.data_dir.clone() else {
+            return self.synthesize_clauses_with_events(clauses, phdata, voices, icons).map(|(pcm, ev)| (vec![pcm], ev));
+        };
+        let mut chunks = Vec::new();
+        let events = cgen::render_clauses(clauses, phdata, &dir, &self.voice, voices, icons, &mut |pcm| chunks.push(pcm.to_vec()));
+        Ok((chunks, events))
+    }
+
     /// Build the MBROLA phoneme list for a clause (`MbrolaTranslate`'s input).
     ///
     /// The same annotate + intonation passes as

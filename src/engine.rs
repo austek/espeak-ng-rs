@@ -771,6 +771,26 @@ impl EspeakNg {
         }
     }
 
+    /// Deliver markup one clause per callback, as C's `SpeakNextClause` does, the events with
+    /// the last chunk.  No post-fx: event samples are the audio samples.
+    fn stream_markup_with_events<F>(&self, text: &str, rate: u32, mut callback: F) -> Result<u32>
+    where
+        F: FnMut(&[i16], bool, &[SynthEvent]) -> bool,
+    {
+        let (mut chunks, raw) = self.synth_markup_chunks(text)?;
+        let mut events = vec![sample_rate_event(rate)];
+        events.extend(raw.iter().map(|(e, name)| marker_event(e, name.as_deref(), 1.0, rate)));
+        events.push(terminated_event());
+        let last = chunks.pop().unwrap_or_default();
+        for chunk in &chunks {
+            if callback(chunk, false, &[]) {
+                return Ok(rate);
+            }
+        }
+        callback(&last, true, &events);
+        Ok(rate)
+    }
+
     /// Synthesize markup clause by clause, as C `SpeakNextClause` does.
     fn synth_markup(&self, text: &str) -> Result<PcmBuffer> {
         self.synth_markup_raw(text).map(|(pcm, _)| pcm)
@@ -791,6 +811,12 @@ impl EspeakNg {
 
     /// The audio and the generator's events, a mark's name resolved from the clause reader.
     fn synth_markup_raw(&self, text: &str) -> Result<(PcmBuffer, Vec<NamedEvent>)> {
+        let (chunks, named) = self.synth_markup_chunks(text)?;
+        Ok((chunks.concat(), named))
+    }
+
+    /// As `synth_markup_raw`, the audio kept as one chunk per clause.
+    fn synth_markup_chunks(&self, text: &str) -> Result<(Vec<PcmBuffer>, Vec<NamedEvent>)> {
         let translator = self.make_translator()?;
         let mut phdata = self.load_phdata()?;
         crate::translate::select_phoneme_table(&mut phdata, &self.data_dir, self.voice_spec.effective_lang())
@@ -812,7 +838,7 @@ impl EspeakNg {
             .filter_map(|c| c.voice_after.as_deref())
             .filter_map(|id| self.voice_params_for_id(id).map(|p| (id.to_string(), p)))
             .collect();
-        let (pcm, raw) = synth.synthesize_clauses_with_events(&doc.clause_codes(), &phdata, &voices, &icons)?;
+        let (pcm, raw) = synth.synthesize_clauses_chunked(&doc.clause_codes(), &phdata, &voices, &icons)?;
         let named = raw.into_iter().map(|e| {
             use crate::synthesize::cgen::MarkerKind;
             let name = matches!(e.marker.kind, MarkerKind::Mark | MarkerKind::Play)
@@ -966,6 +992,9 @@ impl EspeakNg {
 
         // The same cases `synth_streaming` can't split, plus anything needing
         // the post-fx pass over the whole buffer.
+        if self.markup && self.soundicons.is_empty() && !post_fx {
+            return self.stream_markup_with_events(text, rate, callback);
+        }
         if !self.soundicons.is_empty() || self.markup || post_fx {
             let (samples, _, events) = self.synth_with_events(text)?;
             callback(&samples, true, &events);

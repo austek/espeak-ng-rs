@@ -61,8 +61,8 @@ fn split_parts_cut_at_c_buffer_boundaries() {
     assert_eq!(split_parts(&[], "plain"), C_PART_SAMPLES);
 }
 
+// Markup delivers one chunk per clause like C, so the 60 ms buffers restart at each clause.
 #[test]
-#[ignore = "-m delivers one chunk and no SENTENCE events until stage 8 T4"]
 fn split_parts_cut_at_c_buffer_boundaries_with_markup() {
     skip_without_en!();
     assert_eq!(split_parts(&["-m"], "markup"), C_PART_SAMPLES);
