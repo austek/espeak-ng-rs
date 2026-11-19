@@ -60,7 +60,7 @@ impl Default for MessageCounts {
 impl MessageCounts {
     /// `TranslateClause`'s bookkeeping around one clause.  A clause of blanks is no sentence
     /// and hands its sentence start on to the next clause.
-    fn clause(&mut self, source: &SourceClause, terminator: Terminator, codes: &[PhonemeCode]) -> ClauseCounters {
+    fn clause(&mut self, source: &SourceClause, terminator: Terminator, codes: &[PhonemeCode], words: u32) -> ClauseCounters {
         let blank = source.text.chars().all(char::is_whitespace);
         let opens = self.new_sentence && !blank;
         self.sentences += u32::from(opens);
@@ -72,7 +72,7 @@ impl MessageCounts {
             end_char: source.end_char.max(0) as u32,
             end_ix: closing_pause_ix(source, codes),
         };
-        self.words += codes.iter().filter(|c| c.source.is_some()).count() as u32;
+        self.words += words;
         self.new_sentence = terminator.is_sentence() || (blank && self.new_sentence);
         counters
     }
@@ -260,11 +260,14 @@ impl Translator {
             None => clause.terminator,
         };
         let no_tonic = u32::from(terminator.intonation()) == INTONATION_NONE;
-        let codes = self.translate_clause(&clause.text, no_tonic, carry, &clause.charix)?;
+        let say_as = carry.say_as;
+        let mut codes = self.translate_clause(&clause.text, no_tonic, carry, &clause.charix)?;
+        let cut = self.cut_clause_words(&clause.text, &clause.charix, say_as.mode, say_as.digits());
+        super::c_words::apply_cut_words(&mut codes, &cut);
         let abbreviated = clause.terminator.dot_after_last_word()
             && codes.iter().any(|c| matches!(c.marker, Some(CodeMarker::AbbreviationDot)));
         let terminator = if abbreviated { terminator.after_abbreviation() } else { terminator };
-        let counters = carry.counts.clause(&clause, terminator, &codes);
+        let counters = carry.counts.clause(&clause, terminator, &codes, cut.len() as u32);
         Ok(TranslatedClause { codes, terminator, eof: clause.eof, voice_after: clause.voice_change, voice, counters })
     }
 
@@ -294,7 +297,7 @@ impl Translator {
         BaseVoice { identifier: None, name: self.options.lang.clone(), languages, ..BaseVoice::default() }
     }
 
-    fn reader_options(&self) -> ReaderOptions {
+    pub(super) fn reader_options(&self) -> ReaderOptions {
         let punctlist = self.options.punct.clone().unwrap_or_default();
         ReaderOptions {
             ssml: true,
@@ -376,7 +379,7 @@ fn pause_factors(wpm: i32) -> (i32, i32) {
 }
 
 /// The language hooks `ReadClause` reads off the translator.
-struct ClauseLang<'a>(&'a Translator);
+pub(super) struct ClauseLang<'a>(pub(super) &'a Translator);
 
 fn translator_name(lang: &str) -> u32 {
     let base = super::primary_bcp47_subtag(lang);

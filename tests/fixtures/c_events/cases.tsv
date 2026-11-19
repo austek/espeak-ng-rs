@@ -83,3 +83,13 @@ word_ssml_ordinal	0	en	0x1010	<speak>the 1st one</speak>
 word_ssml_dollar	0	en	0x1010	<speak>pay $5 each</speak>
 word_ssml_time	0	en	0x1010	<speak>at 10:30 sharp</speak>
 word_percent	0	en	0x1000	about 100% sure
+word_quote_sentences	0	en	0x1000	"Hello," she said. "How are you?"
+word_hyphen	0	en	0x1000	well-known e-mail, then co-op.
+word_spaced_dash	0	en	0x1000	one a - b two
+word_double_dash	0	en	0x1000	x--y and more
+word_camel_case	0	en	0x1000	CamelCase and iPhone.
+word_ru_guillemets	0	ru	0x1000	Он сказал: «привет», и ушёл. Т.е. всё.
+word_ssml_quote_sentences	0	en	0x1010	<speak>"Hello," she said. "How are you?"</speak>
+word_abbrev_clauses	0	en	0x1000	The U.S.A. and U.K. are friends. Dr. Smith agrees.
+word_money_grouped	0	en	0x1000	Costs $5.50 or 3,000 here.
+word_de_quotes	0	de	0x1000	Guten Tag, "Herr" Müller. Das kostet 5 € oder 10%.

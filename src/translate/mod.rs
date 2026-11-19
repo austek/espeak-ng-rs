@@ -30,6 +30,7 @@ pub(crate) mod ucd_alpha;
 pub mod ssml;
 pub mod readclause;
 pub mod ssml_driver;
+mod c_words;
 mod plain_events;
 mod say_as;
 mod dotted_abbrev;

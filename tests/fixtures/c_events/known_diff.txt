@@ -1,6 +1,3 @@
-plain_abbreviation	events
 plain_newlines	audio
 plain_embedded_unknown_letter	audio
 plain_embedded_break_z	audio
-plain_private_use_after_dot	events
-plain_private_use_boundary	events

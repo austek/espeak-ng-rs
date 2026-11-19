@@ -3,6 +3,9 @@
 //! The translator reads the whole text at once, so the clauses are cut from its code stream
 //! and given the message counts the clause reader would have kept.
 
+use super::readclause::{ClauseReader, NoTags, ReaderOptions, SourceClause};
+use super::c_words::{apply_cut_words, CutWord};
+use super::ssml_driver::ClauseLang;
 use super::{
     split_after_sentences, PhonemeCode, SourceIx, TokenizeMode, Translator, SOURCE_IX_MASK, TRANSLATE_PIECE_BYTES,
 };
@@ -20,8 +23,30 @@ impl Translator {
             base += piece.chars().count();
             codes.extend(self.translate_codes_in_mode(piece, true, None, TokenizeMode::Plain, None, Some(&charix))?);
         }
-        Ok(plain_clauses(&codes, text))
+        Ok(plain_clauses(&codes, text, &self.plain_reads(text)))
     }
+
+    /// What `ReadClause` and `TranslateClause` make of each clause of plain `text`.
+    fn plain_reads(&self, text: &str) -> Vec<ClauseRead> {
+        let options = ReaderOptions { ssml: false, ..self.reader_options() };
+        let mut reader = ClauseReader::new(text, options, NoTags);
+        let clauses = reader.read_all(&ClauseLang(self));
+        let read = |c: &SourceClause| ClauseRead {
+            start_char: c.start_char.max(0) as u32,
+            end_char: c.end_char.max(0) as u32,
+            blank: c.text.chars().all(|ch| ch <= ' '),
+            cut: self.cut_clause_words(&c.text, &c.charix, 0, 0),
+        };
+        clauses.iter().map(read).collect()
+    }
+}
+
+/// A clause as the reader and the word cutter left it.
+struct ClauseRead {
+    start_char: u32,
+    end_char: u32,
+    blank: bool,
+    cut: Vec<CutWord>,
 }
 
 /// The reader's `charix` for text it read without changing: the 1-based character index of
@@ -53,7 +78,7 @@ fn closes_clause(code: &PhonemeCode) -> bool {
     code.code == 0 && code.is_boundary && code.marker.is_none()
 }
 
-fn plain_clauses(codes: &[PhonemeCode], text: &str) -> Vec<ClauseCodes> {
+fn plain_clauses(codes: &[PhonemeCode], text: &str, reads: &[ClauseRead]) -> Vec<ClauseCodes> {
     let closings: Vec<Option<(u32, bool)>> = codes.iter().filter(|c| closes_clause(c)).map(closing_mark).collect();
     let bytes: Vec<usize> = text.char_indices().map(|(i, _)| i).chain(std::iter::once(text.len())).collect();
     let total = bytes.len() as u32 - 1;
@@ -62,15 +87,21 @@ fn plain_clauses(codes: &[PhonemeCode], text: &str) -> Vec<ClauseCodes> {
     let last = clauses.len() - 1;
     for (i, clause) in clauses.iter_mut().enumerate() {
         let closing = closings.get(i).copied();
-        let (end, lookahead) = match closing {
-            Some(Some(mark)) => mark,
-            Some(None) if i < last => (tally.start_char, false),
+        let read = (reads.len() == last + 1).then(|| &reads[i]);
+        if let Some(r) = read {
+            tally.start_char = r.start_char.min(total);
+        }
+        let (end, lookahead) = match (read, closing) {
+            (Some(r), _) => (r.end_char, false),
+            (None, Some(Some(mark))) => mark,
+            (None, Some(None)) if i < last => (tally.start_char, false),
             _ => (total, false),
         };
         let end = end.clamp(tally.start_char, total);
         let span_end = end - u32::from(lookahead && end > tally.start_char);
         let span = &text[bytes[tally.start_char as usize]..bytes[span_end as usize]];
-        let blank = span.chars().all(char::is_whitespace);
+        let span = if read.is_some() { span.trim_end_matches(char::is_whitespace) } else { span };
+        let blank = read.map_or_else(|| span.chars().all(char::is_whitespace), |r| r.blank);
         let opens = tally.new_sentence && !blank;
         tally.sentences += u32::from(opens);
         let eof_pad = usize::from(closing.is_none());
@@ -82,9 +113,9 @@ fn plain_clauses(codes: &[PhonemeCode], text: &str) -> Vec<ClauseCodes> {
             end_char: end,
             end_ix: ((span.len() + 1 + eof_pad) & 0x7ff) as u16,
         });
-        tally.words += clause.codes.iter().filter(|c| c.source.is_some()).count() as u32;
+        tally.words += read.map_or_else(|| clause.codes.iter().filter(|c| c.source.is_some()).count() as u32, |r| r.cut.len() as u32);
         tally.new_sentence = clause.terminator.is_sentence() || (blank && tally.new_sentence);
-        relocate(&mut clause.codes, tally.start_char);
+        relocate(&mut clause.codes, tally.start_char, read.map_or(&[], |r| r.cut.as_slice()));
         tally.start_char = end;
     }
     clauses
@@ -92,12 +123,13 @@ fn plain_clauses(codes: &[PhonemeCode], text: &str) -> Vec<ClauseCodes> {
 
 /// Makes the word positions relative to the clause start, as the reader's `charix` is, and
 /// gives each word a `||` in its pronunciation splits off the position after its own.
-fn relocate(codes: &mut [PhonemeCode], start_char: u32) {
+fn relocate(codes: &mut [PhonemeCode], start_char: u32, cut: &[CutWord]) {
     for code in codes.iter_mut() {
         if let Some(s) = code.source.as_mut() {
             s.ix = s.ix.saturating_sub(start_char);
         }
     }
+    apply_cut_words(codes, cut);
     let mut word: Option<SourceIx> = None;
     for at in 0..codes.len() {
         match codes[at].source {

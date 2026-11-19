@@ -21,6 +21,13 @@ pub(crate) struct SayAs {
     digits_seen: usize,
 }
 
+impl SayAs {
+    /// `count_sayas_digits`.
+    pub(crate) fn digits(&self) -> usize {
+        self.digits_seen
+    }
+}
+
 enum Piece<'a> {
     Text(&'a str),
     Command(&'a str),
