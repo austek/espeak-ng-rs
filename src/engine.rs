@@ -1192,6 +1192,9 @@ impl EspeakNg {
         t.options.word_gap = self.word_gap;
         t.options.capitals = self.capitals;
         t.options.punct = self.punct.clone();
+        if let Some(bits) = self.base_voice_entry().and_then(|v| v.apostrophe) {
+            t.options.number_grammar.apostrophe = bits as u8;
+        }
         Ok(t)
     }
 

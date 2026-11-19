@@ -68,6 +68,8 @@ struct Cli {
     /// tag (lower-cased, `_` → `-`), which would corrupt the file path
     /// `--load` expects.
     voice_raw:     Option<String>,
+    /// The `apostrophe` bits of the voice file `-v` selected, which replace the language's.
+    voice_apostrophe: Option<i32>,
     /// `--ssml-break=<percentage>`: scale every SSML `<break time=…>`.
     ssml_break: Option<u32>,
     /// `-d <device>`: audio output device.  Accepted for parity; this port has
@@ -160,6 +162,7 @@ fn run() -> std::io::Result<()> {
         match espeak_ng::voices::load_voice_file(&path) {
             Some(v) => {
                 loaded_pitch = v.pitch;
+                cli.voice_apostrophe = v.apostrophe;
                 loaded_voice = Some(v.clone());
                 let data = resolved_data_dir(cli.path_override.as_deref());
                 let want = v.dictionary.clone().unwrap_or_else(|| v.language.clone());
@@ -176,6 +179,7 @@ fn run() -> std::io::Result<()> {
         let wanted = match espeak_ng::voices::voice_file_entry(&data, split_variant_base(&spelled)) {
             Some(v) => {
                 loaded_pitch = v.pitch;
+                cli.voice_apostrophe = v.apostrophe;
                 loaded_voice = Some(v);
                 spelled
             }
@@ -699,7 +703,8 @@ fn trace_output(cli: &Cli, text: &str, phonemes_follow: bool) -> std::io::Result
 
     let ioerr = |e: espeak_ng::Error| std::io::Error::other(format!("{e}"));
     let data_dir = resolved_data_dir(cli.path_override.as_deref());
-    let translator = Translator::new(&cli.voice, Some(&data_dir)).map_err(ioerr)?;
+    let mut translator = Translator::new(&cli.voice, Some(&data_dir)).map_err(ioerr)?;
+    apply_voice_apostrophe(cli, &mut translator);
     let mut phdata = PhonemeData::load(&data_dir).map_err(ioerr)?;
     espeak_ng::translate::select_phoneme_table(
         &mut phdata,
@@ -796,6 +801,7 @@ fn pho_output(cli: &Cli, text: &str) -> std::io::Result<()> {
     };
 
     let mut translator = Translator::new(&lang, Some(&data_dir)).map_err(ioerr)?;
+    apply_voice_apostrophe(cli, &mut translator);
     if let Some(g) = cli.word_gap {
         translator.options.word_gap = g as i32;
     }
@@ -832,11 +838,18 @@ fn pho_output(cli: &Cli, text: &str) -> std::io::Result<()> {
     emit(cli, &out)
 }
 
+fn apply_voice_apostrophe(cli: &Cli, translator: &mut Translator) {
+    if let Some(bits) = cli.voice_apostrophe {
+        translator.options.number_grammar.apostrophe = bits as u8;
+    }
+}
+
 fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
     let data_dir = resolved_data_dir(cli.path_override.as_deref());
     let mut translator = Translator::new(&cli.voice, Some(&data_dir)).map_err(|e| {
         std::io::Error::other(format!("{e}"))
     })?;
+    apply_voice_apostrophe(cli, &mut translator);
     if let Some(k) = cli.capitals {
         translator.options.capitals = k as u8;
     }

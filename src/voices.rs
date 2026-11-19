@@ -757,6 +757,14 @@ pub fn voice_numbers(data_dir: &Path, lang: &str) -> (u32, u32) {
         .map_or((0, 0), |v| v.numbers)
 }
 
+/// The `apostrophe` bits (`LOPT_APOSTROPHE`) a voice file sets for its language.
+pub fn voice_apostrophe(data_dir: &Path, lang: &str) -> Option<i32> {
+    list_voices(data_dir)
+        .iter()
+        .find(|v| v.language.eq_ignore_ascii_case(lang))
+        .and_then(|v| v.apostrophe)
+}
+
 /// Whether a voice file sets `lowercaseSentence` for its language.
 pub fn voice_lowercase_sentence(data_dir: &Path, lang: &str) -> bool {
     list_voices(data_dir)

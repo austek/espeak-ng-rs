@@ -987,9 +987,9 @@ impl NumberGrammar {
             "shn" | "yue" => BREAK_INDIVIDUAL,
             _ => BREAK_THOUSANDS,
         };
-        // C `LOPT_APOSTROPHE`: Hebrew and Esperanto (its voice file's `apostrophe 2`) keep a
-        // word-final apostrophe.
-        grammar.apostrophe = if matches!(lang, "he" | "eo") { 2 } else { 0 };
+        // C `LOPT_APOSTROPHE`: Hebrew keeps a word-final apostrophe; a voice file's
+        // `apostrophe` replaces this (Esperanto's `apostrophe 2`).
+        grammar.apostrophe = if lang == "he" { 2 } else { 0 };
         // C `NUM_1900`: 1900–1999 read as "nineteen hundred …".
         grammar.year_1900 = matches!(
             lang,
@@ -2442,8 +2442,8 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             || (c.is_ascii_digit() && grammar.listed_symbols.contains(&c))
             || (c == '\''
                 && (grammar.apostrophe & 1 != 0
-                    || (matches!(tokens.last(), Some(Token::Number(_)))
-                        && chars.peek().is_some_and(|n| n.is_alphabetic()))))
+                    || matches!(tokens.last(), Some(Token::Number(_))))
+                && chars.peek().is_some_and(|n| n.is_alphabetic()))
         {
             // (An apostrophe between a digit and a letter stays in the word, as
             // in C: `2024'an` is the number and the word `'an`.)
@@ -10773,6 +10773,9 @@ impl Translator {
             options.number_grammar = NumberGrammar::for_lang_with(base, voice_numbers);
         }
         options.number_grammar.lowercase_sentence |= crate::voices::voice_lowercase_sentence(&dir, base);
+        if let Some(bits) = crate::voices::voice_apostrophe(&dir, base) {
+            options.number_grammar.apostrophe = bits as u8;
+        }
         Ok(Translator { options, data_dir: dir, loaded: std::sync::Mutex::new(None) })
     }
 
