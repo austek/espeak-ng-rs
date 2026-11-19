@@ -11700,6 +11700,7 @@ impl Translator {
                             .count();
                         pre_pause = (pre_pause as usize).saturating_sub(pending) as _;
                         let at = if pre_pause > 0 { at + lift_embedded_before_pause(&mut codes, at) } else { at };
+                        let existing_pauses = trailing_pause_count(&codes[..at]);
                         let mut n = 0;
                         while pre_pause > 0 {
                             let code = if pre_pause > 1 {
@@ -11717,8 +11718,8 @@ impl Translator {
                             );
                             n += 1;
                         }
-                        if pending / 2 + n > 0 {
-                            pre_pauses.insert(token_ix, pending / 2 + n);
+                        if existing_pauses + n > 0 {
+                            pre_pauses.insert(token_ix, existing_pauses + n);
                         }
                         if n > 0 {
                             let clause_start = codes[..at].iter().rev().take_while(|c| {
@@ -12192,6 +12193,17 @@ fn mark_word_starts(
             word += 1;
         }
     }
+}
+
+/// The pauses that end `codes` with only markers between them: every one of them sits in front
+/// of the word C starts at the next phoneme, wherever a pass put it.
+fn trailing_pause_count(codes: &[PhonemeCode]) -> usize {
+    codes
+        .iter()
+        .rev()
+        .take_while(|c| c.marker.is_some() || is_pre_pause_code(c.code))
+        .filter(|c| c.marker.is_none())
+        .count()
 }
 
 /// The index of the first code of `codes` that is not one of the first `pre_pause` pauses.

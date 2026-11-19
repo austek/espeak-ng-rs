@@ -127,6 +127,10 @@ word_de_digit_groups	0	de	0x1000	Es sind 123456 Stück.
 word_cmn_tone_digit_word	0	cmn	0x1000	我有3个苹果和5个橙子。
 word_ssml_say_as_digits_groups	0	en	0x1010	<speak><say-as interpret-as="digits">12345</say-as></speak>
 word_ssml_say_as_cardinal_groups	0	en	0x1010	<speak><say-as interpret-as="cardinal">1234567</say-as></speak>
+word_en_quote_dash_clause_pauses	0	en	0x1000	"Hello!" \u{2014} and gone
+word_en_bracket_dash_clause_pauses	0	en	0x1000	(Hello!) \u{2014} and gone
+word_ru_quote_dash_clause_pauses	0	ru	0x1000	\u{AB}\u{41F}\u{440}\u{438}\u{432}\u{435}\u{442}!\u{BB} \u{2014} \u{438} \u{443}\u{448}\u{451}\u{43B}
+word_de_quote_dash_clause_pauses	0	de	0x1000	"Hallo!" \u{2014} und weg
 word_nl_digit_groups	0	nl	0x1000	1234567
 word_de_digit_groups_seven	0	de	0x1000	1234567
 word_en_digit_groups_seven	0	en	0x1000	1234567
