@@ -12156,20 +12156,23 @@ fn mark_word_starts(
     spans: &[GroupSpan],
     groups_only: bool,
 ) {
+    let sounds = codes.iter().zip(owners).any(|(c, &o)| {
+        o == token && c.marker.is_none() && !c.is_boundary && c.code != crate::phoneme::PHON_END_WORD && !is_pre_pause_code(c.code)
+    });
+    let first_code = codes.iter().zip(owners).find(|(c, &o)| o == token && c.marker.is_none()).map(|(c, _)| c);
+    let leading_pause_word = first_code
+        .is_some_and(|c| !c.is_boundary && is_pre_pause_code(c.code) && pre_pause == 0 && sounds);
     let restarts: Vec<(usize, u32)> = spans
         .iter()
         .scan(0, |words, span| {
             let at = *words;
             *words += span.words;
-            Some((at, span.offset))
+            Some((if at > 0 && leading_pause_word { at + 1 } else { at }, span.offset))
         })
         .collect();
     let (mut base, mut part, mut word) = (src.ix, 0u16, 0usize);
     let mut open = true;
     let mut pre = pre_pause;
-    let sounds = codes.iter().zip(owners).any(|(c, &o)| {
-        o == token && c.marker.is_none() && !c.is_boundary && c.code != crate::phoneme::PHON_END_WORD && !is_pre_pause_code(c.code)
-    });
     for (code, _) in codes.iter_mut().zip(owners).filter(|(_, &o)| o == token) {
         if code.is_boundary || code.code == crate::phoneme::PHON_END_WORD {
             open = true;

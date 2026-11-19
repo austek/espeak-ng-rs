@@ -127,3 +127,19 @@ word_de_digit_groups	0	de	0x1000	Es sind 123456 Stück.
 word_cmn_tone_digit_word	0	cmn	0x1000	我有3个苹果和5个橙子。
 word_ssml_say_as_digits_groups	0	en	0x1010	<speak><say-as interpret-as="digits">12345</say-as></speak>
 word_ssml_say_as_cardinal_groups	0	en	0x1010	<speak><say-as interpret-as="cardinal">1234567</say-as></speak>
+word_nl_digit_groups	0	nl	0x1000	1234567
+word_de_digit_groups_seven	0	de	0x1000	1234567
+word_en_digit_groups_seven	0	en	0x1000	1234567
+word_sv_digit_groups_seven	0	sv	0x1000	1234567
+word_da_digit_groups_seven	0	da	0x1000	1234567
+word_fr_digit_groups_seven	0	fr	0x1000	1234567
+word_ru_digit_groups_seven	0	ru	0x1000	1234567
+word_nl_digit_groups_eight	0	nl	0x1000	12345678
+word_nl_digit_groups_mid_clause	0	nl	0x1000	x 1234567 y
+word_nl_digit_groups_ten	0	nl	0x1000	1234567890
+word_de_digit_groups_ten	0	de	0x1000	1234567890
+word_sv_digit_groups_eight	0	sv	0x1000	12345678
+word_ru_digit_groups_ten	0	ru	0x1000	1234567890
+word_it_digit_groups_seven	0	it	0x1000	1234567
+word_es_digit_groups_seven	0	es	0x1000	1234567
+word_pl_digit_groups_seven	0	pl	0x1000	1234567
