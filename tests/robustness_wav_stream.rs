@@ -45,7 +45,7 @@ fn piped_stdout_gets_upstream_placeholder_sizes() {
         .output()
         .expect("run cli");
     assert!(out.status.success());
-    assert_eq!(u32_at(&out.stdout, 4), 0x7fff_ff24);
+    assert_eq!(u32_at(&out.stdout, 4), 0x7fff_f024);
     assert_eq!(u32_at(&out.stdout, 40), 0x7fff_f000);
     assert!(out.stdout.len() > 44);
 }

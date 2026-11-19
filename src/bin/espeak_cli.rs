@@ -1126,7 +1126,7 @@ fn wav_header(sample_rate: u32, data_bytes: Option<u64>) -> [u8; 44] {
             let n = u32::try_from(n).unwrap_or(u32::MAX);
             (n.saturating_add(36), n)
         }
-        None => (0x7fff_ff24, 0x7fff_f000),
+        None => (0x7fff_f024, 0x7fff_f000),
     };
     let mut h = Vec::with_capacity(44);
     h.extend_from_slice(b"RIFF");
@@ -1166,22 +1166,9 @@ impl WavOut for std::io::BufWriter<std::io::Stdout> {
     }
 }
 
-/// Standard output as a WAV destination: patchable when it is redirected to a
-/// regular file, a plain stream when it is a pipe or terminal.
+/// Standard output as a WAV destination: C never patches the header sizes of
+/// stdout, even when it is redirected to a regular file.
 fn wav_stdout_target() -> Box<dyn WavOut> {
-    #[cfg(unix)]
-    {
-        use std::io::Seek;
-        use std::os::fd::AsFd;
-        let seekable = std::io::stdout()
-            .as_fd()
-            .try_clone_to_owned()
-            .map(std::fs::File::from)
-            .and_then(|mut f| f.stream_position().map(|_| f));
-        if let Ok(file) = seekable {
-            return Box::new(std::io::BufWriter::with_capacity(1 << 16, file));
-        }
-    }
     Box::new(std::io::BufWriter::with_capacity(1 << 16, std::io::stdout()))
 }
 
