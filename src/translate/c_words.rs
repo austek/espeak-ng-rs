@@ -7,6 +7,7 @@
 //! what the events need: how many words C made, and where each one starts and how long it is.
 
 use super::letters;
+use crate::phoneme::{PHON_PAUSE, PHON_PAUSE_NOLINK};
 use super::ucd_alpha::{is_alpha, is_emoji};
 
 const N_CLAUSE_WORDS: usize = 300;
@@ -105,14 +106,36 @@ impl super::Translator {
     }
 }
 
-/// Gives each word start the position and length C cut for the word that starts there.
+/// Gives each word start the position and length C cut for the word that starts there, or
+/// for the word it lies inside when C translated that one word in several pieces.
 pub(crate) fn apply_cut_words(codes: &mut [super::PhonemeCode], cut: &[CutWord]) {
-    for code in codes.iter_mut() {
+    let switched: Vec<bool> = (0..codes.len()).map(|i| opens_switch(&codes[i..])).collect();
+    for (code, switched) in codes.iter_mut().zip(switched) {
         let Some(source) = code.source.as_mut() else { continue };
-        if let Some(word) = cut.iter().find(|w| w.first > 0 && w.first as u32 == source.ix) {
+        let found = cut.iter().find(|w| w.first > 0 && w.first as u32 == source.ix);
+        if let Some(word) = found.or_else(|| cut.iter().find(|w| switched && covers(w, source.ix))) {
             *source = super::SourceIx { ix: word.sourceix.max(0) as u32, len: word.length.min(31) as u8 };
         }
     }
+}
+
+/// Whether the word that starts at the first of `codes` is read through another language's
+/// dictionary.
+fn opens_switch(codes: &[super::PhonemeCode]) -> bool {
+    let pause = |c: &super::PhonemeCode| c.marker.is_none() && matches!(c.code, PHON_PAUSE | PHON_PAUSE_NOLINK);
+    codes
+        .iter()
+        .skip_while(|c| pause(c))
+        .next()
+        .or(codes.first())
+        .is_some_and(|c| matches!(c.marker, Some(super::CodeMarker::LangSwitch(_))))
+}
+
+/// Whether `ix` lies inside the word C cut, past its first character: C translated the word in
+/// pieces (one per character) that all report the whole word.
+fn covers(word: &CutWord, ix: u32) -> bool {
+    let first = word.first.max(0) as u32;
+    first > 0 && (first..first + word.length as u32).contains(&ix)
 }
 
 fn is_digit09(c: u32) -> bool {

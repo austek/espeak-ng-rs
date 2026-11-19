@@ -99,4 +99,8 @@ word_ssml_de_dict_pause_after_number	0	de	0x1010	<speak>sieben acht.</speak>
 word_ssml_de_dict_pause_after_mark	0	de	0x1010	<speak>Haus<mark name="m"/>tür offen.</speak>
 word_ssml_de_dict_pause_first	0	de	0x1010	<speak>orgie</speak>
 word_ssml_hu_dict_pause_first	0	hu	0x1010	<speak>érzem</speak>
+word_af_other_language_word	0	af	0x1000	ek en brian.
+word_af_other_language_first	0	af	0x1000	brian ek
+word_ja_other_language_word	0	ja	0x1000	漢字
+word_ssml_af_other_language_word	0	af	0x1010	<speak>ek en brian.</speak>
 word_de_quotes	0	de	0x1000	Guten Tag, "Herr" Müller. Das kostet 5 € oder 10%.

@@ -218,6 +218,10 @@ pub fn build_list(
                 table = switched.get(lang).unwrap_or(phdata);
                 let mut switch = Ph::new(tab(phdata, PHON_SWITCH), 0, if opening { newword } else { 0 });
                 switch.switch_name = Some(table.active_table_name().unwrap_or(lang).to_string());
+                if opening {
+                    let next = codes[idx + 1..].iter().find(|k| k.marker.is_none()).and_then(|k| k.source);
+                    switch.source = word_source.take().or(next);
+                }
                 list.push(switch);
                 if opening {
                     newword = 0;
