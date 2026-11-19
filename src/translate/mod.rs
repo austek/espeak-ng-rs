@@ -13079,10 +13079,11 @@ fn promote_vowel(codes: &mut Vec<PhonemeCode>, vowel: usize) -> (usize, usize) {
     let is_stress = |c: &PhonemeCode| matches!(c.code, 2..=7 | PHON_STRESS_TONIC) && !c.is_boundary;
     let first = (0..vowel).rev().take_while(|&i| is_stress(&codes[i])).last().unwrap_or(vowel);
     let original = if first < vowel { codes[vowel - 1].code } else { 0 };
+    let source = codes[first..vowel].iter().find_map(|c| c.source);
     codes.splice(
         first..vowel,
         [
-            PhonemeCode { marker: Some(CodeMarker::PromotedTonic(original)), ..Default::default() },
+            PhonemeCode { marker: Some(CodeMarker::PromotedTonic(original)), source, ..Default::default() },
             PhonemeCode { code: PHON_STRESS_P, ..Default::default() },
         ],
     );
