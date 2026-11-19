@@ -120,3 +120,9 @@ word_af_apostrophe_schwa	0	af	0x1000	Hy het 'n boek
 word_ko_deleted_first_phoneme	0	ko	0x1000	냇가
 word_ko_deleted_first_phoneme_second_word	0	ko	0x1000	냇가 좋다
 word_ko_deleted_first_phoneme_middle	0	ko	0x1000	한국 냇가 좋다
+word_en_digit_groups	0	en	0x1000	12345
+word_en_digit_groups_long	0	en	0x1000	x 12345678 y
+word_en_thousands_groups	0	en	0x1000	1,234,567
+word_de_digit_groups	0	de	0x1000	Es sind 123456 Stück.
+word_ssml_say_as_digits_groups	0	en	0x1010	<speak><say-as interpret-as="digits">12345</say-as></speak>
+word_ssml_say_as_cardinal_groups	0	en	0x1010	<speak><say-as interpret-as="cardinal">1234567</say-as></speak>

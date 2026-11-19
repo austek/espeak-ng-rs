@@ -5030,6 +5030,47 @@ fn stress_each_word(
     out
 }
 
+/// A digit group C translates as a word of its own: how many words it speaks and the character
+/// offset of its text in the token.
+struct GroupSpan {
+    words: usize,
+    offset: u32,
+}
+
+/// The digit groups of a number C translates one by one (`TranslateClause` cuts a run of five or
+/// more digits at `break_numbers`, and a thousands-separated number at its separators); empty
+/// when the number is read as one word.  `runs` is where each run of digits starts in the source.
+fn number_group_spans(token: &Token, runs: &[u32], dict: &Dictionary, grammar: &NumberGrammar) -> Vec<GroupSpan> {
+    let pronunciation = match token {
+        Token::Number(NumberToken::Cardinal(digits))
+            if (MAX_UNSPLIT_DIGITS + 1..=MAX_GROUPED_DIGITS).contains(&digits.len())
+                && !reads_digit_by_digit(digits, grammar) =>
+        {
+            cardinal_pronunciation(digits, dict, grammar)
+        }
+        Token::Number(NumberToken::Grouped(digits)) => Some(grouped_pronunciation(digits, dict, grammar)),
+        _ => None,
+    };
+    let Some(pronunciation) = pronunciation.filter(|p| grammar.c_numbers != 0 && p.word_ends.len() > 1) else {
+        return Vec::new();
+    };
+    let separated = runs.len() > 1;
+    if separated && runs.len() != pronunciation.word_ends.len() {
+        return Vec::new();
+    }
+    let mut start = 0;
+    let mut spans = Vec::new();
+    for (n, &end) in pronunciation.word_ends.iter().enumerate() {
+        let words = pronunciation.bytes[start..end.min(pronunciation.bytes.len())]
+            .split(|&b| b == PHON_END_WORD)
+            .filter(|word| !word.is_empty())
+            .count();
+        spans.push(GroupSpan { words, offset: if separated { runs[n] } else { 0 } });
+        start = end;
+    }
+    spans
+}
+
 /// Whether the dictionary lists `word` itself (C looks a word up before it
 /// tries the number reading, so `100` in `mr_list` wins over the composed one).
 fn has_listed_word(word: &str, dict: &Dictionary, options: &LangOptions) -> bool {
@@ -11834,9 +11875,13 @@ impl Translator {
             }
             let sounding = first_sounding(&codes, &owners, tokens.len());
             let plain = matches!(mode, TokenizeMode::Plain);
-            let sources = charix.map(|cx| {
-                token_sources(source_text, &tokens, &self.options.number_grammar, cx, plain)
-            });
+            let (sources, digit_runs) = match charix {
+                Some(cx) => {
+                    let (sources, runs) = token_sources(source_text, &tokens, &self.options.number_grammar, cx, plain);
+                    (Some(sources), runs)
+                }
+                None => (None, Vec::new()),
+            };
             if let (true, Some(sources)) = (plain, sources.as_ref()) {
                 for (i, c) in codes.iter().enumerate() {
                     let closes = c.code == 0 && c.is_boundary && c.clause_char.is_some() && c.marker.is_none();
@@ -11847,7 +11892,9 @@ impl Translator {
             }
             for (ix, token) in tokens.iter().enumerate() {
                 let src = sources.as_ref().and_then(|s| s[ix]);
+                let spans = number_group_spans(token, digit_runs.get(ix).map_or(&[], Vec::as_slice), dict, &number_grammar);
                 if let (true, Some(src)) = (plain, src) {
+                    mark_word_starts(&mut codes, &owners, ix, src, pre_pauses.get(&ix).copied().unwrap_or(0), &spans, true);
                     if let Some(f) = sounding[ix] {
                         // A token glued to the one before it has no boundary of its own.
                         if word_starts.last().is_some_and(|&(b, _, _)| b == boundaries_before[f]) {
@@ -11857,7 +11904,7 @@ impl Translator {
                         }
                     }
                 } else if let (false, Some(src)) = (plain, src) {
-                    mark_word_starts(&mut codes, &owners, ix, src, pre_pauses.get(&ix).copied().unwrap_or(0));
+                    mark_word_starts(&mut codes, &owners, ix, src, pre_pauses.get(&ix).copied().unwrap_or(0), &spans, false);
                 }
                 let Some(f) = first[ix] else { continue };
                 let text = token_surface(token, &self.options.number_grammar);
@@ -12073,8 +12120,28 @@ fn locate_surface(text: &str, surface: &str, from: usize) -> Option<(usize, usiz
 /// its source, and every further word the token's phonemes spell out (`phonEND_WORD`, as in
 /// the parts of a number) starts at `source_ix + 1`.  The `pre_pause` pauses before the word's
 /// own phonemes and markers take no source; a pause its own pronunciation starts with does.
-fn mark_word_starts(codes: &mut [PhonemeCode], owners: &[usize], token: usize, src: SourceIx, pre_pause: usize) {
-    let mut part = 0u16;
+///
+/// A number C translates group by group (`spans`) restarts at each group: its first word starts
+/// at the group's own position.  With `groups_only` the first word of the token is left to the
+/// caller and only the groups after it are marked.
+fn mark_word_starts(
+    codes: &mut [PhonemeCode],
+    owners: &[usize],
+    token: usize,
+    src: SourceIx,
+    pre_pause: usize,
+    spans: &[GroupSpan],
+    groups_only: bool,
+) {
+    let restarts: Vec<(usize, u32)> = spans
+        .iter()
+        .scan(0, |words, span| {
+            let at = *words;
+            *words += span.words;
+            Some((at, span.offset))
+        })
+        .collect();
+    let (mut base, mut part, mut word) = (src.ix, 0u16, 0usize);
     let mut open = true;
     let mut pre = pre_pause;
     let sounds = codes.iter().zip(owners).any(|(c, &o)| {
@@ -12088,9 +12155,15 @@ fn mark_word_starts(codes: &mut [PhonemeCode], owners: &[usize], token: usize, s
         } else if is_pre_pause_code(code.code) && (pre > 0 || !sounds) {
             pre = pre.saturating_sub(1);
         } else if open {
-            code.source = Some(SourceIx { ix: src.ix + u32::from(part), ..src });
+            if let Some(&(_, offset)) = restarts.iter().find(|&&(at, _)| at == word) {
+                (base, part) = (src.ix + offset, 0);
+            }
+            if !groups_only || (word > 0 && part == 0) {
+                code.source = Some(SourceIx { ix: base + u32::from(part), ..src });
+            }
             open = false;
             part = 1;
+            word += 1;
         }
     }
 }
@@ -12136,7 +12209,7 @@ fn token_sources(
     grammar: &NumberGrammar,
     charix: &[i32],
     plain: bool,
-) -> Vec<Option<SourceIx>> {
+) -> (Vec<Option<SourceIx>>, Vec<Vec<u32>>) {
     let aligned = if plain { charix.to_vec() } else { align_charix(text, charix) };
     let charix = aligned.as_slice();
     let mut cursor = 0;
@@ -12148,12 +12221,12 @@ fn token_sources(
         .iter()
         .map(|token| {
             if let (true, Token::ClauseBoundary(c)) = (plain, token) {
-                return clause_end_source(text, *c, charix, &mut cursor);
+                return (clause_end_source(text, *c, charix, &mut cursor), Vec::new());
             }
             if let Token::Embedded(_) = token {
                 let read = |at: &usize| charix.get(*at).is_some_and(|&c| c > 0);
                 command = command.or_else(|| text.get(cursor..)?.find('\u{1}').map(|i| cursor + i).filter(read));
-                return None;
+                return (None, Vec::new());
             }
             if matches!(
                 token,
@@ -12163,11 +12236,11 @@ fn token_sources(
                     | Token::DotEndsClause
                     | Token::ClauseBoundary(_)
             ) {
-                return None;
+                return (None, Vec::new());
             }
             let surface = token_surface(token, grammar);
             if surface.is_empty() {
-                return None;
+                return (None, Vec::new());
             }
             let found = locate_surface(text, &surface, cursor);
             if let Some((_, end)) = found {
@@ -12175,23 +12248,53 @@ fn token_sources(
             }
             let waiting = command.take().filter(|&at| found.is_some_and(|(start, _)| at < start));
             let start = waiting.or(found.map(|(start, _)| start)).unwrap_or(cursor);
-            let source = word_source_masked(charix, start, mask)?;
+            let Some(source) = word_source_masked(charix, start, mask) else { return (None, Vec::new()) };
             // Punctuation glued to the word ends it, as C's inserted-space count does.
             let glued = found
                 .filter(|&(_, end)| {
                     waiting.is_none() && text[end..].chars().next().is_some_and(|c| !c.is_whitespace() && c != '\u{1}')
                 })
                 .map_or(usize::MAX, |(start, end)| text[start..end].chars().count());
+            let from = (start..charix.len()).find(|&j| charix[j] > 0).unwrap_or(start);
+            let run: Vec<char> = text[from..].chars().take_while(|c| !c.is_whitespace()).collect();
             // Where C starts a second word inside the first one's run of characters.
-            let split = waiting.is_none().then(|| {
-                let from = (start..charix.len()).find(|&j| charix[j] > 0).unwrap_or(start);
-                let run: Vec<char> = text[from..].chars().take_while(|c| !c.is_whitespace()).collect();
-                (1..run.len()).find_map(|n| word_cut(&run, n, grammar))
-            });
+            let split = waiting.is_none().then(|| (1..run.len()).find_map(|n| word_cut(&run, n, grammar)));
             let own = glued.min(split.flatten().unwrap_or(usize::MAX));
-            Some(SourceIx { len: source.len.min(own.min(31) as u8), ..source })
+            let groups = match token {
+                Token::Number(NumberToken::Cardinal(digits) | NumberToken::Grouped(digits)) if waiting.is_none() => {
+                    let written: Vec<char> = text[from..].chars().take(2 * digits.len()).collect();
+                    digit_run_offsets(&written, digits.len())
+                }
+                _ => Vec::new(),
+            };
+            (Some(SourceIx { len: source.len.min(own.min(31) as u8), ..source }), groups)
         })
-        .collect()
+        .unzip()
+}
+
+/// Where each run of digits starts in `run` (counted from its first digit) when a number of
+/// `count` digits is written with separators between the runs; empty when it is not.
+fn digit_run_offsets(run: &[char], count: usize) -> Vec<u32> {
+    let first = run.iter().position(char::is_ascii_digit).unwrap_or(0);
+    let mut starts = Vec::new();
+    let (mut seen, mut after_separator) = (0, false);
+    for (n, c) in run.iter().enumerate().skip(first) {
+        if c.is_alphabetic() {
+            return Vec::new();
+        }
+        if !c.is_ascii_digit() {
+            after_separator = true;
+        } else {
+            if after_separator || starts.is_empty() {
+                starts.push((n - first) as u32);
+            }
+            (seen, after_separator) = (seen + 1, false);
+            if seen == count {
+                return starts;
+            }
+        }
+    }
+    Vec::new()
 }
 
 /// Where C ends the length of a plain-text word at `run[n]` inside it: C starts the next
