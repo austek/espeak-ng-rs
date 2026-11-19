@@ -10018,7 +10018,7 @@ pub(crate) fn build_translate_entries(
                     || hyphen_after_blanks(tokens, token_ix)
                     || is_spoken_symbol(*c)
                     || punct_covers(options, *c)
-                    || dict_names_symbol(dict, *c, options.dict_condition)
+                    || (*c != '\'' && dict_names_symbol(dict, *c, options.dict_condition))
                     || (!is_clause_punctuation(*c) && english_word(*c, false).is_some()) =>
             {
                 let blank_hyphen = hyphen_after_blanks(tokens, token_ix);
