@@ -271,7 +271,8 @@ pub fn build_list(
         }
         let before = std::mem::replace(&mut insert, Insert::None);
         let s = entry_stress(before, t.typ, &mut stress, || follows_vowel(&codes[idx + 1..], table));
-        let leading_pause = matches!(c.code, PHON_PAUSE | PHON_PAUSE_NOLINK) && newword & PHLIST_START_OF_CLAUSE != 0;
+        let leading_pause =
+            matches!(c.code, PHON_PAUSE | PHON_PAUSE_NOLINK) && newword & PHLIST_START_OF_CLAUSE != 0 && word_source.is_none();
         let mut p = Ph::new(t.clone(), s, if leading_pause { 0 } else { newword });
         if !leading_pause {
             p.source = word_source.take();

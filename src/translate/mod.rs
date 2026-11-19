@@ -11143,6 +11143,9 @@ impl Translator {
         // letter-to-sound rules?  Turkish/Bashkir/Tatar suppress vowel reduction
         // then (`isTranslationGiven`).
         let mut from_dict: Vec<bool> = Vec::new();
+        // How many pause codes the word-level `pre_pause` put in front of each token's own
+        // phonemes: they carry no word start (`plist2` points past them).
+        let mut pre_pauses: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
         // `phonSWITCH` entries carry `[phonSWITCH, <lang bytes…>]` rather than
         // real phonemes.  Re-translate the word with the target language and
         // wrap its codes in switch markers, so `-x` prints `(en)h@l'oU(ru)`
@@ -11654,6 +11657,9 @@ impl Translator {
                             );
                             n += 1;
                         }
+                        if pending / 2 + n > 0 {
+                            pre_pauses.insert(token_ix, pending / 2 + n);
+                        }
                         if n > 0 {
                             let clause_start = codes[..at].iter().rev().take_while(|c| {
                                 !(c.is_boundary && c.code == 0 && c.clause_char.is_some())
@@ -11804,7 +11810,7 @@ impl Translator {
         // `codes` would not survive them — the number of word/clause boundaries
         // before a code does, since no pass adds or removes one.
         let mut groups: Vec<(String, usize)> = Vec::new();
-        let mut word_starts: Vec<(usize, SourceIx)> = Vec::new();
+        let mut word_starts: Vec<(usize, SourceIx, usize)> = Vec::new();
         let mut clause_ends: Vec<(usize, SourceIx)> = Vec::new();
         if tracking {
             owners.resize(codes.len(), owner_now);
@@ -11844,14 +11850,14 @@ impl Translator {
                 if let (true, Some(src)) = (plain, src) {
                     if let Some(f) = sounding[ix] {
                         // A token glued to the one before it has no boundary of its own.
-                        if word_starts.last().is_some_and(|&(b, _)| b == boundaries_before[f]) {
+                        if word_starts.last().is_some_and(|&(b, _, _)| b == boundaries_before[f]) {
                             codes[f].source = Some(src);
                         } else {
-                            word_starts.push((boundaries_before[f], src));
+                            word_starts.push((boundaries_before[f], src, pre_pauses.get(&ix).copied().unwrap_or(0)));
                         }
                     }
                 } else if let (false, Some(src)) = (plain, src) {
-                    mark_word_starts(&mut codes, &owners, ix, src);
+                    mark_word_starts(&mut codes, &owners, ix, src, pre_pauses.get(&ix).copied().unwrap_or(0));
                 }
                 let Some(f) = first[ix] else { continue };
                 let text = token_surface(token, &self.options.number_grammar);
@@ -11968,8 +11974,10 @@ impl Translator {
                 positions.get(b - 1).map(|&i| i + 1).unwrap_or(out_len)
             }
         };
-        for (boundary, src) in word_starts {
-            if let Some(code) = out.get_mut(start_of(boundary)).filter(|c| c.source.is_none()) {
+        for (boundary, src, pre_pause) in word_starts {
+            let first = start_of(boundary);
+            let at = skip_pre_pauses(&out[first.min(out_len)..], pre_pause) + first;
+            if let Some(code) = out.get_mut(at).filter(|c| c.source.is_none()) {
                 code.source = Some(src);
             }
         }
@@ -12063,20 +12071,44 @@ fn locate_surface(text: &str, surface: &str, from: usize) -> Option<(usize, usiz
 
 /// `TranslateWord2`'s `plist2->sourceix = source_ix`: the token's first sounding code carries
 /// its source, and every further word the token's phonemes spell out (`phonEND_WORD`, as in
-/// the parts of a number) starts at `source_ix + 1`.  Pre-pauses and markers sit in front of
-/// the word's own phoneme and take no source.
-fn mark_word_starts(codes: &mut [PhonemeCode], owners: &[usize], token: usize, src: SourceIx) {
+/// the parts of a number) starts at `source_ix + 1`.  The `pre_pause` pauses before the word's
+/// own phonemes and markers take no source; a pause its own pronunciation starts with does.
+fn mark_word_starts(codes: &mut [PhonemeCode], owners: &[usize], token: usize, src: SourceIx, pre_pause: usize) {
     let mut part = 0u16;
     let mut open = true;
+    let mut pre = pre_pause;
+    let sounds = codes.iter().zip(owners).any(|(c, &o)| {
+        o == token && c.marker.is_none() && !c.is_boundary && c.code != crate::phoneme::PHON_END_WORD && !is_pre_pause_code(c.code)
+    });
     for (code, _) in codes.iter_mut().zip(owners).filter(|(_, &o)| o == token) {
         if code.is_boundary || code.code == crate::phoneme::PHON_END_WORD {
             open = true;
-        } else if code.marker.is_none() && !is_pre_pause_code(code.code) && open {
+        } else if code.marker.is_some() {
+            continue;
+        } else if is_pre_pause_code(code.code) && (pre > 0 || !sounds) {
+            pre = pre.saturating_sub(1);
+        } else if open {
             code.source = Some(SourceIx { ix: src.ix + u32::from(part), ..src });
             open = false;
             part = 1;
         }
     }
+}
+
+/// The index of the first code of `codes` that is not one of the first `pre_pause` pauses.
+fn skip_pre_pauses(codes: &[PhonemeCode], pre_pause: usize) -> usize {
+    let mut left = pre_pause;
+    codes
+        .iter()
+        .position(|c| {
+            if c.marker.is_some() {
+                return false;
+            }
+            let skip = left > 0 && is_pre_pause_code(c.code);
+            left -= usize::from(skip);
+            !skip
+        })
+        .unwrap_or(0)
 }
 
 fn is_pre_pause_code(code: u8) -> bool {

@@ -92,4 +92,11 @@ word_ru_guillemets	0	ru	0x1000	Он сказал: «привет», и ушёл.
 word_ssml_quote_sentences	0	en	0x1010	<speak>"Hello," she said. "How are you?"</speak>
 word_abbrev_clauses	0	en	0x1000	The U.S.A. and U.K. are friends. Dr. Smith agrees.
 word_money_grouped	0	en	0x1000	Costs $5.50 or 3,000 here.
+word_de_dict_pause_first	0	de	0x1000	orgie
+word_hu_dict_pause_first	0	hu	0x1000	érzem
+word_ssml_de_dict_pause_words	0	de	0x1010	<speak>ich esse einen Apfel und ein Ei.</speak>
+word_ssml_de_dict_pause_after_number	0	de	0x1010	<speak>sieben acht.</speak>
+word_ssml_de_dict_pause_after_mark	0	de	0x1010	<speak>Haus<mark name="m"/>tür offen.</speak>
+word_ssml_de_dict_pause_first	0	de	0x1010	<speak>orgie</speak>
+word_ssml_hu_dict_pause_first	0	hu	0x1010	<speak>érzem</speak>
 word_de_quotes	0	de	0x1000	Guten Tag, "Herr" Müller. Das kostet 5 € oder 10%.
