@@ -888,7 +888,7 @@ impl EspeakNg {
     /// best-effort source `text_position`), and `End`/`MsgTerminated`.  With
     /// SSML markup the events come from the clause generator, as C's do.  When
     /// sound icons are present the runs are spliced, so only message-level
-    /// events (and, with markup, interpolated `Mark` events) are produced.
+    /// events (and, with markup, `Mark` events scaled to the spliced audio) are produced.
     ///
     /// # Note on `text_position`
     /// The audio timing is exact; the source char offset is derived by scanning
@@ -896,32 +896,25 @@ impl EspeakNg {
     /// source token expands to several spoken words (numbers, abbreviations).
     pub fn synth_with_events(&self, text: &str) -> Result<(PcmBuffer, u32, Vec<SynthEvent>)> {
         let rate = self.sample_rate();
-        let ms = |s: usize| (s as u64 * 1000 / rate.max(1) as u64) as u32;
 
         // Icon/markup splicing reorders audio; word-level timing isn't tracked
         // through it, so fall back to a message-terminated event only — plus any
-        // SSML `<mark>` events, whose audio time is interpolated from their text
-        // position (exact per-word timing isn't tracked through the markup path).
+        // SSML `<mark>` events, taken from the markup render and scaled to the
+        // spliced audio's length.
         if self.markup && self.soundicons.is_empty() {
             return self.synth_markup_with_events(text, rate);
         }
         if !self.soundicons.is_empty() || self.markup {
             let (samples, _) = self.synth(text)?;
-            let end_ms = ms(samples.len());
             let mut events = vec![sample_rate_event(rate)];
             if self.markup {
-                let (_segs, marks) = crate::translate::ssml::process_markup_with_marks(text);
-                let total = crate::translate::ssml::strip_markup(text).chars().count().max(1);
-                for m in marks {
-                    let at = (m.position as u64 * end_ms as u64 / total as u64) as u32;
-                    events.push(SynthEvent {
-                        kind: EventKind::Mark(m.name),
-                        text_position: m.position as u32 + 1,
-                        length: 0,
-                        audio_position_ms: at,
-                        sample: u64::from(at) * u64::from(rate) / 1000,
-                    });
-                }
+                let (marked, _, reader_events) = self.synth_markup_with_events(text, rate)?;
+                let scale = samples.len() as f64 / marked.len().max(1) as f64;
+                events.extend(reader_events.into_iter().filter(|e| matches!(e.kind, EventKind::Mark(_))).map(|mut e| {
+                    e.sample = (e.sample as f64 * scale) as u64;
+                    e.audio_position_ms = (e.sample * 1000 / u64::from(rate.max(1))) as u32;
+                    e
+                }));
             }
             events.push(terminated_event());
             return Ok((samples, rate, events));

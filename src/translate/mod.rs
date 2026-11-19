@@ -27,7 +27,6 @@ pub mod ipa_table;
 pub mod phoneme_ipa;
 pub mod compat;
 pub(crate) mod ucd_alpha;
-pub mod ssml;
 pub mod readclause;
 pub mod ssml_driver;
 mod c_words;
@@ -6482,109 +6481,6 @@ pub(crate) fn parse_inline_phonemes(content: &str, phdata: &PhonemeData) -> Vec<
     codes
 }
 
-/// Apply a segment's SSML [`SayAs`](ssml::SayAs) interpretation to its text,
-/// given the language it will be translated in.  `Ordinal` appends the English
-/// ordinal suffix to integer tokens ("3" → "3rd"), which the number path then
-/// reads as an ordinal; other languages/modes pass through unchanged.
-/// Process SSML into the plain text the synthesizer should speak, for the audio
-/// path: strips tags, decodes entities, applies text-level `<say-as>` spelling
-/// (`characters`/`digits`/`telephone`) **and** the language-aware interpret modes
-/// (`ordinal`/`date`/`time`) — the latter were previously only applied on the
-/// `--ipa`/`-x` path.  `<voice>` language spans are read in `lang` (audio voice
-/// switching is not yet wired).
-pub fn ssml_to_speech_text(text: &str, lang: &str) -> String {
-    ssml::process_markup_with_marks(text)
-        .0
-        .into_iter()
-        .map(|s| interpret_segment_text(&s.text, s.interpret, lang))
-        .collect()
-}
-
-fn interpret_segment_text(text: &str, interpret: ssml::SayAs, lang: &str) -> String {
-    // These renderings are English-only (best-effort); other languages pass
-    // through and read the raw content.
-    if interpret == ssml::SayAs::Normal || primary_bcp47_subtag(lang) != "en" {
-        return text.to_string();
-    }
-    match interpret {
-        ssml::SayAs::Ordinal => ordinalize_english(text),
-        ssml::SayAs::Date => dateize_english(text),
-        ssml::SayAs::Time => timeize_english(text),
-        ssml::SayAs::Normal => unreachable!(),
-    }
-}
-
-const MONTHS: [&str; 12] = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-];
-
-/// Render an ISO `YYYY-MM-DD` (or `YYYY/MM/DD`) date as English words:
-/// "2024-01-15" → "January 15th 2024" (read as "January fifteenth …").
-/// Unrecognised input is returned unchanged (read normally).
-fn dateize_english(text: &str) -> String {
-    let parts: Vec<&str> = text.trim().split(['-', '/']).collect();
-    if parts.len() == 3 && parts[0].len() == 4 {
-        if let (Ok(y), Ok(m), Ok(d)) =
-            (parts[0].parse::<u32>(), parts[1].parse::<u32>(), parts[2].parse::<u32>())
-        {
-            if (1..=12).contains(&m) && (1..=31).contains(&d) {
-                let ds = d.to_string();
-                return format!("{} {d}{} {y}", MONTHS[(m - 1) as usize], english_ordinal_suffix(&ds));
-            }
-        }
-    }
-    text.to_string()
-}
-
-/// Render a `HH:MM` (or `HH:MM:SS`) time as English words: "14:30" → "14 30"
-/// ("fourteen thirty"), "9:05" → "9 oh 5", "14:00" → "14 o'clock".
-/// Unrecognised input is returned unchanged.
-fn timeize_english(text: &str) -> String {
-    let t = text.trim();
-    if let Some((h, rest)) = t.split_once(':') {
-        let m = rest.split(':').next().unwrap_or("");
-        if let (Ok(hh), Ok(mm)) = (h.parse::<u32>(), m.parse::<u32>()) {
-            if hh < 24 && mm < 60 {
-                return match mm {
-                    0 => format!("{hh} o'clock"),
-                    1..=9 => format!("{hh} oh {mm}"),
-                    _ => format!("{hh} {mm}"),
-                };
-            }
-        }
-    }
-    text.to_string()
-}
-
-/// Append the English ordinal suffix to every integer token in `text`.
-fn ordinalize_english(text: &str) -> String {
-    text.split_whitespace()
-        .map(|tok| {
-            if !tok.is_empty() && tok.bytes().all(|b| b.is_ascii_digit()) {
-                format!("{tok}{}", english_ordinal_suffix(tok))
-            } else {
-                tok.to_string()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-/// The English ordinal suffix for a run of decimal digits (`st`/`nd`/`rd`/`th`).
-fn english_ordinal_suffix(digits: &str) -> &'static str {
-    let last_two = &digits[digits.len().saturating_sub(2)..];
-    if matches!(last_two, "11" | "12" | "13") {
-        return "th";
-    }
-    match digits.as_bytes().last() {
-        Some(b'1') => "st",
-        Some(b'2') => "nd",
-        Some(b'3') => "rd",
-        _ => "th",
-    }
-}
-
 /// Technical symbols that eSpeak NG speaks as their name by default (i.e.
 /// without `--punct`).  Everything else — `.,;:!?'"()[]{}` etc. — is treated
 /// as pause/clause punctuation and produces no spoken output.
@@ -10955,8 +10851,8 @@ impl Translator {
 
     /// Translate free text to IPA, interpreting SSML markup (`-m` mode).
     ///
-    /// Equivalent to `espeak-ng -v <lang> -q --ipa -m <text>`.  See
-    /// [`ssml::strip_markup`] for the supported subset.
+    /// Equivalent to `espeak-ng -v <lang> -q --ipa -m <text>`.  The tags are read
+    /// by the clause reader and [`ssml_driver`], as C reads them.
     pub fn text_to_ipa_ssml(&self, text: &str) -> Result<String> {
         self.text_to_ipa_with_options(text, false, false, true, true)
     }

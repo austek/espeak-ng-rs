@@ -111,6 +111,15 @@ fn phoneme_needs_the_espeak_alphabet_and_keeps_its_content() {
     ]);
 }
 
+/// C reads `<!…>` as an unknown tag, and a tag left open at the end of the text is dropped.
+#[test]
+fn unknown_and_unterminated_tags_are_dropped() {
+    check(&[
+        ("hello <broken", "həlˈəʊ", "h@l'oU"),
+        ("<!DOCTYPE speak>hi", "hˈaɪ", "h'aI"),
+    ]);
+}
+
 /// C starts a tag only when `<` is followed by `/`, a letter, `!` or `?`.
 #[test]
 fn lt_before_a_non_tag_character_is_literal() {

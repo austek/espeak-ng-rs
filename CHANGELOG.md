@@ -43,6 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     sentences so far, and keeps a sentence at the position the engine gave
     it. A word whose `length` is 0 is measured in the text, as before.
 
+### Removed
+
+- **Breaking:** the SSML text walker `translate::ssml` (`process_markup`,
+  `process_markup_with_marks`, `process_markup_opts`, `strip_markup`,
+  `document_prosody`, `Segment`, `Mark`, `SayAs`, `Prosody`) and
+  `translate::ssml_to_speech_text`. Markup is read by the clause reader
+  and `translate::ssml_driver`, as C reads it; nothing in the engine called the
+  walker.
+
 ## [0.2.0] - 2026-09-05
 
 ### Added

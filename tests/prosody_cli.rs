@@ -14,7 +14,7 @@ fn wav_samples(bytes: &[u8]) -> usize {
 }
 
 #[test]
-fn document_prosody_rate_changes_wav_length() {
+fn prosody_rate_changes_wav_length() {
     if !Path::new("espeak-ng-data/en_dict").exists() {
         eprintln!("[SKIP] no en data");
         return;
