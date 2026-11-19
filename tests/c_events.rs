@@ -18,6 +18,8 @@ use std::path::Path;
 use espeak_ng::{EspeakNg, EventKind};
 
 const SSML_FLAG: u32 = 0x10;
+const PHONEME_EVENTS: u32 = 0x1;
+const PHONEME_IPA: u32 = 0x2;
 /// The probe installs a URI callback that accepts `<audio>` URIs.
 const ACCEPT_URI: u32 = 0x10000;
 
@@ -94,6 +96,7 @@ fn engine(case: &Case) -> Option<EspeakNg> {
     }
     let mut e = EspeakNg::builder().voice(&case.voice).data_dir(dir).build().ok()?;
     e.set_markup(case.flags & SSML_FLAG != 0);
+    e.set_phoneme_events(case.options & PHONEME_EVENTS != 0, case.options & PHONEME_IPA != 0);
     if case.options & ACCEPT_URI != 0 {
         e.set_uri_callback(Some(Box::new(|_, _| 0)));
     }

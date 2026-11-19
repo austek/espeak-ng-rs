@@ -45,6 +45,8 @@ pub struct Ph {
     pub tone_env: ToneEnv,
     /// C `sourceix`: the word this phoneme opens, in the clause source.
     pub source: Option<SourceIx>,
+    /// The phoneme table a `phonSWITCH` entry selects (C's `phoneme_tab_list[tone_ph].name`).
+    pub switch_name: Option<String>,
 }
 
 /// What a tone phoneme's program selects: phondata offsets of its pitch and
@@ -77,6 +79,7 @@ impl Ph {
             tone: None,
             tone_env: ToneEnv::default(),
             source: None,
+            switch_name: None,
         }
     }
 
@@ -213,7 +216,9 @@ pub fn build_list(
             Some(CodeMarker::LangSwitch(lang)) => {
                 let opening = switched.contains_key(lang);
                 table = switched.get(lang).unwrap_or(phdata);
-                list.push(Ph::new(tab(phdata, PHON_SWITCH), 0, if opening { newword } else { 0 }));
+                let mut switch = Ph::new(tab(phdata, PHON_SWITCH), 0, if opening { newword } else { 0 });
+                switch.switch_name = Some(table.active_table_name().unwrap_or(lang).to_string());
+                list.push(switch);
                 if opening {
                     newword = 0;
                 }

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `EspeakNg::set_phoneme_events(enable, ipa)` (C `espeak_ng_SetPhonemeEvents`)
+  turns on one `EventKind::Phoneme` per phoneme, plain text and SSML alike. The
+  name is the mnemonic with `,`/`'` stress, or the IPA name the phoneme's
+  program picks in context, cut to 8 bytes as C's event string is. Positions
+  and samples follow C's `Generate`. `VoiceParams` gains `phoneme_events`.
+
 ### Changed
 
 - **Breaking: `SynthEvent` and `EventKind` carry the fields of C's

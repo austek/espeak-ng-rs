@@ -343,6 +343,8 @@ pub struct EspeakNg {
     soundicons: crate::soundicon::SoundIconTable,
     /// When set, `synth` interprets SSML `<audio src="…">` markup.
     markup:     bool,
+    /// `option_phoneme_events`: bit 0 = phoneme events, bit 1 = IPA names.
+    phoneme_events: u32,
     /// `espeakSSML_BREAK_MUL` (`--ssml-break`) as a percentage: scales every
     /// SSML `<break time=…>`.  100 = the duration as written.
     ssml_break: u32,
@@ -413,6 +415,7 @@ impl EspeakNg {
             data_dir:   data_dir.to_path_buf(),
             soundicons: crate::soundicon::SoundIconTable::new(22_050),
             markup:     false,
+            phoneme_events: 0,
             ssml_break: 100,
             voice_pitch: None,
             voice_file: None,
@@ -477,6 +480,12 @@ impl EspeakNg {
     /// default.
     pub fn set_markup(&mut self, on: bool) {
         self.markup = on;
+    }
+
+    /// `espeak_ng_SetPhonemeEvents`: report a [`EventKind::Phoneme`] event per phoneme, named
+    /// in IPA when `ipa` is set.  As in C, `ipa` alone also turns the events on.
+    pub fn set_phoneme_events(&mut self, enable: bool, ipa: bool) {
+        self.phoneme_events = u32::from(enable) | (u32::from(ipa) << 1);
     }
 
     /// Register the `espeak_SetUriCallback` hook.  With one set, markup `<audio src>`
@@ -1328,6 +1337,7 @@ impl EspeakNg {
             echo_amp,
             flutter,
             stress_amps,
+            phoneme_events: self.phoneme_events,
             lang: spec.effective_lang().to_string(),
             voice_pitch: spec
                 .variant
@@ -1412,6 +1422,7 @@ fn marker_event(e: &crate::synthesize::cgen::RawEvent, name: Option<&str>, scale
         MarkerKind::Play => EventKind::Play(name.unwrap_or_default().to_string()),
         MarkerKind::End => EventKind::End(e.marker.value as u32),
         MarkerKind::SampleRate => EventKind::SampleRate(e.marker.value as u32),
+        MarkerKind::Phoneme => EventKind::Phoneme(e.marker.phoneme_name()),
     };
     let sample = (e.sample as f64 * scale) as usize;
     let mut ev = event_at(kind, e.marker.pos, sample, rate);

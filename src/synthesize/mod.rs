@@ -261,6 +261,8 @@ pub struct VoiceParams {
     pub stress_amps: [i32; 8],
     /// The language whose translator options and voice file apply.
     pub lang: String,
+    /// `option_phoneme_events`: non-zero queues a phoneme event per phoneme, bit 1 names it in IPA.
+    pub phoneme_events: u32,
     /// The voice's `pitch <base> <range>`, when the voice or variant sets one.
     pub voice_pitch: Option<(i32, i32)>,
     /// The data directory, for the voice file's synthesis keywords.  `None`
@@ -323,7 +325,8 @@ impl Default for VoiceParams {
             flutter:            0,
             stress_amps:        [0; 8],
             lang:               String::new(),
-            voice_pitch:        None,
+            phoneme_events:     0,
+            voice_pitch:       None,
             data_dir:           None,
             voice_files:        Vec::new(),
         }

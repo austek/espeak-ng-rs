@@ -4,17 +4,43 @@
 
 use std::collections::HashMap;
 
-use super::phlist::{Ph, PHLIST_START_OF_SENTENCE, PHLIST_START_OF_WORD, SFLAG_LENGTHEN, SFLAG_NEXT_PAUSE, SFLAG_SEQCONTINUE};
+use super::phlist::{
+    Ph, PHLIST_START_OF_SENTENCE, PHLIST_START_OF_WORD, SFLAG_LENGTHEN, SFLAG_NEXT_PAUSE, SFLAG_SEQCONTINUE, SFLAG_SYLLABLE,
+};
 use super::speed::Speed;
 use super::voice::{LangSynth, WVoice};
 use super::phlist::ClauseCounters;
 use super::{Env, Marker, MarkerKind, Wcmd};
 use crate::phoneme::{
-    PhonemeData, PHON_LENGTHEN, PH_FRICATIVE, PH_LIQUID, PH_LONG, PH_NASAL, PH_NOPAUSE, PH_PAUSE,
+    PhonemeData, PHON_END_WORD, PHON_LENGTHEN, PHON_SWITCH, PH_FRICATIVE, PH_LIQUID, PH_LONG, PH_NASAL, PH_NOPAUSE, PH_PAUSE,
     PH_PREVOICE, PH_STOP, PH_TRILL, PH_VFRICATIVE, PH_VOWEL, PH_VSTOP,
 };
 use crate::synthesize::bytecode::{self, Neighbours};
 use crate::synthesize::phondata::{SpectFrame, SpectSeq, FRAME_T2_SIZE, FRAME_T_SIZE, FRFLAG_KLATT};
+use crate::translate::phoneme_ipa::{declared_ipa_name, mnemonic_to_ipa_c};
+
+/// `espeakINITIALIZE_PHONEME_IPA` in `option_phoneme_events`.
+pub const PHONEME_IPA: u32 = 0x02;
+const STRESS_IS_SECONDARY: u8 = 3;
+const STRESS_IS_PRIORITY: u8 = 5;
+
+/// The stress character `WritePhMnemonicWithStress` writes before a syllable's phoneme.
+fn stress_mark(stress: u8, ipa: bool) -> Option<char> {
+    if stress <= 1 {
+        return None;
+    }
+    let stress = stress.min(STRESS_IS_PRIORITY);
+    Some(match (ipa, stress > STRESS_IS_SECONDARY) {
+        (true, true) => '\u{2c8}',
+        (true, false) => '\u{2cc}',
+        (false, _) => ['=', '=', ',', ',', '\'', '\''][usize::from(stress)],
+    })
+}
+
+/// The mnemonic characters of a phoneme, up to the `/` that starts a variant indicator.
+fn mnemonic_ascii(mnemonic: u32) -> String {
+    mnemonic.to_le_bytes().iter().take_while(|&&b| b != 0 && b != b'/').map(|&b| char::from(b)).collect()
+}
 
 const EMBED_I: usize = 7;
 const ICON_AMP: i32 = 0x15;
@@ -121,6 +147,10 @@ pub struct Generator<'a> {
     counters: Option<ClauseCounters>,
     word_count: u32,
     sentence_pending: bool,
+    /// `option_phoneme_events`: non-zero queues a phoneme event per phoneme.
+    phoneme_events: u32,
+    /// `Generate`'s `sourceix`: the position of the word the phoneme belongs to.
+    sourceix: u32,
 }
 
 /// A sound icon's 16-bit samples as `Wcmd::Wave` addresses them: a byte offset past the end of
@@ -160,6 +190,8 @@ impl<'a> Generator<'a> {
             counters: None,
             word_count: 0,
             sentence_pending: false,
+            phoneme_events: 0,
+            sourceix: 0,
         }
     }
 
@@ -186,6 +218,12 @@ impl<'a> Generator<'a> {
         self
     }
 
+    /// `option_phoneme_events`: bit 0 asks for phoneme events, [`PHONEME_IPA`] for IPA names.
+    pub fn with_phoneme_events(mut self, option: u32) -> Self {
+        self.phoneme_events = option;
+        self
+    }
+
     /// `DoMarker(espeakEVENT_SENTENCE)` and `DoMarker(espeakEVENT_WORD)` of `Generate`.
     fn word_markers(&mut self, p: &Ph) {
         let Some(k) = self.counters else {
@@ -197,11 +235,11 @@ impl<'a> Generator<'a> {
         let Some(src) = p.source.filter(|_| p.newword & PHLIST_START_OF_WORD != 0) else { return };
         let pos = src.ix + k.start_char;
         if std::mem::take(&mut self.sentence_pending) {
-            self.push(Wcmd::Marker(Marker { kind: MarkerKind::Sentence, pos, len: 0, value: k.sentences as i32 }));
+            self.push(Wcmd::Marker(Marker { pos, value: k.sentences as i32, ..Marker::new(MarkerKind::Sentence) }));
         }
         let value = (k.start_word + self.word_count) as i32;
         self.word_count += 1;
-        self.push(Wcmd::Marker(Marker { kind: MarkerKind::Word, pos, len: src.len, value }));
+        self.push(Wcmd::Marker(Marker { pos, len: src.len, value, ..Marker::new(MarkerKind::Word) }));
     }
 
     pub fn embedded_s2_value(&self) -> i32 {
@@ -909,6 +947,20 @@ impl<'a> Generator<'a> {
 
     fn interp_ctl(&self, list: &[Ph], ix: usize, pre_voicing: bool) -> PhData {
         let p = &list[ix];
+        let e = self.run_program(list, ix, pre_voicing);
+        PhData {
+            sound_addr: e.sound_addr,
+            sound_param: e.sound_param,
+            set_length: e.set_length.map_or(p.ph.std_length as i32, |v| v as i32) + e.add_length as i32,
+            pause_before: e.pause_before_ms as i32,
+            pd_control: if e.pd_fornextph { PD_FORNEXTPH } else { 0 },
+            vowel_transition: e.vowel_transition,
+        }
+    }
+
+    /// The phoneme's program run against its neighbours in the clause list.
+    fn run_program(&self, list: &[Ph], ix: usize, pre_voicing: bool) -> bytecode::PhonemeExtract {
+        let p = &list[ix];
         let get = |i: usize| list.get(i);
         let code = |i: Option<&Ph>| i.map_or(0, |q| q.code());
         let stress = |i: Option<&Ph>| i.map_or(0, |q| q.stresslevel & 7);
@@ -939,14 +991,56 @@ impl<'a> Generator<'a> {
         let lookup = |c: u8| {
             window.iter().find(|q| q.code() == c).map(|q| q.ph.clone()).or_else(|| self.phdata.get(c).cloned())
         };
-        let e = bytecode::interpret_phoneme(p.ph.program, &self.phdata.phonindex, &nb, lookup);
-        PhData {
-            sound_addr: e.sound_addr,
-            sound_param: e.sound_param,
-            set_length: e.set_length.map_or(p.ph.std_length as i32, |v| v as i32) + e.add_length as i32,
-            pause_before: e.pause_before_ms as i32,
-            pd_control: if e.pd_fornextph { PD_FORNEXTPH } else { 0 },
-            vowel_transition: e.vowel_transition,
+        bytecode::interpret_phoneme(p.ph.program, &self.phdata.phonindex, &nb, lookup)
+    }
+
+    // ---- WritePhMnemonicWithStress ----------------------------------------
+
+    /// C `WritePhMnemonicWithStress(..., use_ipa)` for the list entry at `ix`.
+    fn phoneme_name(&self, list: &[Ph], ix: usize) -> String {
+        let p = &list[ix];
+        let stress = if p.synthflags & SFLAG_SYLLABLE != 0 { stress_mark(p.stresslevel, self.use_ipa()) } else { None };
+        let name = self.mnemonic(list, ix);
+        stress.map_or(name.clone(), |c| format!("{c}{name}"))
+    }
+
+    /// C `WritePhMnemonic`.
+    fn mnemonic(&self, list: &[Ph], ix: usize) -> String {
+        let p = &list[ix];
+        if p.code() == PHON_END_WORD {
+            return String::new();
+        }
+        if p.code() == PHON_SWITCH {
+            return format!("({})", p.switch_name.as_deref().unwrap_or_default());
+        }
+        if !self.use_ipa() {
+            return mnemonic_ascii(p.ph.mnemonic);
+        }
+        let e = self.run_program(list, ix, false);
+        declared_ipa_name(e.ipa_string.as_deref())
+            .unwrap_or_else(|| mnemonic_to_ipa_c(p.ph.mnemonic, p.ph.typ == PH_VOWEL))
+    }
+
+    fn use_ipa(&self) -> bool {
+        self.phoneme_events & PHONEME_IPA != 0
+    }
+
+    /// `DoPhonemeMarker(espeakEVENT_PHONEME, sourceix, 0, phoneme_name)`.
+    fn phoneme_marker(&mut self, list: &[Ph], ix: usize) {
+        let mut name = [0u8; 8];
+        let full = self.phoneme_name(list, ix);
+        let n = full.len().min(name.len());
+        name[..n].copy_from_slice(&full.as_bytes()[..n]);
+        let marker = Marker { pos: self.sourceix, name, ..Marker::new(MarkerKind::Phoneme) };
+        self.push(Wcmd::Marker(marker));
+    }
+
+    /// The `option_phoneme_events` test of `Generate`, before the phoneme's own sound is queued.
+    fn early_phoneme_marker(&mut self, list: &[Ph], ix: usize) {
+        let p = &list[ix];
+        let after_liquid_or_nasal = p.typ == PH_VOWEL && matches!(list[ix - 1].typ, PH_LIQUID | PH_NASAL);
+        if self.phoneme_events != 0 && p.code() != PHON_END_WORD && !after_liquid_or_nasal {
+            self.phoneme_marker(list, ix);
         }
     }
 
@@ -966,7 +1060,7 @@ impl<'a> Generator<'a> {
         }
         self.end_pitch(true);
         if let Some(k) = self.counters {
-            self.push(Wcmd::Marker(Marker { kind: MarkerKind::End, pos: k.end_char, len: 0, value: k.sentences as i32 }));
+            self.push(Wcmd::Marker(Marker { pos: k.end_char, value: k.sentences as i32, ..Marker::new(MarkerKind::End) }));
         }
     }
 
@@ -1005,13 +1099,13 @@ impl<'a> Generator<'a> {
     fn mark(&mut self, value: i32, source: Option<crate::translate::SourceIx>) {
         let Some(k) = self.counters else { return };
         let pos = source.map_or(0, |s| s.ix & 0x7ff) + k.start_char;
-        self.push(Wcmd::Marker(Marker { kind: MarkerKind::Mark, pos, len: 0, value }));
+        self.push(Wcmd::Marker(Marker { pos, value, ..Marker::new(MarkerKind::Mark) }));
     }
 
     /// `DoEmbedded`'s `EMBED_U`: `DoMarker(espeakEVENT_PLAY, count_characters+1, 0, value)`.
     fn play(&mut self, value: i32) {
         let Some(k) = self.counters else { return };
-        self.push(Wcmd::Marker(Marker { kind: MarkerKind::Play, pos: k.end_char + 1, len: 0, value }));
+        self.push(Wcmd::Marker(Marker { pos: k.end_char + 1, value, ..Marker::new(MarkerKind::Play) }));
     }
 
     /// `DoEmbedded`'s `EMBED_I`: a break, then the clip as 16-bit data at amplitude 21.
@@ -1030,12 +1124,14 @@ impl<'a> Generator<'a> {
             if !(merge || p.ph.phflags & PH_NOPAUSE != 0) {
                 self.last_frame = None;
             }
+            self.sourceix = p.source.map_or(0, |s| s.ix & 0x7ff) + self.counters.map_or(0, |k| k.start_char);
             self.word_markers(&p);
         }
         self.end_amplitude();
         if p.prepause > 0 && p.ph.phflags & PH_PREVOICE == 0 {
             self.do_pause(p.prepause, 1);
         }
+        self.early_phoneme_marker(list, ix);
         match p.typ {
             PH_PAUSE => self.do_pause(p.length, 0),
             PH_STOP => self.stop(list, ix),
@@ -1262,6 +1358,9 @@ impl<'a> Generator<'a> {
             }
             self.do_spect2(list, ix, 1, &mut fmt, modulation);
         }
+        if self.phoneme_events != 0 && matches!(prev.typ, PH_LIQUID | PH_NASAL) {
+            self.phoneme_marker(list, ix);
+        }
         let mut fmt2 = fmt;
         fmt2.fmt_addr = d.sound_addr[PD_FMT];
         fmt2.fmt_amp = d.sound_param[PD_FMT];
@@ -1336,4 +1435,24 @@ struct Transition {
 #[allow(dead_code)]
 fn is_klatt(f: &SpectFrame) -> bool {
     f.frflags & FRFLAG_KLATT != 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // `WritePhMnemonicWithStress`: `stress_chars` is "==,,''", the IPA marks follow STRESS_IS_SECONDARY.
+    #[test]
+    fn stress_marks_follow_c() {
+        let marks = |ipa| (0..8).map(|s| stress_mark(s, ipa)).collect::<Vec<_>>();
+        assert_eq!(marks(false), [None, None, Some(','), Some(','), Some('\''), Some('\''), Some('\''), Some('\'')]);
+        assert_eq!(marks(true), [None, None, Some('\u{2cc}'), Some('\u{2cc}'), Some('\u{2c8}'), Some('\u{2c8}'), Some('\u{2c8}'), Some('\u{2c8}')]);
+    }
+
+    // The mnemonic of `'oU` ends at a `/` variant indicator.
+    #[test]
+    fn mnemonic_stops_at_variant_marker() {
+        assert_eq!(mnemonic_ascii(u32::from_le_bytes(*b"oU\0\0")), "oU");
+        assert_eq!(mnemonic_ascii(u32::from_le_bytes(*b"a/2\0")), "a");
+    }
 }

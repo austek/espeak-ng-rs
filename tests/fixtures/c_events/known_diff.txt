@@ -4,13 +4,4 @@ plain_embedded_unknown_letter	audio
 plain_embedded_break_z	audio
 plain_private_use_after_dot	events
 plain_private_use_boundary	events
-ph1_hello	events
-ph3_hello	events
-ph1_hello_world	events
-ph3_sentence	events
-ph1_de	events
-ph3_de	events
-ph1_it	events
-ph3_it	events
-ph3_ssml_mark	events
 multi_say_as_date	events

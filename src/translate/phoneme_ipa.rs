@@ -59,7 +59,12 @@ fn program_ipa_name(phdata: &PhonemeData, code: u8, nb: &Neighbours) -> Option<S
         return None;
     }
     let fx = interpret_phoneme(ph.program, &phdata.phonindex, nb, |c| phdata.get(c).cloned());
-    let s = fx.ipa_string.as_deref()?;
+    declared_ipa_name(fx.ipa_string.as_deref())
+}
+
+/// The name of a program's `ipa_string`, as `WritePhMnemonic` reads it.
+pub(crate) fn declared_ipa_name(ipa_string: Option<&str>) -> Option<String> {
+    let s = ipa_string?;
     let b = s.as_bytes();
     // A leading space is C's "this phoneme has no IPA name" marker.
     if b.first() == Some(&0x20) {
@@ -77,7 +82,7 @@ fn program_ipa_name(phdata: &PhonemeData, code: u8, nb: &Neighbours) -> Option<S
 ///
 /// Unlike [`super::ipa_table::mnemonic_to_ipa`] this keeps a `-` in a vowel
 /// mnemonic, because C does: French's reducible schwa `@-` prints `ə-`.
-fn mnemonic_to_ipa_c(mnemonic: u32, is_vowel: bool) -> String {
+pub(crate) fn mnemonic_to_ipa_c(mnemonic: u32, is_vowel: bool) -> String {
     let mut out = Vec::new();
     let mut first = true;
     let mut mnem = mnemonic;

@@ -40,6 +40,8 @@ pub enum MarkerKind {
     End,
     /// `WavegenSetVoice`; the value is the new voice's sample rate.
     SampleRate,
+    /// `DoPhonemeMarker`: the phoneme's name in `Marker::name`.
+    Phoneme,
 }
 
 /// `DoMarker`'s payload: a source position, a word length and a value.
@@ -49,11 +51,19 @@ pub struct Marker {
     pub pos: u32,
     pub len: u8,
     pub value: i32,
+    /// The first 8 bytes of a phoneme name (`DoPhonemeMarker`'s `memcpy`); zero-padded.
+    pub name: [u8; 8],
 }
 
 impl Marker {
     pub const fn new(kind: MarkerKind) -> Self {
-        Marker { kind, pos: 0, len: 0, value: 0 }
+        Marker { kind, pos: 0, len: 0, value: 0, name: [0; 8] }
+    }
+
+    /// The phoneme name `MarkerEvent` hands out as `id.string`.
+    pub fn phoneme_name(&self) -> String {
+        let end = self.name.iter().position(|&b| b == 0).unwrap_or(self.name.len());
+        String::from_utf8_lossy(&self.name[..end]).into_owned()
     }
 }
 
@@ -230,6 +240,7 @@ pub struct Renderer<'a> {
     wpm_s: i32,
     wpm_s2: i32,
     no_final_pause: bool,
+    phoneme_events: u32,
     max_clause_pause: i32,
     switched: std::collections::HashMap<String, PhonemeData>,
     emitted: usize,
@@ -266,6 +277,7 @@ impl<'a> Renderer<'a> {
             wpm_s: rate,
             wpm_s2: rate,
             no_final_pause: params.no_final_pause,
+            phoneme_events: params.phoneme_events,
             max_clause_pause: 0,
             switched: std::collections::HashMap::new(),
             emitted: 0,
@@ -377,7 +389,8 @@ impl<'a> Renderer<'a> {
         let mut g = generate::Generator::new(phdata, &self.voice, &self.tr, self.speed, self.wpm_s2)
             .with_icons(&self.icon_clips)
             .with_wave_flag(self.wave_flag)
-            .with_counters(clause.counters);
+            .with_counters(clause.counters)
+            .with_phoneme_events(self.phoneme_events);
         g.generate(&mut c.list);
         self.speed = g.speed;
         self.wpm_s2 = g.embedded_s2_value();
@@ -396,7 +409,7 @@ impl<'a> Renderer<'a> {
         self.wavegen.run(&g.queue, &g.frames, wave_data, &mut on_marker);
         if let Some(next) = self.pending_wvoice.take() {
             self.wavegen.change_voice(next);
-            let marker = Marker { kind: MarkerKind::SampleRate, pos: 0, len: 0, value: wavegen::SAMPLERATE };
+            let marker = Marker { value: wavegen::SAMPLERATE, ..Marker::new(MarkerKind::SampleRate) };
             self.events.push(RawEvent { marker, sample: base + self.wavegen.out.len() });
         }
         self.wavegen.finish();
