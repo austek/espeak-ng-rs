@@ -37,8 +37,10 @@ pub const EVENT_LIST_TERMINATED: c_int = 0;
 pub const EVENT_WORD: c_int = 1;
 pub const EVENT_SENTENCE: c_int = 2;
 pub const EVENT_MARK: c_int = 3;
+pub const EVENT_PLAY: c_int = 4;
 pub const EVENT_END: c_int = 5;
 pub const EVENT_MSG_TERMINATED: c_int = 6;
+pub const EVENT_PHONEME: c_int = 7;
 pub const EVENT_SAMPLERATE: c_int = 8;
 
 pub const N_SPEECH_PARAM: usize = 15;

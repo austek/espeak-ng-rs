@@ -57,6 +57,51 @@ fn closing_quote_scenarios() -> Vec<Scenario> {
         .collect()
 }
 
+const MARK_TEXT: &str = r#"One <mark name="a"/> two. Three, four."#;
+const AUDIO_TEXT: &str = r#"Hi <audio src="a.wav">there</audio> you."#;
+const VOICE_TEXT: &str = r#"<speak>Hi <voice name="de">Hallo Welt.</voice> bye.</speak>"#;
+
+/// One scenario per event kind and delivery path, recorded from C.  The last
+/// `events` argument is the probe's option word: `espeak_Initialize` options,
+/// plus 0x100 to use `espeak_ng_SetPhonemeEvents` and 0x200 for a URI
+/// callback that refuses.
+fn event_scenarios() -> Vec<Scenario> {
+    let rows: [(&str, &str, &str, &str, &str, &str); 11] = [
+        ("mark_mode1", "1", "en", "0x1010", MARK_TEXT, "0"),
+        ("mark_mode2", "2", "en", "0x1010", MARK_TEXT, "0"),
+        ("play_accepted", "1", "en", "0x1010", AUDIO_TEXT, "0"),
+        ("play_refused", "1", "en", "0x1010", AUDIO_TEXT, "512"),
+        ("voice_mode1", "1", "en", "0x1010", VOICE_TEXT, "0"),
+        ("voice_mode2", "2", "en", "0x1010", VOICE_TEXT, "0"),
+        ("phoneme_mode1", "1", "en", "0x1000", "Hi there.", "1"),
+        ("phoneme_mode2", "2", "en", "0x1000", "Hi there.", "1"),
+        ("phoneme_ipa_de", "2", "de", "0x1000", "Guten Tag.", "3"),
+        ("phoneme_ipa_only_option", "2", "en", "0x1000", "Hi.", "2"),
+        ("phoneme_ng_ipa_mode1", "1", "en", "0x1000", "Hi there.", "259"),
+    ];
+    rows.iter()
+        .map(|(name, mode, voice, flags, text, options)| {
+            let fixture: &'static str = Box::leak(format!("expected/events_{name}.txt").into_boxed_str());
+            Scenario { fixture, args: args(&["events", mode, voice, flags, text, options]) }
+        })
+        .collect()
+}
+
+/// `espeak_SetPhonemeTrace` and `espeak_SetPhonemeCallback`: one phoneme line per clause.
+fn trace_scenarios() -> Vec<Scenario> {
+    let rows: [(&str, &str, &str, &str, &str); 3] = [
+        ("mnemonics", "1", "en", "Hello world, this is a test. Second one.", "0"),
+        ("ipa_de_callback", "2", "de", "Guten Tag. Wie geht es dir?", "1"),
+        ("callback_only", "0", "en", "Hi. Bye.", "1"),
+    ];
+    rows.iter()
+        .map(|(name, mode, voice, text, callback)| {
+            let fixture: &'static str = Box::leak(format!("expected/trace_{name}.txt").into_boxed_str());
+            Scenario { fixture, args: args(&["trace", mode, voice, "0x1000", text, callback]) }
+        })
+        .collect()
+}
+
 fn scenarios() -> Vec<Scenario> {
     let mut list = vec![
         Scenario { fixture: "expected/batch.txt", args: vec!["batch".into(), cases_path()] },
@@ -72,6 +117,8 @@ fn scenarios() -> Vec<Scenario> {
     }
     list.extend(final_pause_scenarios());
     list.extend(closing_quote_scenarios());
+    list.extend(event_scenarios());
+    list.extend(trace_scenarios());
     list
 }
 
@@ -86,10 +133,46 @@ fn probe_output_matches_the_c_library() {
         eprintln!("[SKIP] no espeak-ng-data");
         return;
     }
-    for s in scenarios() {
-        let got = run_probe_with(probe_binary(), &s.args.iter().map(String::as_str).collect::<Vec<_>>());
-        assert_eq!(got, fixture(s.fixture), "scenario {} {:?}", s.fixture, s.args);
+    let mismatched: Vec<&str> = scenarios()
+        .iter()
+        .filter(|s| run_probe_with(probe_binary(), &s.args.iter().map(String::as_str).collect::<Vec<_>>()) != fixture(s.fixture))
+        .map(|s| s.fixture)
+        .collect();
+    assert!(mismatched.is_empty(), "scenarios differ from the C recording: {mismatched:?}");
+}
+
+/// The scenario whose fixture is `fixture`, compared on its own so a failure names the diff.
+fn assert_scenario(fixture_name: &str) {
+    if !have_data() {
+        eprintln!("[SKIP] no espeak-ng-data");
+        return;
     }
+    let s = scenarios().into_iter().find(|s| s.fixture == fixture_name).expect("scenario");
+    let got = run_probe_with(probe_binary(), &s.args.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(got, fixture(s.fixture), "{fixture_name}");
+}
+
+macro_rules! event_kind_tests {
+    ($($test:ident => $fixture:literal),* $(,)?) => {
+        $(#[test] fn $test() { assert_scenario($fixture); })*
+    };
+}
+
+event_kind_tests! {
+    mark_event_in_retrieval_mode => "expected/events_mark_mode1.txt",
+    mark_event_in_synchronous_mode => "expected/events_mark_mode2.txt",
+    play_event_when_the_uri_callback_accepts => "expected/events_play_accepted.txt",
+    play_event_absent_when_the_uri_callback_refuses => "expected/events_play_refused.txt",
+    voice_change_sample_rate_event_in_retrieval_mode => "expected/events_voice_mode1.txt",
+    voice_change_sample_rate_event_in_synchronous_mode => "expected/events_voice_mode2.txt",
+    phoneme_events_from_initialize_options_in_retrieval_mode => "expected/events_phoneme_mode1.txt",
+    phoneme_events_from_initialize_options_in_synchronous_mode => "expected/events_phoneme_mode2.txt",
+    phoneme_events_name_phonemes_in_ipa_for_german => "expected/events_phoneme_ipa_de.txt",
+    ipa_initialize_option_alone_enables_phoneme_events => "expected/events_phoneme_ipa_only_option.txt",
+    phoneme_events_from_set_phoneme_events => "expected/events_phoneme_ng_ipa_mode1.txt",
+    phoneme_trace_prints_one_line_per_clause => "expected/trace_mnemonics.txt",
+    phoneme_trace_in_ipa_with_the_phoneme_callback => "expected/trace_ipa_de_callback.txt",
+    phoneme_callback_without_a_trace => "expected/trace_callback_only.txt",
 }
 
 /// Records the expectations from the reference C library.  Needs

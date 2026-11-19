@@ -30,6 +30,8 @@ pub struct State {
     pub current: Option<VoiceTable>,
     pub run: Option<PhonemeRun>,
     pub phoneme_trace: i32,
+    /// The `FILE*` of `espeak_SetPhonemeTrace` as an address; 0 is NULL (stderr).
+    pub trace_stream: usize,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -62,6 +64,7 @@ impl State {
             current: None,
             run: None,
             phoneme_trace: 0,
+            trace_stream: 0,
         }
     }
 

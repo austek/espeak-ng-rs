@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name is the mnemonic with `,`/`'` stress, or the IPA name the phoneme's
   program picks in context, cut to 8 bytes as C's event string is. Positions
   and samples follow C's `Generate`. `VoiceParams` gains `phoneme_events`.
+- C ABI: the callback receives the engine's events as C does (`PLAY`,
+  `PHONEME`, `MARK`, `SAMPLERATE` after a voice change, ...), grouped into 60 ms
+  buffers by sample. `espeak_Initialize` options and `espeak_ng_SetPhonemeEvents`
+  enable phoneme events; `espeak_SetPhonemeTrace` and `espeak_SetPhonemeCallback`
+  receive one phoneme string per clause of plain-text requests (SSML requests
+  produce none).
 
 ### Changed
 

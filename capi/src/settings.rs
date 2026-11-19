@@ -23,7 +23,12 @@ pub struct Settings {
     pub voice_file: Option<VoiceEntry>,
     pub params: [i32; N_SPEECH_PARAM],
     pub punct_list: Vec<char>,
+    /// C's `option_phoneme_events`: bit 0 reports phoneme events, bit 1 names them in IPA.
+    pub phoneme_events: u32,
 }
+
+pub const PHONEME_EVENTS: u32 = 1;
+pub const PHONEME_IPA: u32 = 2;
 
 impl Settings {
     pub fn new(data_dir: PathBuf) -> Self {
@@ -33,7 +38,18 @@ impl Settings {
             voice_file: None,
             params: PARAM_DEFAULTS,
             punct_list: Vec::new(),
+            phoneme_events: 0,
         }
+    }
+
+    /// `espeak_ng_SetPhonemeEvents`: `ipa` only counts when `enable` is set.
+    pub fn set_phoneme_events(&mut self, enable: bool, ipa: bool) {
+        self.phoneme_events = if enable { PHONEME_EVENTS | (u32::from(ipa) * PHONEME_IPA) } else { 0 };
+    }
+
+    /// `espeak_Initialize`'s `options`: either bit turns the events on.
+    pub fn set_initialize_options(&mut self, options: i32) {
+        self.phoneme_events = options as u32 & (PHONEME_EVENTS | PHONEME_IPA);
     }
 
     /// C's `SetParameter`: absolute values are stored unclamped; a relative
@@ -64,6 +80,7 @@ impl Settings {
         engine.set_punctuation_list(self.punct_chars());
         engine.set_voice_pitch(self.voice_file.as_ref().and_then(|v| v.pitch));
         engine.set_voice_file(self.voice_file.clone());
+        engine.set_phoneme_events(self.phoneme_events & PHONEME_EVENTS != 0, self.phoneme_events & PHONEME_IPA != 0);
         Ok(engine)
     }
 
@@ -85,6 +102,17 @@ mod tests {
         let mut s = Settings::new(PathBuf::from("."));
         assert!(s.set_param(PARAM_RATE, 7, true));
         assert_eq!(s.params[PARAM_RATE], 187);
+    }
+
+    #[test]
+    fn ipa_alone_enables_events_only_through_initialize() {
+        let mut s = Settings::new(PathBuf::from("."));
+        s.set_initialize_options(2);
+        assert_eq!(s.phoneme_events, PHONEME_IPA);
+        s.set_phoneme_events(false, true);
+        assert_eq!(s.phoneme_events, 0);
+        s.set_phoneme_events(true, true);
+        assert_eq!(s.phoneme_events, PHONEME_EVENTS | PHONEME_IPA);
     }
 
     #[test]

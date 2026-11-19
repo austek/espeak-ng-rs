@@ -11,7 +11,7 @@ use espeak_ng::voices::{
 };
 use espeak_ng::{EspeakNg, VoiceSpec};
 
-use crate::blocks::{build, buffer_samples, Block};
+use crate::blocks::{build, buffer_samples, Block, Ev};
 use crate::settings::Settings;
 use crate::state::CANCEL;
 use crate::types::{UriCallback, ENDPAUSE, POS_CHARACTER_VALUE, SSML};
@@ -101,8 +101,22 @@ pub struct Job {
 }
 
 pub struct Rendered {
-    pub blocks: Vec<Block>,
-    pub rate: u32,
+    /// The buffers of each clause, in order.
+    pub clauses: Vec<Vec<Block>>,
+    /// The text that was spoken, after `position` skipping.
+    pub text: String,
+}
+
+/// The phoneme string of each clause, as C prints it to the trace stream and
+/// hands it to the phoneme callback.  Markup is not interpreted here, so an
+/// SSML request has no lines.
+pub fn phoneme_lines(settings: &Settings, text: &str, flags: u32, mode: i32) -> Vec<String> {
+    if flags & SSML != 0 {
+        return Vec::new();
+    }
+    crate::phonemes::clauses(settings, text, mode)
+        .map(|clauses| clauses.into_iter().map(|c| c.phonemes).collect())
+        .unwrap_or_default()
 }
 
 /// `uri_callback(1, uri, xmlbase)` of the reader; a URI with an interior NUL is refused.
@@ -142,7 +156,8 @@ pub fn render(job: &Job) -> espeak_ng::Result<Rendered> {
         CANCEL.load(Ordering::SeqCst)
     })?;
     let size = buffer_samples(job.buflength_ms, rate);
-    Ok(Rendered { blocks: build(&text, &chunks, &events, rate, size), rate })
+    let events: Vec<Ev> = events.iter().map(Ev::from).collect();
+    Ok(Rendered { clauses: build(&chunks, &events, size), text })
 }
 
 /// Compile `<lang>_list`/`<lang>_rules` from `source` (default: the data

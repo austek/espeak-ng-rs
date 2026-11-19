@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering;
 use std::sync::OnceLock;
 
 use crate::ops::{self, Job};
-use crate::delivery::{deliver, Target};
+use crate::delivery::{deliver, trace_only, Target, Trace};
 use crate::phonemes;
 use crate::ptr::*;
 use crate::settings::Settings;
@@ -60,7 +60,7 @@ fn start(path: Option<PathBuf>, mode: c_int, buflength: c_int) -> c_int {
 /// # Safety
 /// `path` is null or a NUL-terminated string.
 #[no_mangle]
-pub unsafe extern "C" fn espeak_Initialize(output: c_int, buflength: c_int, path: *const c_char, _options: c_int) -> c_int {
+pub unsafe extern "C" fn espeak_Initialize(output: c_int, buflength: c_int, path: *const c_char, options: c_int) -> c_int {
     guard(EE_INTERNAL_ERROR, || {
         let mode = match output {
             AUDIO_OUTPUT_RETRIEVAL => 0,
@@ -69,7 +69,10 @@ pub unsafe extern "C" fn espeak_Initialize(output: c_int, buflength: c_int, path
         };
         let path = c_string(path).map(PathBuf::from);
         match start(path, mode, buflength) {
-            ENS_OK => ops::SAMPLE_RATE,
+            ENS_OK => {
+                with_state(|s| s.settings.set_initialize_options(options));
+                ops::SAMPLE_RATE
+            }
             _ => EE_INTERNAL_ERROR,
         }
     })
@@ -160,14 +163,16 @@ fn synthesize(req: Request, uid_out: *mut c_uint, user_data: *mut c_void) -> c_i
         let retrieval = !s.synchronous();
         let uid = if retrieval { s.next_uid } else { 0 };
         s.next_uid += u32::from(retrieval);
-        (s.settings.clone(), s.buflength_ms, uid, retrieval)
+        (s.settings.clone(), s.buflength_ms, uid, retrieval, (s.phoneme_trace, s.trace_stream))
     });
-    let Some((settings, buflength_ms, uid, retrieval)) = snapshot else {
+    let Some((settings, buflength_ms, uid, retrieval, (trace_mode, trace_stream))) = snapshot else {
         return ENS_NOT_INITIALIZED;
     };
+    let lookup = settings.clone();
     // SAFETY: `uid_out` is null or the caller's writable unsigned int.
     unsafe { write_out(uid_out, uid) };
     CANCEL.store(false, Ordering::SeqCst);
+    let req_flags = req.flags;
     let job = Job {
         settings,
         text: req.text,
@@ -180,9 +185,19 @@ fn synthesize(req: Request, uid_out: *mut c_uint, user_data: *mut c_void) -> c_i
         Ok(r) => r,
         Err(e) => return error_status(&e),
     };
-    if let Some(callback) = state::callbacks().synth {
-        let target = Target { callback, uid, user_data, rate: rendered.rate, retrieval };
-        deliver(&target, &rendered.blocks);
+    let callbacks = state::callbacks();
+    let print = trace_mode & 0xf != 0;
+    let lines = if print || callbacks.phoneme.is_some() {
+        ops::phoneme_lines(&lookup, &rendered.text, req_flags, trace_mode)
+    } else {
+        Vec::new()
+    };
+    let trace = Trace { lines, print, stream: trace_stream, callback: callbacks.phoneme };
+    match callbacks.synth {
+        Some(callback) => {
+            deliver(&Target { callback, uid, user_data, retrieval }, &rendered.clauses, &trace);
+        }
+        None => trace_only(&trace),
     }
     ENS_OK
 }
@@ -422,15 +437,21 @@ pub unsafe extern "C" fn espeak_ng_SetPunctuationList(punctlist: *const WChar) -
 /// # Safety
 /// `_stream` is not used.
 #[no_mangle]
-pub unsafe extern "C" fn espeak_SetPhonemeTrace(phonememode: c_int, _stream: *mut CFile) {
+pub unsafe extern "C" fn espeak_SetPhonemeTrace(phonememode: c_int, stream: *mut CFile) {
     guard((), || {
-        with_state(|s| s.phoneme_trace = phonememode);
+        with_state(|s| {
+            s.phoneme_trace = phonememode;
+            s.trace_stream = stream as usize;
+        });
     });
 }
 
 #[no_mangle]
-pub extern "C" fn espeak_ng_SetPhonemeEvents(_enable: c_int, _ipa: c_int) -> c_int {
-    ENS_OK
+pub extern "C" fn espeak_ng_SetPhonemeEvents(enable: c_int, ipa: c_int) -> c_int {
+    guard(ENS_OK, || {
+        with_state(|s| s.settings.set_phoneme_events(enable != 0, ipa != 0));
+        ENS_OK
+    })
 }
 
 // -------------------------------------------------------------- voices

@@ -56,9 +56,11 @@ static int on_synth(short *wav, int n, espeak_EVENT *events) {
 	return 0;
 }
 
+static int uri_status = 0;
+
 static int on_uri(int type, const char *uri, const char *base) {
 	printf("uri type=%d uri=%s base=%s\n", type, uri, base ? base : "(null)");
-	return 0;
+	return uri_status;
 }
 
 static int init(int mode, int options) {
@@ -134,9 +136,15 @@ static int scenario_wav(int argc, char **argv) {
 }
 
 static int scenario_events(int argc, char **argv) {
-	/* events <mode> <voice> <flags> <text> */
+	/* events <mode> <voice> <flags> <text> [<options>]: options go to
+	 * espeak_Initialize; with bit 0x100 they select phoneme events through
+	 * espeak_ng_SetPhonemeEvents (bit 0 enable, bit 1 ipa) instead. */
 	int mode = atoi(argv[0]);
-	init(mode, 0);
+	int options = argc > 4 ? atoi(argv[4]) : 0;
+	uri_status = (options & 0x200) ? 1 : 0;
+	init(mode, (options & 0x100) ? 0 : options & 0xff);
+	if (options & 0x100)
+		espeak_ng_SetPhonemeEvents(options & 1, (options >> 1) & 1);
 	espeak_SetVoiceByName(argv[1]);
 	unsigned flags = (unsigned)strtoul(argv[2], NULL, 0) | espeakCHARS_UTF8;
 	unsigned uid = 0;
@@ -146,6 +154,28 @@ static int scenario_events(int argc, char **argv) {
 	espeak_Synchronize();
 	printf("synth=%d uid=%u samples=%ld fnv=%016llx\n", (int)r, uid, total_samples,
 	       (unsigned long long)fnv);
+	espeak_Terminate();
+	return 0;
+}
+
+static int on_phoneme(const char *s) {
+	printf("phoneme-cb [%s]\n", s ? s : "(null)");
+	return 0;
+}
+
+static int scenario_trace(int argc, char **argv) {
+	/* trace <mode> <voice> <flags> <text> <callback 0|1>: the phoneme trace
+	 * goes to stdout, each clause before its audio callbacks. */
+	init(AUDIO_OUTPUT_SYNCHRONOUS, 0);
+	espeak_SetPhonemeTrace(atoi(argv[0]), stdout);
+	if (atoi(argv[4]))
+		espeak_SetPhonemeCallback(on_phoneme);
+	espeak_SetVoiceByName(argv[1]);
+	unsigned flags = (unsigned)strtoul(argv[2], NULL, 0) | espeakCHARS_UTF8;
+	dump_events = 1;
+	espeak_Synth(argv[3], strlen(argv[3]) + 1, 0, POS_CHARACTER, 0, flags, NULL, NULL);
+	espeak_Synchronize();
+	printf("samples=%ld\n", total_samples);
 	espeak_Terminate();
 	return 0;
 }
@@ -353,6 +383,7 @@ int main(int argc, char **argv) {
 	if (!strcmp(s, "ngapi")) return scenario_ngapi(argc - 2, argv + 2);
 	if (!strcmp(s, "wav")) return scenario_wav(argc - 2, argv + 2);
 	if (!strcmp(s, "events")) return scenario_events(argc - 2, argv + 2);
+	if (!strcmp(s, "trace")) return scenario_trace(argc - 2, argv + 2);
 	if (!strcmp(s, "evflat")) return scenario_evflat(argc - 2, argv + 2);
 	if (!strcmp(s, "voices")) return scenario_voices(argc - 2, argv + 2);
 	if (!strcmp(s, "params")) return scenario_params(argc - 2, argv + 2);
