@@ -110,9 +110,17 @@ impl super::Translator {
 /// for the word it lies inside when C translated that one word in several pieces.
 pub(crate) fn apply_cut_words(codes: &mut [super::PhonemeCode], cut: &[CutWord]) {
     let switched: Vec<bool> = (0..codes.len()).map(|i| opens_switch(&codes[i..])).collect();
+    let starts = codes.iter().filter(|c| c.source.is_some()).count();
+    let in_order = starts == cut.len() && cut.iter().any(|w| w.first == 0);
+    let mut nth = 0;
     for (code, switched) in codes.iter_mut().zip(switched) {
         let Some(source) = code.source.as_mut() else { continue };
-        let found = cut.iter().find(|w| w.first > 0 && w.first as u32 == source.ix);
+        nth += 1;
+        let found = if in_order {
+            cut.get(nth - 1)
+        } else {
+            cut.iter().find(|w| w.first > 0 && w.first as u32 == source.ix)
+        };
         if let Some(word) = found.or_else(|| cut.iter().find(|w| switched && covers(w, source.ix))) {
             *source = super::SourceIx { ix: word.sourceix.max(0) as u32, len: word.length.min(31) as u8 };
         }
