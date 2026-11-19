@@ -5575,13 +5575,16 @@ fn decompose_hangul(word: &str) -> Option<String> {
     const VCOUNT: u32 = 21;
     const TCOUNT: u32 = 28;
     let is_hangul = |c: char| (SBASE..=0xD7A3).contains(&(c as u32));
-    if !word.chars().any(is_hangul) {
+    let compat = |c: char| c_words::compat_jamo(c as u32).and_then(char::from_u32);
+    if !word.chars().any(|c| is_hangul(c) || compat(c).is_some()) {
         return None;
     }
     let mut out = String::with_capacity(word.len() + 6);
     for c in word.chars() {
         let cp = c as u32;
-        if is_hangul(c) {
+        if let Some(jamo) = compat(c) {
+            out.push(jamo);
+        } else if is_hangul(c) {
             let s = cp - SBASE;
             let (l, v, t) = (s / (VCOUNT * TCOUNT), (s % (VCOUNT * TCOUNT)) / TCOUNT, s % TCOUNT);
             // Leading ㅇ (choseong ieung, index 11) is a silent placeholder for a
