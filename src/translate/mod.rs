@@ -12259,18 +12259,32 @@ pub(crate) struct TokenCodes {
 
 /// Byte span of `surface` in `text` at or after `from`, ignoring case and treating every
 /// apostrophe form as the same (the tokenizer normalises them).
+///
+/// A word `CheckDottedAbbrev` joined (`a.b. x` reads as `a.b.x`) is found where the text has
+/// blanks the surface lacks.
 fn locate_surface(text: &str, surface: &str, from: usize) -> Option<(usize, usize)> {
+    locate_surface_with(text, surface, from, false).or_else(|| locate_surface_with(text, surface, from, true))
+}
+
+fn locate_surface_with(text: &str, surface: &str, from: usize, skip_blanks: bool) -> Option<(usize, usize)> {
     const APOSTROPHES: [char; 5] = ['\'', '\u{2019}', '\u{00B4}', '\u{2032}', '\u{0092}'];
     let same = |a: char, b: char| {
         a == b
             || a.to_lowercase().eq(b.to_lowercase())
             || (APOSTROPHES.contains(&a) && APOSTROPHES.contains(&b))
     };
-    text.get(from..)?.char_indices().find_map(|(i, _)| {
+    text.get(from..)?.char_indices().find_map(|(i, first)| {
         let start = from + i;
-        let mut rest = text[start..].chars();
+        if skip_blanks && first.is_whitespace() {
+            return None;
+        }
+        let mut rest = text[start..].chars().peekable();
         let mut end = start;
         let all = surface.chars().all(|s| {
+            while skip_blanks && end > start && !s.is_whitespace() {
+                let Some(blank) = rest.next_if(|c| c.is_whitespace()) else { break };
+                end += blank.len_utf8();
+            }
             rest.next().is_some_and(|c| {
                 end += c.len_utf8();
                 same(c, s)
@@ -12426,8 +12440,7 @@ fn token_sources(
             }
             let waiting = command.take().filter(|&at| found.is_some_and(|(start, _)| at < start));
             let start = waiting.or(found.map(|(start, _)| start)).unwrap_or(cursor);
-            let Some(source) = word_source_masked(charix, start, mask) else { return (None, Vec::new()) };
-            // Punctuation glued to the word ends it, as C's inserted-space count does.
+            let Some(source) = word_source_masked(charix, start, mask) else { return (None, Vec::new()) };            // Punctuation glued to the word ends it, as C's inserted-space count does.
             let glued = found
                 .filter(|&(_, end)| {
                     waiting.is_none() && text[end..].chars().next().is_some_and(|c| !c.is_whitespace() && c != '\u{1}')
