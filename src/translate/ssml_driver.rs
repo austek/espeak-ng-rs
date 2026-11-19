@@ -80,11 +80,11 @@ impl MessageCounts {
 
 /// `sourceix` of the clause's closing pauses, which carry a mark after the last word.
 /// `TranslateClause` leaves `source_index` one past the clause text's NUL.  A clause with no
-/// word adds the empty `words[0]`, whose dummy phoneme (`sourceix` 0) carries the mark
-/// instead, so the closing pause is not asked.
+/// word but an embedded command adds the empty `words[0]`, whose dummy phoneme (`sourceix` 0)
+/// carries the command instead, so the closing pause is not asked.
 fn closing_pause_ix(source: &SourceClause, codes: &[PhonemeCode]) -> u16 {
     let has_word = codes.iter().any(|c| !c.is_boundary && c.marker.is_none());
-    if has_word {
+    if has_word || !source.text.contains('\u{1}') {
         ((source.text.len() + 1) & 0x7ff) as u16
     } else {
         0

@@ -55,6 +55,8 @@ ph1_cmn_ideographic_stop	1	cmn	0x1000	你好世界。
 ph1_hi_danda	1	hi	0x1000	नमस्ते दुनिया।
 ph1_ja_ideographic_stop	1	ja	0x1000	こんにちは。
 ph1_cmn_two_clauses	1	cmn	0x1000	你好。世界。
+ph1_ssml_blank_clause_after_mark	1	en	0x1010	<speak>Phonemes <mark name="p"/>with SSML.</speak>
+ph1_ssml_blank_clause_after_voice	1	en	0x1010	<speak>Hi <voice name="de">Hallo Welt.</voice> bye.</speak>
 multi_voice_back	0	en	0x1010	one <voice xml:lang="de">zwei</voice> three <voice xml:lang="fr">quatre</voice> five
 multi_voice_name	0	en	0x1010	<voice name="de">Guten Tag</voice> and hello
 multi_voice_mark	0	en	0x1010	hi <voice xml:lang="de">welt <mark name="in"/> eins</voice> out
