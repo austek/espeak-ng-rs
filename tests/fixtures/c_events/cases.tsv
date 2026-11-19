@@ -117,3 +117,6 @@ word_ssml_sub_alias_de	0	de	0x1010	<speak>Das <sub alias="Zum Beispiel">z.B.</su
 word_de_quotes	0	de	0x1000	Guten Tag, "Herr" Müller. Das kostet 5 € oder 10%.
 word_nl_apostrophe_schwa	0	nl	0x1000	Het is 't beste, 'n keer.
 word_af_apostrophe_schwa	0	af	0x1000	Hy het 'n boek
+word_ko_deleted_first_phoneme	0	ko	0x1000	냇가
+word_ko_deleted_first_phoneme_second_word	0	ko	0x1000	냇가 좋다
+word_ko_deleted_first_phoneme_middle	0	ko	0x1000	한국 냇가 좋다

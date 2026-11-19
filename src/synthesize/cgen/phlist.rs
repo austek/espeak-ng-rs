@@ -40,6 +40,8 @@ pub struct Ph {
     pub inserted: bool,
     /// A phoneme a program deletes came next in C's list, inside the word.
     pub deleted_next: bool,
+    /// A phoneme a program deleted opened this phoneme's word, so the word stress still splits here.
+    pub split_word: bool,
     /// The tone phoneme of a tone-language syllable (C's `tone_ph`).
     pub tone: Option<PhonemeTab>,
     pub tone_env: ToneEnv,
@@ -76,6 +78,7 @@ impl Ph {
             embedded: Vec::new(),
             inserted: false,
             deleted_next: false,
+            split_word: false,
             tone: None,
             tone_env: ToneEnv::default(),
             source: None,
@@ -186,6 +189,8 @@ pub fn build_list(
     let mut insert = Insert::None;
     let mut bare: Vec<usize> = Vec::new();
     let mut word_source: Option<SourceIx> = None;
+    let mut carried: u8 = 0;
+    let mut split_word = false;
     for (idx, c) in codes.iter().enumerate() {
         word_source = c.source.or(word_source);
         match &c.marker {
@@ -194,6 +199,13 @@ pub fn build_list(
                     if let Some(last) = list.last_mut() {
                         last.deleted_next = true;
                     }
+                } else {
+                    // C drops the word start with the phoneme that carries it; the sentence and
+                    // clause starts wait for the next word that has one.
+                    carried |= newword & (PHLIST_START_OF_SENTENCE | PHLIST_START_OF_CLAUSE);
+                    newword = 0;
+                    word_source = None;
+                    split_word = true;
                 }
                 continue;
             }
@@ -232,7 +244,7 @@ pub fn build_list(
             None => {}
         }
         if c.code == PHON_END_WORD || (c.is_boundary && c.code == 0) {
-            newword |= PHLIST_START_OF_WORD;
+            newword |= PHLIST_START_OF_WORD | std::mem::take(&mut carried);
             prev_vowel = None;
             next_tone = None;
             continue;
@@ -280,6 +292,7 @@ pub fn build_list(
         let mut p = Ph::new(t.clone(), s, if leading_pause { 0 } else { newword });
         if !leading_pause {
             p.source = word_source.take();
+            p.split_word = std::mem::take(&mut split_word);
             newword = 0;
         }
         if before == Insert::Neighbour {
@@ -375,7 +388,7 @@ fn set_word_stress(list: &mut [Ph]) {
     let mut start = 1;
     while start < list.len() {
         let mut end = start + 1;
-        while end < list.len() && list[end].newword == 0 {
+        while end < list.len() && list[end].newword == 0 && !list[end].split_word {
             end += 1;
         }
         let top = list[start..end].iter().map(|p| p.stresslevel).max().unwrap_or(0);
