@@ -9466,8 +9466,8 @@ fn symbol_char(token: &Token) -> Option<char> {
 /// run that starts at `at`.
 fn symbol_run_end(tokens: &[Token], at: usize) -> Option<usize> {
     symbol_char(tokens.get(at)?)?;
-    // C's word buffer holds N_WORD_BYTES; a longer run would make every look-ahead quadratic.
-    Some(at + tokens[at..].iter().take(160).take_while(|t| symbol_char(t).is_some()).count())
+    // A run cannot outgrow the clause buffer, N_TR_SOURCE bytes (translate.h).
+    Some(at + tokens[at..].iter().take(CLAUSE_SOURCE_BYTES).take_while(|t| symbol_char(t).is_some()).count())
 }
 
 /// [`follow_emphasis`] with the word at `at` as bit 0.
