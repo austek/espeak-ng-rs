@@ -40,6 +40,9 @@ pub(crate) struct CutWord {
     /// The reader's `charix` of the character the word's text starts with, `0` when that is
     /// a bracket or blank.
     pub first: i32,
+    /// The word ends in a tone number the reader kept with its syllable (`有3`): the word is
+    /// translated as several, and each reports the whole cut word.
+    pub tone: bool,
 }
 
 /// The word being cut: where it starts in `sbuf` and its position, length and first
@@ -121,7 +124,8 @@ pub(crate) fn apply_cut_words(codes: &mut [super::PhonemeCode], cut: &[CutWord])
         } else {
             cut.iter().find(|w| w.first > 0 && w.first as u32 == source.ix)
         };
-        if let Some(word) = found.or_else(|| cut.iter().find(|w| switched && covers(w, source.ix))) {
+        let inside = |w: &&CutWord| (switched || w.tone) && covers(w, source.ix);
+        if let Some(word) = found.or_else(|| cut.iter().find(inside)) {
             *source = super::SourceIx { ix: word.sourceix.max(0) as u32, len: word.length.min(31) as u8 };
         }
     }
@@ -311,6 +315,7 @@ impl Cut<'_> {
         let (mut space_inserted, mut single_quoted, mut decimal_sep_count) = (false, false, false);
         let (mut phoneme_mode, mut syllable_marked, mut finished) = (false, false, false);
         let (mut word_nospace, mut next_nospace) = (false, false);
+        let mut has_tone = false;
         let (sourceix, length) = self.word_length(0);
         let mut cur = Open { start: sbuf.len(), sourceix, length, first: None };
         let tone_numbers = o.tone_numbers;
@@ -429,6 +434,7 @@ impl Cut<'_> {
                         c = 0x20;
                         space_inserted = true;
                     }
+                    has_tone |= tone_digit;
                 }
                 if is_digit09(prev_out) {
                     if !is_digit09(c) && c != u32::from('.') && c != u32::from(',') && c != 0x20 {
@@ -609,7 +615,12 @@ impl Cut<'_> {
                 sbuf.push(0x20);
                 if self.words.len() < N_CLAUSE_WORDS - 1 && sbuf.len() > cur.start {
                     self.embedded_count = 0;
-                    self.words.push(CutWord { sourceix: cur.sourceix, length: cur.length, first: cur.first.unwrap_or(0) });
+                    self.words.push(CutWord {
+                        sourceix: cur.sourceix,
+                        length: cur.length,
+                        first: cur.first.unwrap_or(0),
+                        tone: std::mem::take(&mut has_tone),
+                    });
                     self.nospace.push(word_nospace);
                     let (sourceix, length) = self.word_length(source_index);
                     cur = Open { start: sbuf.len(), sourceix, length, first: None };
@@ -634,7 +645,7 @@ impl Cut<'_> {
         }
         let _ = (alpha_count, cc);
         if self.words.is_empty() && self.embedded_count > 0 {
-            self.words.push(CutWord { sourceix: 0, length: 0, first: 0 });
+            self.words.push(CutWord { sourceix: 0, length: 0, first: 0, tone: false });
         }
     }
 }
