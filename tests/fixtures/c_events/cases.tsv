@@ -103,4 +103,5 @@ word_af_other_language_word	0	af	0x1000	ek en brian.
 word_af_other_language_first	0	af	0x1000	brian ek
 word_ja_other_language_word	0	ja	0x1000	漢字
 word_ssml_af_other_language_word	0	af	0x1010	<speak>ek en brian.</speak>
+word_ssml_ja_mark_glued	0	ja	0x1010	<speak>こんにちは<mark name="j"/>世界。</speak>
 word_de_quotes	0	de	0x1000	Guten Tag, "Herr" Müller. Das kostet 5 € oder 10%.
