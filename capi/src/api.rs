@@ -195,7 +195,8 @@ fn synthesize(req: Request, uid_out: *mut c_uint, user_data: *mut c_void) -> c_i
     let trace = Trace { lines, print, stream: trace_stream, callback: callbacks.phoneme };
     match callbacks.synth {
         Some(callback) => {
-            deliver(&Target { callback, uid, user_data, retrieval }, &rendered.clauses, &trace);
+            let plain_text = req_flags & SSML == 0;
+            deliver(&Target { callback, uid, user_data, retrieval, plain_text }, &rendered.clauses, &trace);
         }
         None => trace_only(&trace),
     }

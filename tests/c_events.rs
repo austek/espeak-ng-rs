@@ -107,7 +107,8 @@ fn line(kind: &EventKind) -> (u8, String) {
     match kind {
         EventKind::Word(n) => (1, format!("num={n}")),
         EventKind::Sentence(n) => (2, format!("num={n}")),
-        // C's plain-text marks carry a null name.
+        // The engine reports no name for a plain-text mark; the C API turns that into NULL
+        // (`plain_text_marks_have_a_null_name` in capi/tests/c_abi.rs checks it).
         EventKind::Mark(name) if name.is_empty() => (3, "name=(null)".into()),
         EventKind::Mark(name) => (3, format!("name={name}")),
         EventKind::Play(uri) => (4, format!("name={uri}")),

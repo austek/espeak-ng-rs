@@ -17,6 +17,8 @@ pub struct Target {
     pub uid: u32,
     pub user_data: *mut c_void,
     pub retrieval: bool,
+    /// The text is not markup, so it has no name table: C's marks carry a NULL name.
+    pub plain_text: bool,
 }
 
 fn event(t: &Target, ty: c_int, ev: &Ev, id: EventId) -> EspeakEvent {
@@ -58,6 +60,7 @@ fn c_events(t: &Target, evs: &[Ev], names: &mut Vec<CString>) -> Vec<EspeakEvent
                 EventKind::Sentence(n) => event(t, EVENT_SENTENCE, ev, number(*n)),
                 EventKind::Word(n) => event(t, EVENT_WORD, ev, number(*n)),
                 EventKind::End(n) => event(t, EVENT_END, ev, number(*n)),
+                EventKind::Mark(_) if t.plain_text => event(t, EVENT_MARK, ev, EventId { name: ptr::null() }),
                 EventKind::Mark(name) => event(t, EVENT_MARK, ev, name_id(name, names)),
                 EventKind::Play(uri) => event(t, EVENT_PLAY, ev, name_id(uri, names)),
                 EventKind::Phoneme(name) => event(t, EVENT_PHONEME, ev, phoneme_id(name)),

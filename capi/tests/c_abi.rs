@@ -280,6 +280,30 @@ fn python_ctypes_round_trip() {
     assert!(out.status.success() && text.contains("PASS"), "{text}\n{}", String::from_utf8_lossy(&out.stderr));
 }
 
+/// Plain text has no name table: C delivers `id.name == NULL` for a `\x01NM` mark, which the
+/// probe prints as `(null)` and tells apart from an empty name.
+#[test]
+fn plain_text_marks_have_a_null_name() {
+    if !have_data() {
+        eprintln!("[SKIP] no espeak-ng-data");
+        return;
+    }
+    let dir = manifest_dir().join("..").join("tests").join("fixtures").join("c_events");
+    let cases = std::fs::read_to_string(dir.join("cases.tsv")).expect("cases.tsv");
+    let rows: Vec<Vec<&str>> = cases
+        .lines()
+        .filter(|l| l.starts_with("plain_mark"))
+        .map(|l| l.splitn(5, '\t').collect())
+        .collect();
+    assert_eq!(rows.len(), 4, "the four plain mark cases");
+    for f in rows {
+        let got = run_probe(&["evflat", f[1], f[2], f[3], f[4]]);
+        let want = std::fs::read_to_string(dir.join(format!("{}.txt", f[0]))).expect("transcript");
+        assert!(want.contains("name=(null)"), "{}: the recording has a NULL name", f[0]);
+        assert_eq!(got, want, "{}", f[0]);
+    }
+}
+
 #[test]
 fn mark_events_reach_the_callback() {
     if !have_data() {
