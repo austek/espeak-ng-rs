@@ -185,8 +185,8 @@ fn lowered(c: u32) -> u32 {
     char::from_u32(c).and_then(|c| c.to_lowercase().next()).map_or(c, u32::from)
 }
 
-/// C's `TranslateChar` as far as it changes how a word is cut: Hangul syllables split into jamo.
-fn translate_char(c: u32) -> (u32, u32) {
+/// C's `TranslateChar` for Hangul: syllables and compatibility jamo split into jamo.
+fn hangul_char(c: u32) -> Option<(u32, u32)> {
     const COMPAT: [u8; 0x34] = [
         0, 0x00, 0x01, 0xaa, 0x02, 0xac, 0xad, 0x03, 0x04, 0x05, 0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb4, 0xb6, 0x06, 0x07,
         0x08, 0xb9, 0x09, 0x0a, 0xbc, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66,
@@ -195,19 +195,44 @@ fn translate_char(c: u32) -> (u32, u32) {
     if (0xac00..=0xd7af).contains(&c) {
         let code = c - 0xac00;
         let (initial, medial, last) = ((code / 28) / 21, (code / 28) % 21, code % 28);
-        return if initial == 11 {
+        return Some(if initial == 11 {
             (medial + 0x1161, if last > 0 { last + 0x11a7 } else { 0 })
         } else {
             (initial + 0x1100, (11 * 28 * 21) + (medial * 28) + last + 0xac00)
-        };
+        });
     }
     match c.checked_sub(0x3130) {
-        Some(code) if (code as usize) < COMPAT.len() => (u32::from(COMPAT[code as usize]) + 0x1100, 0),
-        _ => (c, 0),
+        Some(code) if (code as usize) < COMPAT.len() => Some((u32::from(COMPAT[code as usize]) + 0x1100, 0)),
+        _ => None,
     }
 }
 
+const SCHWA: u32 = 0x0259;
+
 impl Cut<'_> {
+    /// C's `TranslateChar` as far as it changes how a word is cut.  `source_index` is the byte
+    /// after `c`; Afrikaans drops the `n` of `'n` from the source.
+    fn translate_char(&mut self, prev_in: u32, c: u32, next_in: u32, source_index: usize) -> (u32, u32) {
+        if let Some(split) = hangul_char(c) {
+            return split;
+        }
+        let afrikaans = self.o.lang == "af";
+        if !(afrikaans || self.o.lang == "nl") || c != u32::from('\'') || alpha(prev_in) {
+            return (c, 0);
+        }
+        let (next2, _) = self.char_at(source_index + 1);
+        if !is_space(next2) {
+            return (c, 0);
+        }
+        if next_in == u32::from('n') && afrikaans {
+            self.source[source_index] = b' ';
+        }
+        if next_in == u32::from('n') || next_in == u32::from('t') {
+            return (SCHWA, 0);
+        }
+        (c, 0)
+    }
+
     fn at(&self, j: usize) -> i32 {
         self.charix.get(j).copied().unwrap_or(0)
     }
@@ -381,7 +406,7 @@ impl Cut<'_> {
                 if c == CHAR_EMPHASIS || c == CHAR_COMMA_BREAK {
                     c = 0x20;
                 }
-                let (tc, insert) = translate_char(c);
+                let (tc, insert) = self.translate_char(prev_in, c, next_in, source_index);
                 c = tc;
                 if insert != 0 {
                     char_inserted = insert;

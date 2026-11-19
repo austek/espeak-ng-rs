@@ -115,3 +115,5 @@ word_ssml_ja_mark_glued	0	ja	0x1010	<speak>こんにちは<mark name="j"/>世界
 word_ssml_sub_alias_words	0	en	0x1010	<speak><sub alias="World Wide Web">WWW</sub> rocks.</speak>
 word_ssml_sub_alias_de	0	de	0x1010	<speak>Das <sub alias="Zum Beispiel">z.B.</sub> geht.</speak>
 word_de_quotes	0	de	0x1000	Guten Tag, "Herr" Müller. Das kostet 5 € oder 10%.
+word_nl_apostrophe_schwa	0	nl	0x1000	Het is 't beste, 'n keer.
+word_af_apostrophe_schwa	0	af	0x1000	Hy het 'n boek
