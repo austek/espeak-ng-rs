@@ -6640,16 +6640,22 @@ fn only_pauses_since_clause_start(codes: &[PhonemeCode]) -> bool {
 /// pauses before the next word.
 fn spaced_dash(tokens: &[Token], ix: usize) -> bool {
     let is_dash = |t: Option<&Token>| matches!(t, Some(Token::Punctuation('-') | Token::Operator('-')));
-    let before = ix > 0 && matches!(tokens[ix - 1], Token::Space | Token::Embedded(_));
-    let after = matches!(tokens.get(ix + 1), Some(Token::Space));
-    let doubled = is_dash(tokens.get(ix + 1));
     let second_of_pair = ix > 0 && is_dash(tokens.get(ix - 1));
     let pause_pending = tokens[..ix]
         .iter()
         .rev()
         .find(|t| !matches!(t, Token::Space))
         .is_some_and(|t| matches!(t, Token::Punctuation(p) if is_bracket(*p) || *p == '-'));
-    ((before && after) || doubled) && !second_of_pair && !pause_pending
+    dash_is_blank(tokens, ix) && !second_of_pair && !pause_pending
+}
+
+/// A hyphen C turns into a blank: one between blanks, a doubled one, or the second of a pair.
+fn dash_is_blank(tokens: &[Token], ix: usize) -> bool {
+    let is_dash = |t: Option<&Token>| matches!(t, Some(Token::Punctuation('-') | Token::Operator('-')));
+    let before = ix > 0 && matches!(tokens[ix - 1], Token::Space | Token::Embedded(_));
+    let after = matches!(tokens.get(ix + 1), Some(Token::Space));
+    let second_of_doubled = ix > 0 && is_dash(tokens.get(ix - 1)) && ix > 1 && matches!(tokens[ix - 2], Token::Space | Token::Embedded(_));
+    (before && after) || is_dash(tokens.get(ix + 1)) || second_of_doubled
 }
 
 fn word_tail(word: Option<&str>) -> [u8; 8] {
@@ -10151,6 +10157,16 @@ pub(crate) fn build_translate_entries(
                     kind: TranslateEntryKind::Word, word_lower: Some(c.to_string()),
                     word_group: None, spelled: false,
                     found_in_list,
+                });
+            }
+            // C turns a dash between blanks into a blank before the word list sees it, whatever
+            // name the language's list gives the hyphen.
+            Token::Operator('-') | Token::Punctuation('-') if dash_is_blank(tokens, token_ix) => {
+                entries.push(TranslateEntry {
+                    phonemes: Vec::new(), dict_flags: 0,
+                    kind: TranslateEntryKind::Other, word_lower: None,
+                    word_group: None, spelled: false,
+                    found_in_list: false,
                 });
             }
             Token::Operator(c) | Token::Punctuation(c)
