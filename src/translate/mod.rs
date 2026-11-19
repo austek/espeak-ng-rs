@@ -6737,6 +6737,12 @@ fn is_dotted_letters(word: &str) -> bool {
     word.contains('.') && word.split('.').all(is_single_letter_word)
 }
 
+/// [`is_dotted_letters`] for a word that keeps the dot it ends in (`a.b.c.` before a
+/// lower-case word).
+fn is_dotted_letters_and_dot(word: &str) -> bool {
+    is_dotted_letters(word.trim_end_matches('.'))
+}
+
 /// C `CheckDottedAbbrev`: runs of one-letter words set apart by blanks and dots are joined
 /// unless a multi-word list entry takes them first.  Letters that C spells keep their dots
 /// (`a.b`), which the word translation reads as the sign to spell them; letters the language
@@ -6750,7 +6756,7 @@ fn join_spaced_letter_dots(
     let mut ix = 0;
     while ix < tokens.len() {
         let run = match &tokens[ix] {
-            Token::Word(w) if is_single_letter_word(w) || is_dotted_letters(w) => {
+            Token::Word(w) if is_single_letter_word(w) || is_dotted_letters_and_dot(w) => {
                 dotted_abbrev::check(tokens, ix)
             }
             _ => None,
@@ -7104,7 +7110,13 @@ fn expand_dotted_phrases(tokens: &mut Vec<Token>, dict: &Dictionary, lang: &str,
         let matched = lookup_with_follow(dict, &pieces[0], &ctx, follow.as_bytes())
             .is_some_and(|r| r.skipwords > 0 && !r.phonemes.is_empty());
         if !matched {
-            out.push(Token::Word(core.to_string()));
+            // A one-letter word right behind the dot continues the run of initials
+            // (`a.b.c. x` spells `abcx`), so the dot stays for `CheckDottedAbbrev`.
+            let letter_follows = tokens[ix + 1..]
+                .iter()
+                .find(|t| !matches!(t, Token::Space))
+                .is_some_and(|t| matches!(t, Token::Word(w) if is_single_letter_word(w)));
+            out.push(Token::Word(if letter_follows { word.clone() } else { core.to_string() }));
             continue;
         }
         for (n, piece) in core.split('.').enumerate() {

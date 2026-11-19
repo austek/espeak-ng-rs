@@ -28,9 +28,12 @@ pub(super) fn clause_words(tokens: &[Token], from: usize) -> Vec<(usize, &str)> 
                 continue;
             }
             Token::Embedded(_) => continue,
-            Token::Word(w) if blank && super::is_dotted_letters(w) => {
+            Token::Word(w) if blank && super::is_dotted_letters_and_dot(w) => {
                 let pieces = w.split('.').flat_map(|p| [p, "."]);
-                words.extend(pieces.take(2 * w.split('.').count() - 1).map(|p| (ix, p)));
+                // A word that ends in its dot (`a.b.c.` before a lower-case word) has no
+                // piece behind that dot.
+                let pieces = pieces.take(2 * w.split('.').count() - 1).filter(|p| !p.is_empty());
+                words.extend(pieces.map(|p| (ix, p)));
                 blank = false;
                 continue;
             }
