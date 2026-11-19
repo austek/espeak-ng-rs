@@ -70,3 +70,15 @@ plain_cmn	0	cmn	0x1000	你好世界。
 plain_russian	0	ru	0x1000	Привет, мир! Это тест.
 plain_french_elision	0	fr	0x1000	L'homme est arrivé; il a dit bonjour.
 multi_phoneme_tag	0	en	0x1010	say <phoneme alphabet="ipa" ph="həˈləʊ">hello</phoneme> now
+word_usa	0	en	0x1000	I live in the U.S.A. today
+word_ordinal_digit	0	en	0x1000	the 1st one
+word_dollar	0	en	0x1000	pay $5 each
+word_time	0	en	0x1000	at 10:30 sharp
+word_open_paren	0	en	0x1000	see (in the box)
+word_quoted	0	en	0x1000	say "quoted" now
+word_ssml_rate_embedded	0	en	0x1010	<speak>one \x0120S two</speak>
+word_ssml_joined	0	en	0x1010	<speak>onetwo</speak>
+word_ssml_usa	0	en	0x1010	<speak>the U.S.A. today</speak>
+word_ssml_ordinal	0	en	0x1010	<speak>the 1st one</speak>
+word_ssml_dollar	0	en	0x1010	<speak>pay $5 each</speak>
+word_ssml_time	0	en	0x1010	<speak>at 10:30 sharp</speak>

@@ -12181,6 +12181,18 @@ fn is_pre_pause_code(code: u8) -> bool {
     matches!(code, crate::phoneme::PHON_PAUSE | crate::phoneme::PHON_PAUSE_NOLINK)
 }
 
+/// The reader's `charix` (the value of a character sits at the byte after it, `-1` on its
+/// continuation bytes) moved onto the bytes of the characters it describes.
+fn align_charix(text: &str, charix: &[i32]) -> Vec<i32> {
+    let mut out = Vec::with_capacity(text.len());
+    for (i, c) in text.char_indices() {
+        let n = c.len_utf8();
+        out.push(charix.get(i + n).copied().filter(|&v| v > 0).unwrap_or(0));
+        out.extend(std::iter::repeat_n(-1, n - 1));
+    }
+    out
+}
+
 /// The source index of each token that starts a word, found by walking the clause text
 /// with a cursor.  A token the rewriting passes made up (so absent from the text) takes the
 /// next word at the cursor, as C's `CalcWordLength` does for any word.
@@ -12191,6 +12203,8 @@ fn token_sources(
     charix: &[i32],
     plain: bool,
 ) -> Vec<Option<SourceIx>> {
+    let aligned = if plain { charix.to_vec() } else { align_charix(text, charix) };
+    let charix = aligned.as_slice();
     let mut cursor = 0;
     // Where an embedded command that waits for its word begins: plain text reads the command
     // as part of that word.
@@ -12202,8 +12216,9 @@ fn token_sources(
             if let (true, Token::ClauseBoundary(c)) = (plain, token) {
                 return clause_end_source(text, *c, charix, &mut cursor);
             }
-            if let (true, Token::Embedded(_)) = (plain, token) {
-                command = command.or_else(|| text.get(cursor..)?.find('\u{1}').map(|i| cursor + i));
+            if let Token::Embedded(_) = token {
+                let read = |at: &usize| charix.get(*at).is_some_and(|&c| c > 0);
+                command = command.or_else(|| text.get(cursor..)?.find('\u{1}').map(|i| cursor + i).filter(read));
                 return None;
             }
             if matches!(
@@ -12234,7 +12249,7 @@ fn token_sources(
                 })
                 .map_or(usize::MAX, |(start, end)| text[start..end].chars().count());
             // Where C starts a second word inside the first one's run of characters.
-            let split = (plain && waiting.is_none()).then(|| {
+            let split = waiting.is_none().then(|| {
                 let from = (start..charix.len()).find(|&j| charix[j] > 0).unwrap_or(start);
                 let run: Vec<char> = text[from..].chars().take_while(|c| !c.is_whitespace()).collect();
                 (1..run.len()).find_map(|n| word_cut(&run, n, grammar))
@@ -14673,7 +14688,7 @@ mod tests {
     fn clause_words_carry_their_source_index() {
         let t = Translator::new_default("en").unwrap();
         let text = "hello world";
-        let charix: Vec<i32> = (1..=11).map(|i| if i == 6 { 0 } else { i }).collect();
+        let charix = [0, 1, 2, 3, 4, 5, 0, 7, 8, 9, 10, 11];
         let codes = t
             .translate_clause(text, false, &mut ssml_driver::ClauseCarry::default(), &charix)
             .unwrap();
@@ -14687,7 +14702,7 @@ mod tests {
     #[test]
     fn clause_word_source_survives_multibyte_text() {
         let t = Translator::new_default("en").unwrap();
-        let charix = [1, 2, 3, 4, -1, 0, 6, -1, 7, 8, 9];
+        let charix = [0, 1, 2, 3, -1, 4, 0, -1, 6, 7, 8, 9];
         let codes = t
             .translate_clause("café über", false, &mut ssml_driver::ClauseCarry::default(), &charix)
             .unwrap();
