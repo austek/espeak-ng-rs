@@ -35,6 +35,39 @@ fn word_and_sentence(voice: &str, text: &str) -> Option<Vec<String>> {
     )
 }
 
+// A word the translator folds into the previous token (`and` after a pre-pause, the second half
+// of a dictionary phrase) still gets its own event, and every `phonEND_WORD` inside a token's
+// phonemes starts a word at `source_ix + 1`.
+#[test]
+fn a_word_after_a_pre_pause_keeps_its_event() {
+    let Some(got) = word_and_sentence("en", "<speak>big spaces and gaps</speak>") else { return };
+    assert_eq!(got, ["2 8 0 0 1", "1 8 3 0 1", "1 12 6 5088 2", "1 19 3 18005 3", "1 23 4 22379 4"]);
+}
+
+#[test]
+fn a_two_word_dictionary_phrase_gets_two_events() {
+    let Some(got) = word_and_sentence("en", "<speak>naïve café déjà vu</speak>") else { return };
+    assert_eq!(got[4], "1 20 4 22329 4", "{got:?}");
+}
+
+#[test]
+fn the_parts_of_a_number_are_words_one_character_on() {
+    let Some(got) = word_and_sentence("en", "<speak>number 123 and 456</speak>") else { return };
+    assert_eq!(
+        got,
+        [
+            "2 8 0 0 1", "1 8 6 0 1", "1 15 3 7406 2", "1 16 3 22852 3", "1 16 3 31951 4", "1 19 3 39986 5",
+            "1 23 3 44395 6", "1 24 3 60379 7", "1 24 3 68423 8"
+        ]
+    );
+}
+
+#[test]
+fn a_decimal_is_three_words() {
+    let Some(got) = word_and_sentence("en", "<speak>it is 3.5 km</speak>") else { return };
+    assert_eq!(got[3..6], ["1 14 3 6052 3", "1 15 3 11017 4", "1 15 3 17700 5"], "{got:?}");
+}
+
 #[test]
 fn two_sentences_start_after_the_empty_leading_clause() {
     let Some(got) = word_and_sentence("en", "<s>One</s><s>Two</s>") else { return };

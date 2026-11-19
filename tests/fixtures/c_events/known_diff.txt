@@ -1,4 +1,3 @@
-ssml_say_as_digits	events
 plain_abbreviation	events
 plain_newlines	audio
 plain_embedded_unknown_letter	audio
@@ -14,5 +13,4 @@ ph3_de	events
 ph1_it	events
 ph3_it	events
 ph3_ssml_mark	events
-multi_say_as_cardinal	events
 multi_say_as_date	events

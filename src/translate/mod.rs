@@ -11943,9 +11943,13 @@ impl Translator {
                 }
             }
             for (ix, token) in tokens.iter().enumerate() {
-                let word_first = if plain { sounding[ix] } else { first[ix] };
-                if let (Some(f), Some(Some(src))) = (word_first, sources.as_ref().map(|s| s[ix])) {
-                    word_starts.push((boundaries_before[f], src));
+                let src = sources.as_ref().and_then(|s| s[ix]);
+                if let (true, Some(src)) = (plain, src) {
+                    if let Some(f) = sounding[ix] {
+                        word_starts.push((boundaries_before[f], src));
+                    }
+                } else if let (false, Some(src)) = (plain, src) {
+                    mark_word_starts(&mut codes, &owners, ix, src);
                 }
                 let Some(f) = first[ix] else { continue };
                 let text = token_surface(token, &self.options.number_grammar);
@@ -12153,6 +12157,28 @@ fn locate_surface(text: &str, surface: &str, from: usize) -> Option<(usize, usiz
         });
         all.then_some((start, end))
     })
+}
+
+/// `TranslateWord2`'s `plist2->sourceix = source_ix`: the token's first sounding code carries
+/// its source, and every further word the token's phonemes spell out (`phonEND_WORD`, as in
+/// the parts of a number) starts at `source_ix + 1`.  Pre-pauses and markers sit in front of
+/// the word's own phoneme and take no source.
+fn mark_word_starts(codes: &mut [PhonemeCode], owners: &[usize], token: usize, src: SourceIx) {
+    let mut part = 0u16;
+    let mut open = true;
+    for (code, _) in codes.iter_mut().zip(owners).filter(|(_, &o)| o == token) {
+        if code.is_boundary || code.code == crate::phoneme::PHON_END_WORD {
+            open = true;
+        } else if code.marker.is_none() && !is_pre_pause_code(code.code) && open {
+            code.source = Some(SourceIx { ix: src.ix + u32::from(part), ..src });
+            open = false;
+            part = 1;
+        }
+    }
+}
+
+fn is_pre_pause_code(code: u8) -> bool {
+    matches!(code, crate::phoneme::PHON_PAUSE | crate::phoneme::PHON_PAUSE_NOLINK)
 }
 
 /// The source index of each token that starts a word, found by walking the clause text
