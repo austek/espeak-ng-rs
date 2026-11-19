@@ -11946,7 +11946,12 @@ impl Translator {
                 let src = sources.as_ref().and_then(|s| s[ix]);
                 if let (true, Some(src)) = (plain, src) {
                     if let Some(f) = sounding[ix] {
-                        word_starts.push((boundaries_before[f], src));
+                        // A token glued to the one before it has no boundary of its own.
+                        if word_starts.last().is_some_and(|&(b, _)| b == boundaries_before[f]) {
+                            codes[f].source = Some(src);
+                        } else {
+                            word_starts.push((boundaries_before[f], src));
+                        }
                     }
                 } else if let (false, Some(src)) = (plain, src) {
                     mark_word_starts(&mut codes, &owners, ix, src);

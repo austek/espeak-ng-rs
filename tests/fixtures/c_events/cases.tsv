@@ -82,3 +82,4 @@ word_ssml_usa	0	en	0x1010	<speak>the U.S.A. today</speak>
 word_ssml_ordinal	0	en	0x1010	<speak>the 1st one</speak>
 word_ssml_dollar	0	en	0x1010	<speak>pay $5 each</speak>
 word_ssml_time	0	en	0x1010	<speak>at 10:30 sharp</speak>
+word_percent	0	en	0x1000	about 100% sure
