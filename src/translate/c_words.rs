@@ -133,8 +133,7 @@ fn opens_switch(codes: &[super::PhonemeCode]) -> bool {
     let pause = |c: &super::PhonemeCode| c.marker.is_none() && matches!(c.code, PHON_PAUSE | PHON_PAUSE_NOLINK);
     codes
         .iter()
-        .skip_while(|c| pause(c))
-        .next()
+        .find(|c| !pause(c))
         .or(codes.first())
         .is_some_and(|c| matches!(c.marker, Some(super::CodeMarker::LangSwitch(_))))
 }
