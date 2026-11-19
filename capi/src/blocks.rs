@@ -64,31 +64,12 @@ pub fn clause_end_positions(text: &str) -> Vec<i32> {
         .collect()
 }
 
-fn is_word_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '\''
-}
-
-fn byte_offset(text: &str, pos: u32) -> usize {
-    let skip = (pos as usize).saturating_sub(1);
-    text.char_indices().nth(skip).map_or(text.len(), |(b, _)| b)
-}
-
-/// The characters of the word at 1-based `pos`: what a plain-text word
-/// event reports until the engine gives its length.
-fn word_length(text: &str, pos: u32) -> i32 {
-    text.get(byte_offset(text, pos)..)
-        .map_or(0, |s| s.chars().take_while(|&c| is_word_char(c)).count() as i32)
-}
-
-fn text_events(text: &str, events: &[Source]) -> Vec<Ev> {
+fn text_events(events: &[Source]) -> Vec<Ev> {
     events
         .iter()
         .filter_map(|e| {
             let (kind, length) = match &e.kind {
-                EventKind::Word(i) => {
-                    let length = if e.length > 0 { e.length as i32 } else { word_length(text, e.text_position) };
-                    (EvKind::Word(*i as i32), length)
-                }
+                EventKind::Word(i) => (EvKind::Word(*i as i32), e.length as i32),
                 EventKind::Mark(name) => (EvKind::Mark(name.clone()), e.length as i32),
                 EventKind::Sentence(n) => (EvKind::Sentence(*n as i32), e.length as i32),
                 _ => return None,
@@ -140,7 +121,7 @@ fn sentences_in(events: &[Ev]) -> i32 {
 
 fn build_from(text: &str, chunks: &[Vec<i16>], events: &[Source], rate: u32, size: usize) -> Vec<Block> {
     let size = size.max(1);
-    let mut evs = text_events(text, events);
+    let mut evs = text_events(events);
     evs.sort_by_key(|e| (e.sample, rank(&e.kind)));
     let ends = clause_end_positions(text);
     let text_len = text.chars().count() as i32;
@@ -219,19 +200,11 @@ mod tests {
     }
 
     #[test]
-    fn a_word_the_engine_gave_no_length_is_measured_in_the_text() {
+    fn a_word_length_of_zero_stays_zero() {
         let sources = [src(EventKind::Word(1), 1, 0, 0)];
         let blocks = build_from("Hi.", &[vec![0; 2000]], &sources, 22050, 1324);
         let word = events(&blocks).into_iter().find(|e| e.kind == EvKind::Word(1)).expect("word").length;
-        assert_eq!(word, 2);
-    }
-
-    #[test]
-    fn an_engine_length_wins_over_the_text() {
-        let sources = [src(EventKind::Word(1), 1, 7, 0)];
-        let blocks = build_from("Hi.", &[vec![0; 2000]], &sources, 22050, 1324);
-        let word = events(&blocks).into_iter().find(|e| e.kind == EvKind::Word(1)).expect("word").length;
-        assert_eq!(word, 7);
+        assert_eq!(word, 0);
     }
 
     #[test]
