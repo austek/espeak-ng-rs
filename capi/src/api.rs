@@ -198,7 +198,11 @@ fn synthesize(req: Request, uid_out: *mut c_uint, user_data: *mut c_void) -> c_i
             None if wants_lines => ops::phoneme_lines(&lookup, &rendered.text, trace_mode),
             None => Vec::new(),
         };
-        let trace = Trace { lines, print, stream: trace_stream, callback: callbacks.phoneme };
+        let replaced = match &rendered.markup {
+            None if print => ops::replace_lines(&lookup, &rendered.text, trace_mode),
+            _ => Vec::new(),
+        };
+        let trace = Trace { lines, replaced, print, stream: trace_stream, callback: callbacks.phoneme };
         let mut before = |k: usize| answer_uri_calls(&rendered, &mut known, k, callbacks.uri);
         match deliver(target.as_ref(), &rendered.clauses, &trace, from, &mut before) {
             Flow::Done => return ENS_OK,

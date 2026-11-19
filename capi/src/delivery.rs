@@ -102,6 +102,8 @@ fn terminated(t: &Target) -> bool {
 /// What C does with a clause's phoneme string before it generates the clause.
 pub struct Trace {
     pub lines: Vec<String>,
+    /// The `Replace:` lines printed (never handed to the callback) before each phoneme line.
+    pub replaced: Vec<Vec<String>>,
     /// Print each line to `stream` (`espeak_SetPhonemeTrace`).
     pub print: bool,
     /// The trace `FILE*` as an address; 0 is NULL, which C maps to stderr.
@@ -120,14 +122,18 @@ fn stderr_stream() -> *mut CFile {
     *STDERR.get_or_init(|| unsafe { fdopen(2, c"w".as_ptr()) } as usize) as *mut CFile
 }
 
-fn emit(trace: &Trace, line: &str) {
-    let Ok(text) = CString::new(line.replace('\0', "")) else { return };
+fn print_line(trace: &Trace, line: &str) {
     if trace.print {
         let stream = if trace.stream == 0 { stderr_stream() } else { trace.stream as *mut CFile };
         let out = CString::new(format!("{line}\n").replace('\0', "")).unwrap_or_default();
         // SAFETY: `stream` is the caller's open `FILE*` (or stderr) and `out` is NUL-terminated.
         unsafe { fputs(out.as_ptr(), stream) };
     }
+}
+
+fn emit(trace: &Trace, line: &str) {
+    let Ok(text) = CString::new(line.replace('\0', "")) else { return };
+    print_line(trace, line);
     if let Some(callback) = trace.callback {
         // SAFETY: the registered callback accepts a NUL-terminated string valid for the call.
         unsafe { callback(text.as_ptr()) };
@@ -135,10 +141,18 @@ fn emit(trace: &Trace, line: &str) {
 }
 
 /// The trace lines due before clause `k` of `n`; the last clause also takes any surplus.
-fn lines_before(trace: &Trace, k: usize, n: usize) -> &[String] {
+fn lines_before(trace: &Trace, k: usize, n: usize) -> std::ops::Range<usize> {
     let from = k.min(trace.lines.len());
     let to = if k + 1 == n { trace.lines.len() } else { (k + 1).min(trace.lines.len()) };
-    &trace.lines[from..to]
+    from..to
+}
+
+/// Prints the clause's `Replace:` lines and then its phoneme line.
+fn emit_clause(trace: &Trace, index: usize) {
+    for line in trace.replaced.get(index).into_iter().flatten() {
+        print_line(trace, line);
+    }
+    emit(trace, &trace.lines[index]);
 }
 
 /// How a delivery ended.
@@ -163,7 +177,7 @@ pub fn deliver(
         if before(k) {
             return Flow::Restart(k);
         }
-        lines_before(trace, k, clauses.len()).iter().for_each(|line| emit(trace, line));
+        lines_before(trace, k, clauses.len()).for_each(|index| emit_clause(trace, index));
         let Some(t) = target else { continue };
         for block in blocks {
             if CANCEL.load(Ordering::SeqCst) || deliver_block(t, block) {
@@ -172,7 +186,7 @@ pub fn deliver(
         }
     }
     if clauses.is_empty() {
-        trace.lines.iter().for_each(|line| emit(trace, line));
+        (0..trace.lines.len()).for_each(|index| emit_clause(trace, index));
     }
     if before(clauses.len()) {
         return Flow::Restart(clauses.len());

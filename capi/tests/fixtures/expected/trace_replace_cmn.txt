@@ -1,0 +1,70 @@
+Replace: 你 好   ni3hao3 
+Translate 'ni3hao3'
+  1	n        [_^_]
+ 35	n (L03L  [n]
+
+  1	i        [_^_]
+ 21	i (L02   [i]
+
+ 22	3        [214]
+
+  1	h        [_^_]
+ 35	h (L03L  [X]
+
+  1	a        [_^_]
+ 42	ao (L02  [Au]
+
+ 22	3        [214]
+
+Replace: 😀   嘿嘿 
+Replace: 嘿   hei1 
+Translate 'hei1'
+  1	h        [_^_]
+ 35	h (L03L  [X]
+
+  1	e        [_^_]
+ 42	ei (L02  [ei]
+
+ 22	1        [55]
+
+Replace: 嘿   hei1 
+Translate 'hei1'
+  1	h        [_^_]
+ 35	h (L03L  [X]
+
+  1	e        [_^_]
+ 42	ei (L02  [ei]
+
+ 22	1        [55]
+
+ni35X'Au21_| X'ei55_| X'ei55_|
+cb 0 samples=1324 wav=data
+  ev type=8 uid=0 pos=0 len=0 apos=0 ud=(null)
+  ev type=2 uid=0 pos=1 len=0 apos=0 num=1 ud=(null)
+  ev type=1 uid=0 pos=1 len=1 apos=0 num=1 ud=(null)
+cb 1 samples=1324 wav=data
+cb 2 samples=1324 wav=data
+cb 3 samples=1324 wav=data
+cb 4 samples=1324 wav=data
+cb 5 samples=1324 wav=data
+cb 6 samples=1324 wav=data
+cb 7 samples=1324 wav=data
+  ev type=1 uid=0 pos=3 len=1 apos=428 num=2 ud=(null)
+cb 8 samples=1324 wav=data
+cb 9 samples=1324 wav=data
+cb 10 samples=1324 wav=data
+cb 11 samples=1324 wav=data
+  ev type=1 uid=0 pos=4 len=1 apos=688 num=3 ud=(null)
+cb 12 samples=1324 wav=data
+cb 13 samples=1324 wav=data
+cb 14 samples=1324 wav=data
+cb 15 samples=1324 wav=data
+cb 16 samples=1324 wav=data
+cb 17 samples=1324 wav=data
+cb 18 samples=1324 wav=data
+cb 19 samples=1324 wav=data
+cb 20 samples=1324 wav=data
+cb 21 samples=228 wav=data
+  ev type=5 uid=0 pos=3 len=0 apos=1271 ud=(null)
+cb 22 samples=-1 wav=null
+samples=28032

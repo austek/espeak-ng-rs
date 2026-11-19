@@ -17,7 +17,13 @@ pub struct Clause {
 }
 
 pub const PHONEMES_IPA: i32 = 0x02;
+pub const PHONEMES_TRACE: i32 = 0x08;
 pub const PHONEMES_TIE: i32 = 0x80;
+
+/// The `Replace:` lines of each clause of `text` (see `Translator::replace_trace_lines`).
+pub fn replace_lines(settings: &Settings, text: &str, mode: i32) -> espeak_ng::Result<Vec<Vec<String>>> {
+    translator_for(settings, mode)?.replace_trace_lines(text)
+}
 
 fn terminator_value(c: char) -> i32 {
     match c {

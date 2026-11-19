@@ -111,6 +111,53 @@ fn trace_scenarios() -> Vec<Scenario> {
     list
 }
 
+/// Trace bit 3 also prints C's word-lookup lines; only the `Replace:` ones are ported, so these
+/// scenarios are recorded in full and compared on those lines alone.
+fn replace_trace_scenarios() -> Vec<Scenario> {
+    let rows: [(&str, &str, &str); 3] = [
+        ("en", "en", "Tom & Jerry cost 5 \u{20ac} today \u{1f600} ok."),
+        ("de", "de", "Das ist \u{2211} und \u{c4}pfel \u{a7} 3 \u{b0} C. Zweiter Satz mit \u{20ac}."),
+        ("cmn", "cmn", "\u{4f60}\u{597d}\u{1f600}"),
+    ];
+    rows.iter()
+        .map(|(name, voice, text)| {
+            let fixture: &'static str = Box::leak(format!("expected/trace_replace_{name}.txt").into_boxed_str());
+            Scenario { fixture, args: args(&["trace", "9", voice, "0x1000", text, "0"]) }
+        })
+        .collect()
+}
+
+fn replace_lines(output: &str) -> Vec<&str> {
+    output.lines().filter(|l| l.starts_with("Replace: ")).collect()
+}
+
+fn assert_replace_lines(fixture_name: &str) {
+    if !have_data() {
+        eprintln!("[SKIP] no espeak-ng-data");
+        return;
+    }
+    let s = replace_trace_scenarios().into_iter().find(|s| s.fixture == fixture_name).expect("scenario");
+    let got = run_probe_with(probe_binary(), &s.args.iter().map(String::as_str).collect::<Vec<_>>());
+    let want = fixture(s.fixture);
+    assert!(!replace_lines(&want).is_empty(), "{fixture_name} has no Replace line");
+    assert_eq!(replace_lines(&got), replace_lines(&want), "{fixture_name}");
+}
+
+#[test]
+fn trace_bit3_prints_the_replace_lines_of_listed_replacement_text() {
+    assert_replace_lines("expected/trace_replace_en.txt");
+}
+
+#[test]
+fn trace_bit3_prints_the_replace_lines_before_each_clause() {
+    assert_replace_lines("expected/trace_replace_de.txt");
+}
+
+#[test]
+fn trace_bit3_prints_the_replace_lines_of_a_multi_word_entry() {
+    assert_replace_lines("expected/trace_replace_cmn.txt");
+}
+
 const SSML_TRACE_TEXT: &str = "<speak>Hi there.</speak>";
 const SSML_TRACE_CLAUSES: &str = r#"<speak>Hi <voice name="de">Hallo Welt.</voice> bye. <break time="200ms"/> Done now.</speak>"#;
 
@@ -244,7 +291,8 @@ fn record_fixtures_from_c() {
     extra.extend(libs.iter().map(String::as_str));
     extra.extend(["-lm", "-lpthread", "-lstdc++"]);
     compile_c(&manifest_dir().join("tests/c/probe.c"), &out, &extra);
-    for s in scenarios().into_iter().filter(|s| !KEEP_RECORDED.contains(&s.fixture)) {
+    let recorded = scenarios().into_iter().chain(replace_trace_scenarios());
+    for s in recorded.filter(|s| !KEEP_RECORDED.contains(&s.fixture)) {
         let text = run_scenario(&out, &s);
         std::fs::create_dir_all(fixture_path("expected")).expect("mkdir");
         std::fs::write(fixture_path(s.fixture), text).expect("write fixture");

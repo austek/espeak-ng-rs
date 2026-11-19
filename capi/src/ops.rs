@@ -131,6 +131,15 @@ pub fn phoneme_lines(settings: &Settings, text: &str, mode: i32) -> Vec<String> 
         .unwrap_or_default()
 }
 
+/// The `Replace:` lines C prints before each clause's phoneme string when the trace mode has
+/// bit 3 set.
+pub fn replace_lines(settings: &Settings, text: &str, mode: i32) -> Vec<Vec<String>> {
+    if mode & crate::phonemes::PHONEMES_TRACE == 0 {
+        return Vec::new();
+    }
+    crate::phonemes::replace_lines(settings, text, mode).unwrap_or_default()
+}
+
 /// `espeak_SetPhonemeTrace`'s mode as the engine's trace format.
 pub fn trace_format(mode: i32) -> espeak_ng::PhonemeTrace {
     let glyph = char::from_u32(((mode >> 8) & 0xffff) as u32).filter(|&c| c != '\0');

@@ -30,6 +30,7 @@ pub(crate) mod ucd_alpha;
 pub mod readclause;
 pub mod ssml_driver;
 mod c_words;
+pub mod replace_trace;
 mod plain_events;
 mod say_as;
 mod dotted_abbrev;
@@ -5827,6 +5828,11 @@ fn word_to_phonemes_inner(
             // as replacement text (cmn/yue/zh), so compare against the language's
             // default rather than testing the bit directly.
             let is_textmode = result.flags1.textmode() != lang_opts.reversed_textmode;
+            if is_textmode {
+                let replacement = String::from_utf8_lossy(&result.phonemes);
+                let replacement = replacement.trim_end_matches('\0');
+                replace_trace::note(&format!("{word} "), &format!("{replacement} "));
+            }
             if is_textmode && rule_word_flags & FLAG_IN_TEXTMODE == 0 {
                 let replacement = String::from_utf8_lossy(&result.phonemes);
                 let replacement = replacement.trim_end_matches('\0');
@@ -9348,7 +9354,7 @@ pub(crate) fn build_translate_entries(
     alts: &letters::AltLangs,
     spelled: &[Option<usize>],
     emphasized: &[bool],
-) -> (Vec<TranslateEntry>, Vec<bool>) {
+) -> (Vec<TranslateEntry>, Vec<bool>, Vec<Vec<String>>) {
     crate::dictionary::rules::clear_uncovered_brackets();
     let mut entries: Vec<TranslateEntry> = Vec::with_capacity(tokens.len());
     // `$max3` bookkeeping: which symbol is repeating, and how many times so far.
@@ -9447,7 +9453,12 @@ pub(crate) fn build_translate_entries(
     let mut skip_words = 0usize;
     let mut dot_removed_at: Option<usize> = None;
     let mut swallowed = vec![false; tokens.len()];
+    replace_trace::take();
+    let mut replaced: Vec<Vec<String>> = Vec::with_capacity(tokens.len());
     for (token_ix, token) in tokens.iter().enumerate() {
+        if token_ix > 0 {
+            replaced.push(replace_trace::take());
+        }
         swallowed[token_ix] = (matches!(token, Token::Word(_) | Token::Punctuation('.'))
             && skip_words > 0
             && dot_removed_at != Some(token_ix))
@@ -9696,6 +9707,7 @@ pub(crate) fn build_translate_entries(
                         .take(skip_words)
                         .collect::<Vec<_>>()
                         .join(" ");
+                    replace_trace::extend_first_word(&rest);
                     format!("{lower} {rest}")
                 };
                 let roman = (!wr.found_in_list
@@ -10150,7 +10162,10 @@ pub(crate) fn build_translate_entries(
             e.kind = TranslateEntryKind::LangSwitch;
         }
     }
-    (entries, swallowed)
+    if !tokens.is_empty() {
+        replaced.push(replace_trace::take());
+    }
+    (entries, swallowed, replaced)
 }
 
 /// Tones for the vowels of a stretch spoken in another language's table inside a
@@ -10861,6 +10876,7 @@ impl Translator {
             return Some(c.to_string());
         }
         let text = String::from_utf8_lossy(&entry.phonemes).into_owned();
+        replace_trace::note(&format!("{c} "), &format!("{} ", text.trim_end_matches('\0')));
         let words: Vec<&str> = text.trim_end_matches('\0').split_whitespace().collect();
         let listed = lookup(dict, words.first()?, &LookupCtx::default()).is_some();
         listed.then(|| if by_name { format!("_{c}") } else { words.join(" ") })
@@ -11156,7 +11172,7 @@ impl Translator {
                 .and_then(|(en, dict)| en.symbol_switch_word(dict, c, by_name))
         };
         let (emphasized, end_emphasis) = emphasized_tokens(&tokens, start_emphasis);
-        let (mut entries, swallowed) = build_translate_entries(
+        let (mut entries, swallowed, replaced) = build_translate_entries(
             &tokens,
             dict,
             phdata,
@@ -11214,6 +11230,9 @@ impl Translator {
         let (spoken_before_clause, spoken_after) = clause_spoken_flags(&tokens, &entries);
 
         for (token_ix, (token, entry)) in tokens.iter().zip(entries.iter()).enumerate() {
+            if let Some(lines) = token_ix.checked_sub(1).and_then(|k| replaced.get(k)) {
+                push_replaced(&mut codes, lines);
+            }
             if tracking {
                 owners.resize(codes.len(), owner_now);
                 owner_now = token_ix;
@@ -11834,6 +11853,10 @@ impl Translator {
             }
             // Positions added during this iteration inherit the entry's flag.
             from_dict.resize(codes.len(), translation_given);
+        }
+
+        if let Some(lines) = replaced.last() {
+            push_replaced(&mut codes, lines);
         }
 
         // A switch left open at the end of the text still closes, so the
@@ -13793,6 +13816,13 @@ pub enum CodeMarker {
     /// The clause that ends here stopped on the dot of an abbreviation (`Dr.`): its pause is
     /// 10 ms and its tone `CLAUSE_INTONATION_NONE`.
     AbbreviationDot,
+    /// A line C prints to the phoneme trace while it translates the clause
+    /// (`replace_trace`); no synthesis step reads it.
+    Replaced(String),
+}
+
+fn push_replaced(codes: &mut Vec<PhonemeCode>, lines: &[String]) {
+    codes.extend(lines.iter().map(|line| PhonemeCode { marker: Some(CodeMarker::Replaced(line.clone())), ..Default::default() }));
 }
 
 // ---------------------------------------------------------------------------

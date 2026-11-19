@@ -1,0 +1,240 @@
+Found: 'das' [das]  
+Found: 'ist' [Ist]  $u
+Replace: ∑   Summenzeichen 
+Translate 'summenzeichen'
+ 21	s (A     [z]
+ 85	summe    [zUm@]
+  1	s        [s]
+
+  1	n        [n]
+
+  1	z        [ts]
+
+ 22	ei       [aI]
+  1	e        [e:]
+
+ 36	ch       [C]
+  1	c        [k]
+
+ 62	@) en (  [@n]
+  1	e        [e:]
+
+Translate 'summenzeich'
+ 21	s (A     [z]
+ 85	summe    [zUm@]
+  1	s        [s]
+
+  1	n        [n]
+
+  1	z        [ts]
+
+ 22	ei       [aI]
+  1	e        [e:]
+
+ 36	ch       [C]
+  1	c        [k]
+
+Found: 'und' [Unt]  $u+ $pause $strend
+Translate 'äpfel'
+ 68	ä (CC   [E]
+ 36	ä       [E:]
+
+  1	p        [p]
+
+  1	f        [f]
+
+ 62	&) el (  [@l]
+  1	e        [e:]
+
+Replace: §   Paragraf 
+Translate 'paragraf'
+  1	p        [p]
+ 87	_) para  [p,ara]
+
+  1	g        [g]
+
+  1	r        [r]
+
+ 35	a (C_    [A:]
+  1	a        [A]
+
+  1	f        [f]
+
+Found: '_3' ['draI]  
+Replace: °   Grad 
+Unpronouncable? 'grad'
+ 39	_) g (L  [g]
+Translate 'grad'
+  1	g        [g]
+ 39	_) g (L  [g]
+
+  1	r        [r]
+
+ 35	a (C_    [A:]
+  1	a        [A]
+
+ 23	d (_N    [t]
+  1	d        [d]
+
+Translate 'c'
+  1	c        [k]
+ 26	_) c (_  [tse:]
+
+das _|Ist z'Um@nts,aIC@n_:_: _|Unt _!'Epf@l p,aRagr'A:f dr'aI gr'A:t ts'e:
+cb 0 samples=1324 wav=data
+  ev type=8 uid=0 pos=0 len=0 apos=0 ud=(null)
+  ev type=2 uid=0 pos=1 len=0 apos=0 num=1 ud=(null)
+  ev type=1 uid=0 pos=1 len=3 apos=0 num=1 ud=(null)
+cb 1 samples=1324 wav=data
+cb 2 samples=1324 wav=data
+  ev type=1 uid=0 pos=5 len=3 apos=178 num=2 ud=(null)
+cb 3 samples=1324 wav=data
+cb 4 samples=1324 wav=data
+cb 5 samples=1324 wav=data
+  ev type=1 uid=0 pos=9 len=1 apos=359 num=3 ud=(null)
+cb 6 samples=1324 wav=data
+cb 7 samples=1324 wav=data
+cb 8 samples=1324 wav=data
+cb 9 samples=1324 wav=data
+cb 10 samples=1324 wav=data
+cb 11 samples=1324 wav=data
+cb 12 samples=1324 wav=data
+cb 13 samples=1324 wav=data
+cb 14 samples=1324 wav=data
+cb 15 samples=1324 wav=data
+cb 16 samples=1324 wav=data
+cb 17 samples=1324 wav=data
+cb 18 samples=1324 wav=data
+cb 19 samples=1324 wav=data
+  ev type=1 uid=0 pos=11 len=3 apos=1150 num=4 ud=(null)
+cb 20 samples=1324 wav=data
+cb 21 samples=1324 wav=data
+cb 22 samples=1324 wav=data
+  ev type=1 uid=0 pos=15 len=5 apos=1344 num=5 ud=(null)
+cb 23 samples=1324 wav=data
+cb 24 samples=1324 wav=data
+cb 25 samples=1324 wav=data
+cb 26 samples=1324 wav=data
+cb 27 samples=1324 wav=data
+cb 28 samples=1324 wav=data
+  ev type=1 uid=0 pos=21 len=1 apos=1722 num=6 ud=(null)
+cb 29 samples=1324 wav=data
+cb 30 samples=1324 wav=data
+cb 31 samples=1324 wav=data
+cb 32 samples=1324 wav=data
+cb 33 samples=1324 wav=data
+cb 34 samples=1324 wav=data
+cb 35 samples=1324 wav=data
+cb 36 samples=1324 wav=data
+cb 37 samples=1324 wav=data
+  ev type=1 uid=0 pos=23 len=1 apos=2276 num=7 ud=(null)
+cb 38 samples=1324 wav=data
+cb 39 samples=1324 wav=data
+cb 40 samples=1324 wav=data
+cb 41 samples=1324 wav=data
+  ev type=1 uid=0 pos=25 len=1 apos=2501 num=8 ud=(null)
+cb 42 samples=1324 wav=data
+cb 43 samples=1324 wav=data
+cb 44 samples=1324 wav=data
+cb 45 samples=1324 wav=data
+cb 46 samples=1324 wav=data
+cb 47 samples=1324 wav=data
+  ev type=1 uid=0 pos=27 len=1 apos=2847 num=9 ud=(null)
+cb 48 samples=1324 wav=data
+cb 49 samples=1324 wav=data
+cb 50 samples=1324 wav=data
+cb 51 samples=1324 wav=data
+cb 52 samples=1324 wav=data
+cb 53 samples=1324 wav=data
+cb 54 samples=1324 wav=data
+cb 55 samples=1324 wav=data
+cb 56 samples=1324 wav=data
+cb 57 samples=1324 wav=data
+cb 58 samples=595 wav=data
+  ev type=5 uid=0 pos=29 len=0 apos=3509 ud=(null)
+Unpronouncable? 'zweiter'
+ 40	_) z (w  [ts]
+Translate 'zweiter'
+  1	z        [ts]
+ 40	_) z (w  [ts]
+
+  1	w        [v]
+
+ 22	ei       [aI]
+  1	e        [e:]
+
+  1	t        [t]
+
+ 62	@) er (  [@r]
+  1	e        [e:]
+
+Translate 'zweit'
+  1	z        [ts]
+ 40	_) z (w  [ts]
+
+  1	w        [v]
+
+ 22	ei       [aI]
+  1	e        [e:]
+
+  1	t        [t]
+
+Translate 'satz'
+ 21	s (A     [z]
+  1	s        [s]
+
+ 33	a (CC    [a]
+  1	a        [A]
+
+  1	t        [t]
+ 22	tz       [ts]
+
+Found: 'mit' [mIt]  $u+ $pause $strend
+Replace: €   Euro 
+Translate 'euro'
+ 22	eu       [OY]
+  1	e        [e:]
+
+  1	r        [r]
+
+  1	o        [o:]
+
+tsv'aIt3 z'ats_:_: mIt _!'OYRo:
+cb 59 samples=1324 wav=data
+  ev type=2 uid=0 pos=30 len=0 apos=3509 num=2 ud=(null)
+  ev type=1 uid=0 pos=30 len=7 apos=3509 num=10 ud=(null)
+cb 60 samples=1324 wav=data
+cb 61 samples=1324 wav=data
+cb 62 samples=1324 wav=data
+cb 63 samples=1324 wav=data
+cb 64 samples=1324 wav=data
+cb 65 samples=1324 wav=data
+cb 66 samples=1324 wav=data
+  ev type=1 uid=0 pos=38 len=4 apos=3982 num=11 ud=(null)
+cb 67 samples=1324 wav=data
+cb 68 samples=1324 wav=data
+cb 69 samples=1324 wav=data
+cb 70 samples=1324 wav=data
+cb 71 samples=1324 wav=data
+cb 72 samples=1324 wav=data
+cb 73 samples=1324 wav=data
+  ev type=1 uid=0 pos=43 len=3 apos=4372 num=12 ud=(null)
+cb 74 samples=1324 wav=data
+cb 75 samples=1324 wav=data
+cb 76 samples=1324 wav=data
+  ev type=1 uid=0 pos=47 len=1 apos=4570 num=13 ud=(null)
+cb 77 samples=1324 wav=data
+cb 78 samples=1324 wav=data
+cb 79 samples=1324 wav=data
+cb 80 samples=1324 wav=data
+cb 81 samples=1324 wav=data
+cb 82 samples=1324 wav=data
+cb 83 samples=1324 wav=data
+cb 84 samples=1324 wav=data
+cb 85 samples=1324 wav=data
+cb 86 samples=1324 wav=data
+cb 87 samples=1324 wav=data
+cb 88 samples=176 wav=data
+  ev type=5 uid=0 pos=48 len=0 apos=5258 ud=(null)
+cb 89 samples=-1 wav=null
+samples=115959
