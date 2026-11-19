@@ -44,10 +44,13 @@ fn one_megabyte_of_punctuation_and_short_words_is_linear() {
     }
 }
 
+/// Eight times the input costs eight times as much when linear and sixty-four times when
+/// quadratic; a ratio holds in debug and release builds alike, an absolute bound does not.
 #[test]
 fn irish_capitals_inside_one_endless_word_are_linear() {
-    let (elapsed, _) = run_fill("camel", "aB", 4_000_000, "ga");
-    assert!(elapsed < Duration::from_secs(15), "took {elapsed:?}");
+    let (small, _) = run_fill("camel_small", "aB", 200_000, "ga");
+    let (large, _) = run_fill("camel_large", "aB", 1_600_000, "ga");
+    assert!(large < small * 14, "200 KB took {small:?}, 1.6 MB took {large:?}");
 }
 
 #[test]
