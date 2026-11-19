@@ -892,7 +892,7 @@ impl EspeakNg {
             return Ok((samples, rate, events));
         }
 
-        let (samples, word_marks, sentence_marks) = self.synth_text_with_marks(text)?;
+        let (samples, raw) = self.synth_plain_raw(text)?;
         // The tempo/pitch post-pass changes the buffer length, so the sample
         // offsets recorded during synthesis no longer address the audio the
         // caller receives — rescale them (upstream #2470: "rescale event sample
@@ -901,25 +901,10 @@ impl EspeakNg {
         // that differed from `synth()` for the same text.
         let raw_len = samples.len();
         let samples = self.apply_post_fx(samples);
-        let time_scale = if raw_len == 0 {
-            1.0
-        } else {
-            samples.len() as f64 / raw_len as f64
-        };
-        // Marks were recorded against the pre-scaling buffer; the final length
-        // is already in post-fx samples.
-        let mark_sample = |s: usize| (s as f64 * time_scale) as usize;
-        let word_offsets = word_char_offsets(text);
-
-        let events = build_events(
-            text,
-            &word_offsets,
-            &word_marks,
-            &sentence_marks,
-            mark_sample,
-            rate,
-            samples.len(),
-        );
+        let scale = if raw_len == 0 { 1.0 } else { samples.len() as f64 / raw_len as f64 };
+        let mut events = vec![sample_rate_event(rate)];
+        events.extend(raw.iter().map(|e| marker_event(e, None, scale, rate)));
+        events.push(terminated_event());
         Ok((samples, rate, events))
     }
 
@@ -995,34 +980,25 @@ impl EspeakNg {
             self.voice_spec.effective_lang(),
         )
         .map_err(|_| Error::VoiceNotFound(self.voice_spec.effective_lang().to_string()))?;
-        let codes = translator.translate_to_codes(text)?;
+        let clauses = translator.translate_plain_clauses(text)?;
         let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
 
-        let mut emitted = 0usize;
         let mut stopped = false;
-        let (tail, word_marks, sentence_marks) = {
+        let (tail, raw) = {
             let mut sink = |chunk: &[i16], _final: bool| -> bool {
-                emitted += chunk.len();
                 let stop = callback(chunk, false, &[]);
                 stopped |= stop;
                 stop
             };
-            synth.synthesize_codes_streaming_with_marks(&codes, &phdata, &mut sink)?
+            synth.synthesize_clauses_streaming_with_events(&clauses, &phdata, &mut sink)?
         };
         if stopped {
             return Ok(rate);
         }
 
-        let word_offsets = word_char_offsets(text);
-        let events = build_events(
-            text,
-            &word_offsets,
-            &word_marks,
-            &sentence_marks,
-            |s| s,
-            rate,
-            emitted + tail.len(),
-        );
+        let mut events = vec![sample_rate_event(rate)];
+        events.extend(raw.iter().map(|e| marker_event(e, None, 1.0, rate)));
+        events.push(terminated_event());
         callback(&tail, true, &events);
         Ok(rate)
     }
@@ -1081,8 +1057,8 @@ impl EspeakNg {
     }
 
     /// Plain-text render (like [`synth_text`](Self::synth_text)) that also
-    /// returns each spoken word's and sentence's start sample offset.
-    fn synth_text_with_marks(&self, text: &str) -> Result<(PcmBuffer, Vec<usize>, Vec<usize>)> {
+    /// returns the generator's events.
+    fn synth_plain_raw(&self, text: &str) -> Result<(PcmBuffer, Vec<crate::synthesize::cgen::RawEvent>)> {
         let translator = self.make_translator()?;
         let mut phdata  = self.load_phdata()?;
         crate::translate::select_phoneme_table(
@@ -1092,10 +1068,10 @@ impl EspeakNg {
         )
         .map_err(|_| Error::VoiceNotFound(self.voice_spec.effective_lang().to_string()))?;
 
-        let codes = translator.translate_to_codes(text)?;
+        let clauses = translator.translate_plain_clauses(text)?;
         let voice = self.make_voice_params_levels(self.rate, self.pitch, self.volume);
         let synth = Synthesizer::new(voice);
-        synth.synthesize_codes_with_marks(&codes, &phdata)
+        synth.synthesize_clauses_with_events(&clauses, &phdata, &std::collections::HashMap::new(), &[])
     }
 
     // ── Info ─────────────────────────────────────────────────────────────
@@ -1421,64 +1397,6 @@ fn sample_rate_event(rate: u32) -> SynthEvent {
 /// C's `espeakEVENT_MSG_TERMINATED` in retrieval mode: every position zero.
 fn terminated_event() -> SynthEvent {
     event_at(EventKind::MsgTerminated, 0, 0, 1)
-}
-
-/// Assemble the `SampleRate` / `Sentence` / `Word` / `End` / `MsgTerminated`
-/// event list from the sample offsets recorded during synthesis.
-/// `word_offsets` are byte offsets in `text`, paired with the spoken words by
-/// index; the events carry 1-based character positions.
-fn build_events(
-    text: &str,
-    word_offsets: &[usize],
-    word_marks: &[usize],
-    sentence_marks: &[usize],
-    mark_sample: impl Fn(usize) -> usize,
-    rate: u32,
-    total_samples: usize,
-) -> Vec<SynthEvent> {
-    let chars = text.chars().count() as u32;
-    let char_pos = |byte: usize| text.get(..byte).map_or(chars, |s| s.chars().count() as u32) + 1;
-    let at = |kind, pos, start| event_at(kind, pos, mark_sample(start), rate);
-    let mut events = Vec::with_capacity(word_marks.len() + sentence_marks.len() + 3);
-    events.push(sample_rate_event(rate));
-    // The first sentence begins at the start; each later clause boundary opens another.
-    let sentences = std::iter::once(0).chain(sentence_marks.iter().copied());
-    let mut body: Vec<SynthEvent> = sentences.map(|s| at(EventKind::Sentence(0), 1, s)).collect();
-    for (i, &start) in word_marks.iter().enumerate() {
-        let pos = word_offsets.get(i).map_or(chars, |&b| char_pos(b));
-        body.push(at(EventKind::Word(i as u32 + 1), pos, start));
-    }
-    // Audio order, with each Sentence ahead of the words that start with it.
-    body.sort_by_key(|e| e.sample);
-    let mut sentence = 0;
-    for i in 0..body.len() {
-        if matches!(body[i].kind, EventKind::Sentence(_)) {
-            sentence += 1;
-            let next = body[i..].iter().find(|e| matches!(e.kind, EventKind::Word(_)));
-            body[i].text_position = next.map_or(1, |w| w.text_position);
-            body[i].kind = EventKind::Sentence(sentence);
-        }
-    }
-    events.extend(body);
-    events.push(event_at(EventKind::End(sentence), chars, total_samples, rate));
-    events.push(terminated_event());
-    events
-}
-
-/// Byte offsets of each word start in `text` — a word being a maximal run of
-/// alphanumeric/apostrophe characters.  Used to give `EventKind::Word` events a
-/// best-effort source `text_position` (paired with spoken words by index).
-fn word_char_offsets(text: &str) -> Vec<usize> {
-    let mut offsets = Vec::new();
-    let mut in_word = false;
-    for (i, c) in text.char_indices() {
-        let is_word = c.is_alphanumeric() || c == '\'';
-        if is_word && !in_word {
-            offsets.push(i);
-        }
-        in_word = is_word;
-    }
-    offsets
 }
 
 /// Copy a `+variant`'s per-formant `formant <i> <freq%> <height%> [width%]`

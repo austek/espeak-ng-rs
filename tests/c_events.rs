@@ -104,6 +104,8 @@ fn line(kind: &EventKind) -> (u8, String) {
     match kind {
         EventKind::Word(n) => (1, format!("num={n}")),
         EventKind::Sentence(n) => (2, format!("num={n}")),
+        // C's plain-text marks carry a null name.
+        EventKind::Mark(name) if name.is_empty() => (3, "name=(null)".into()),
         EventKind::Mark(name) => (3, format!("name={name}")),
         EventKind::Play(uri) => (4, format!("name={uri}")),
         EventKind::End(n) => (5, format!("num={n}")),

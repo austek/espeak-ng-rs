@@ -58,4 +58,15 @@ multi_say_as_cardinal	0	en	0x1010	<say-as interpret-as="cardinal">42</say-as> it
 multi_say_as_ordinal	0	en	0x1010	the <say-as interpret-as="ordinal">3</say-as> one
 multi_say_as_date	0	en	0x1010	<say-as interpret-as="date" format="mdy">1/2/2020</say-as> end
 multi_sub	0	en	0x1010	<sub alias="world wide web">WWW</sub> site
+plain_apostrophes	0	en	0x1000	John's car isn't here.
+plain_ellipsis	0	en	0x1000	hello... world
+plain_grouped_number	0	en	0x1000	3.14 and 1,000,000 and 12:30
+plain_ordinal	0	en	0x1000	the 5th and 3rd
+plain_mark_before_word	0	en	0x1000	one \x010M two
+plain_mark_at_end	0	en	0x1000	one two \x010M.
+plain_mark_multibyte	0	en	0x1000	été \x010M
+plain_mark_second_clause	0	en	0x1000	one two. \x010M three
+plain_cmn	0	cmn	0x1000	你好世界。
+plain_russian	0	ru	0x1000	Привет, мир! Это тест.
+plain_french_elision	0	fr	0x1000	L'homme est arrivé; il a dit bonjour.
 multi_phoneme_tag	0	en	0x1010	say <phoneme alphabet="ipa" ph="həˈləʊ">hello</phoneme> now

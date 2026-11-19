@@ -30,6 +30,7 @@ pub(crate) mod ucd_alpha;
 pub mod ssml;
 pub mod readclause;
 pub mod ssml_driver;
+mod plain_events;
 mod say_as;
 mod dotted_abbrev;
 use ssml_driver::{ClauseCarry, TokenizeMode};
@@ -11893,6 +11894,7 @@ impl Translator {
         // before a code does, since no pass adds or removes one.
         let mut groups: Vec<(String, usize)> = Vec::new();
         let mut word_starts: Vec<(usize, SourceIx)> = Vec::new();
+        let mut clause_ends: Vec<(usize, SourceIx)> = Vec::new();
         if tracking {
             owners.resize(codes.len(), owner_now);
             let mut boundaries_before = Vec::with_capacity(codes.len() + 1);
@@ -11913,14 +11915,25 @@ impl Translator {
                     first[o] = Some(i);
                 }
             }
+            let sounding = first_sounding(&codes, &owners, tokens.len());
+            let plain = matches!(mode, TokenizeMode::Plain);
             let sources = charix.map(|cx| {
-                token_sources(source_text, &tokens, &self.options.number_grammar, cx)
+                token_sources(source_text, &tokens, &self.options.number_grammar, cx, plain)
             });
+            if let (true, Some(sources)) = (plain, sources.as_ref()) {
+                for (i, c) in codes.iter().enumerate() {
+                    let closes = c.code == 0 && c.is_boundary && c.clause_char.is_some() && c.marker.is_none();
+                    if let (true, Some(Some(src))) = (closes, sources.get(owners[i])) {
+                        clause_ends.push((boundaries_before[i], *src));
+                    }
+                }
+            }
             for (ix, token) in tokens.iter().enumerate() {
-                let Some(f) = first[ix] else { continue };
-                if let Some(Some(src)) = sources.as_ref().map(|s| s[ix]) {
+                let word_first = if plain { sounding[ix] } else { first[ix] };
+                if let (Some(f), Some(Some(src))) = (word_first, sources.as_ref().map(|s| s[ix])) {
                     word_starts.push((boundaries_before[f], src));
                 }
+                let Some(f) = first[ix] else { continue };
                 let text = token_surface(token, &self.options.number_grammar);
                 if !text.is_empty() {
                     groups.push((text, boundaries_before[f]));
@@ -12040,6 +12053,11 @@ impl Translator {
                 code.source = Some(src);
             }
         }
+        for (boundary, end) in clause_ends {
+            if let Some(code) = positions.get(boundary).and_then(|&i| out.get_mut(i)) {
+                code.source = Some(end);
+            }
+        }
         if let Some(track) = track {
             let starts: Vec<usize> = groups.iter().map(|&(_, b)| start_of(b)).collect();
             for (i, (text, _)) in groups.into_iter().enumerate() {
@@ -12131,11 +12149,23 @@ fn token_sources(
     tokens: &[Token],
     grammar: &NumberGrammar,
     charix: &[i32],
+    plain: bool,
 ) -> Vec<Option<SourceIx>> {
     let mut cursor = 0;
+    // Where an embedded command that waits for its word begins: plain text reads the command
+    // as part of that word.
+    let mut command: Option<usize> = None;
+    let mask = if plain { i32::MAX } else { SOURCE_IX_MASK };
     tokens
         .iter()
         .map(|token| {
+            if let (true, Token::ClauseBoundary(c)) = (plain, token) {
+                return clause_end_source(text, *c, charix, &mut cursor);
+            }
+            if let (true, Token::Embedded(_)) = (plain, token) {
+                command = command.or_else(|| text.get(cursor..)?.find('\u{1}').map(|i| cursor + i));
+                return None;
+            }
             if matches!(
                 token,
                 Token::Space
@@ -12154,14 +12184,77 @@ fn token_sources(
             if let Some((_, end)) = found {
                 cursor = end;
             }
-            let source = word_source(charix, found.map_or(cursor, |(start, _)| start))?;
+            let waiting = command.take().filter(|&at| found.is_some_and(|(start, _)| at < start));
+            let start = waiting.or(found.map(|(start, _)| start)).unwrap_or(cursor);
+            let source = word_source_masked(charix, start, mask)?;
             // Punctuation glued to the word ends it, as C's inserted-space count does.
-            let own = found
-                .filter(|&(_, end)| text[end..].chars().next().is_some_and(|c| !c.is_whitespace()))
+            let glued = found
+                .filter(|&(_, end)| {
+                    waiting.is_none() && text[end..].chars().next().is_some_and(|c| !c.is_whitespace() && c != '\u{1}')
+                })
                 .map_or(usize::MAX, |(start, end)| text[start..end].chars().count());
+            // Where C starts a second word inside the first one's run of characters.
+            let split = (plain && waiting.is_none()).then(|| {
+                let from = (start..charix.len()).find(|&j| charix[j] > 0).unwrap_or(start);
+                let run: Vec<char> = text[from..].chars().take_while(|c| !c.is_whitespace()).collect();
+                (1..run.len()).find_map(|n| word_cut(&run, n, grammar))
+            });
+            let own = glued.min(split.flatten().unwrap_or(usize::MAX));
             Some(SourceIx { len: source.len.min(own.min(31) as u8), ..source })
         })
         .collect()
+}
+
+/// Where C ends the length of a plain-text word at `run[n]` inside it: C starts the next
+/// word at an apostrophe, at the dot of an abbreviation, after the comma of a grouped
+/// number and where letters follow digits, and `len` stays with the first part.
+fn word_cut(run: &[char], n: usize, grammar: &NumberGrammar) -> Option<usize> {
+    let grouped = |next: Option<&char>| {
+        run[n - 1].is_ascii_digit() && grammar.decimal_separator != ',' && next.is_some_and(char::is_ascii_digit)
+    };
+    match run[n] {
+        '\'' | '\u{2019}' => Some(n),
+        '.' if run[n - 1].is_alphabetic() => Some(n),
+        ',' if grouped(run.get(n + 1)) => Some(n + 1),
+        c if c.is_alphabetic() && run[n - 1].is_ascii_digit() => Some(n),
+        _ => None,
+    }
+}
+
+/// The first code of each token that sounds.  Pauses a word carries ahead of its own
+/// boundary belong between the words, so its first sound is the one after that boundary;
+/// a token with nothing but pauses starts no word.
+fn first_sounding(codes: &[PhonemeCode], owners: &[usize], tokens: usize) -> Vec<Option<usize>> {
+    let mut first: Vec<Option<usize>> = vec![None; tokens];
+    let mut paused = vec![None; tokens];
+    let mut crossed = vec![false; tokens];
+    for (i, &o) in owners.iter().enumerate().filter(|&(_, &o)| o < tokens) {
+        if first[o].is_some() {
+            continue;
+        }
+        if codes[i].is_boundary {
+            crossed[o] |= paused[o].is_some();
+        } else if codes[i].code == 0 || is_pause_code(codes[i].code) {
+            paused[o] = paused[o].or(Some(i));
+        } else {
+            first[o] = Some(if crossed[o] { i } else { paused[o].unwrap_or(i) });
+        }
+    }
+    first
+}
+
+/// Where the reader stands once the clause closed by `punct` is read, as plain text counts
+/// it: `count_characters` takes the mark and the character after it, which ends the clause.
+/// `len` says whether that character exists.  `None` when the mark is not in `text`.
+fn clause_end_source(text: &str, punct: char, charix: &[i32], cursor: &mut usize) -> Option<SourceIx> {
+    let single = punct.to_string();
+    let marks: &[&str] = if punct == '\u{2026}' { &["...", "\u{2026}"] } else { &[single.as_str()] };
+    let (start, end) = marks.iter().find_map(|m| locate_surface(text, m, *cursor))?;
+    *cursor = end;
+    let last = text[start..end].char_indices().last().map_or(start, |(i, _)| start + i);
+    let mark = charix.get(last).copied().filter(|&c| c > 0)?;
+    let lookahead = u8::from(end < text.len());
+    Some(SourceIx { ix: (mark + i32::from(lookahead)) as u32, len: lookahead })
 }
 
 /// The text a token stands for, or `""` for one that is not part of the source
@@ -13545,21 +13638,31 @@ pub struct PhonemeCode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SourceIx {
     /// The word's first character, counted from the clause start as the reader's `charix` does.
-    pub ix: u16,
+    pub ix: u32,
     /// The word's length in characters, capped at 31.
     pub len: u8,
 }
 
 /// C's `CalcWordLength`: the word starting at or after byte `start` of the clause source.
 /// `None` when only blanks remain.
+#[cfg(test)]
 pub(crate) fn word_source(charix: &[i32], start: usize) -> Option<SourceIx> {
+    word_source_masked(charix, start, SOURCE_IX_MASK)
+}
+
+/// The bits of `charix` that C keeps in `sourceix`.
+const SOURCE_IX_MASK: i32 = 0x7ff;
+
+/// [`word_source`] with the index masked by `mask`; plain text keeps the whole-message index
+/// until its clauses are split.
+pub(crate) fn word_source_masked(charix: &[i32], start: usize, mask: i32) -> Option<SourceIx> {
     let first = (start..charix.len()).find(|&j| charix[j] > 0)?;
     let len = charix[first..]
         .iter()
         .take_while(|&&c| c != 0)
         .filter(|&&c| c != -1)
         .count();
-    Some(SourceIx { ix: (charix[first] & 0x7ff) as u16, len: len.min(31) as u8 })
+    Some(SourceIx { ix: (charix[first] & mask) as u32, len: len.min(31) as u8 })
 }
 
 /// A marker carried alongside the phoneme codes.

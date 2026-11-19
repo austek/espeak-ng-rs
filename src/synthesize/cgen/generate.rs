@@ -195,7 +195,7 @@ impl<'a> Generator<'a> {
         };
         self.sentence_pending |= p.newword & PHLIST_START_OF_SENTENCE != 0;
         let Some(src) = p.source.filter(|_| p.newword & PHLIST_START_OF_WORD != 0) else { return };
-        let pos = u32::from(src.ix) + k.start_char;
+        let pos = src.ix + k.start_char;
         if std::mem::take(&mut self.sentence_pending) {
             self.push(Wcmd::Marker(Marker { kind: MarkerKind::Sentence, pos, len: 0, value: k.sentences as i32 }));
         }
@@ -1004,7 +1004,7 @@ impl<'a> Generator<'a> {
     /// `DoEmbedded`'s `EMBED_M`: `DoMarker(espeakEVENT_MARK, (sourceix & 0x7ff) + clause_start_char, 0, value)`.
     fn mark(&mut self, value: i32, source: Option<crate::translate::SourceIx>) {
         let Some(k) = self.counters else { return };
-        let pos = source.map_or(0, |s| u32::from(s.ix) & 0x7ff) + k.start_char;
+        let pos = source.map_or(0, |s| s.ix & 0x7ff) + k.start_char;
         self.push(Wcmd::Marker(Marker { kind: MarkerKind::Mark, pos, len: 0, value }));
     }
 

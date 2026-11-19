@@ -1,0 +1,7 @@
+ev 8 0 0 0 0 num=22050
+ev 2 1 0 0 0 num=1
+ev 1 1 3 0 0 num=1
+ev 1 5 3 226 4997 num=2
+ev 3 13 0 553 12203 name=(null)
+ev 5 12 0 854 18840 num=1
+samples=18840

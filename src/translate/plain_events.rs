@@ -1,0 +1,131 @@
+//! Plain text with the positions and counts C's `TranslateClause` leaves for `Generate`.
+//!
+//! The translator reads the whole text at once, so the clauses are cut from its code stream
+//! and given the message counts the clause reader would have kept.
+
+use super::{
+    split_after_sentences, PhonemeCode, SourceIx, TokenizeMode, Translator, SOURCE_IX_MASK, TRANSLATE_PIECE_BYTES,
+};
+use crate::error::Result;
+use crate::phoneme::PHON_END_WORD;
+use crate::synthesize::cgen::phlist::{split_clauses, ClauseCodes, ClauseCounters};
+
+impl Translator {
+    /// The clauses of plain `text`, each with the counters C reads while generating it.
+    pub(crate) fn translate_plain_clauses(&self, text: &str) -> Result<Vec<ClauseCodes>> {
+        let mut codes = Vec::new();
+        let mut base = 0;
+        for piece in split_after_sentences(text, TRANSLATE_PIECE_BYTES) {
+            let charix = identity_charix(piece, base);
+            base += piece.chars().count();
+            codes.extend(self.translate_codes_in_mode(piece, true, None, TokenizeMode::Plain, None, Some(&charix))?);
+        }
+        Ok(plain_clauses(&codes, text))
+    }
+}
+
+/// The reader's `charix` for text it read without changing: the 1-based character index of
+/// each byte (`-1` inside a multibyte character), `0` on blanks.
+fn identity_charix(piece: &str, base: usize) -> Vec<i32> {
+    let mut out = Vec::with_capacity(piece.len());
+    for (n, c) in piece.chars().enumerate() {
+        out.push(if c.is_whitespace() { 0 } else { (base + n + 1) as i32 });
+        out.extend(std::iter::repeat_n(-1, c.len_utf8() - 1));
+    }
+    out
+}
+
+/// `count_sentences`, `count_words` and `new_sentence` between clauses.
+struct Tally {
+    sentences: u32,
+    words: u32,
+    new_sentence: bool,
+    start_char: u32,
+}
+
+/// Where a clause's closing mark left the reader: its `count_characters` and whether the
+/// character after the mark was read; `None` when the clause ran to the end of the text.
+fn closing_mark(code: &PhonemeCode) -> Option<(u32, bool)> {
+    code.source.map(|s| (s.ix, s.len != 0))
+}
+
+fn closes_clause(code: &PhonemeCode) -> bool {
+    code.code == 0 && code.is_boundary && code.marker.is_none()
+}
+
+fn plain_clauses(codes: &[PhonemeCode], text: &str) -> Vec<ClauseCodes> {
+    let closings: Vec<Option<(u32, bool)>> = codes.iter().filter(|c| closes_clause(c)).map(closing_mark).collect();
+    let bytes: Vec<usize> = text.char_indices().map(|(i, _)| i).chain(std::iter::once(text.len())).collect();
+    let total = bytes.len() as u32 - 1;
+    let mut tally = Tally { sentences: 0, words: 0, new_sentence: true, start_char: 0 };
+    let mut clauses = split_clauses(codes);
+    let last = clauses.len() - 1;
+    for (i, clause) in clauses.iter_mut().enumerate() {
+        let closing = closings.get(i).copied();
+        let (end, lookahead) = match closing {
+            Some(Some(mark)) => mark,
+            Some(None) if i < last => (tally.start_char, false),
+            _ => (total, false),
+        };
+        let end = end.clamp(tally.start_char, total);
+        let span_end = end - u32::from(lookahead && end > tally.start_char);
+        let span = &text[bytes[tally.start_char as usize]..bytes[span_end as usize]];
+        let blank = span.chars().all(char::is_whitespace);
+        let opens = tally.new_sentence && !blank;
+        tally.sentences += u32::from(opens);
+        let eof_pad = usize::from(closing.is_none());
+        clause.counters = Some(ClauseCounters {
+            start_char: tally.start_char,
+            start_word: tally.words + 1,
+            sentences: tally.sentences,
+            new_sentence: opens,
+            end_char: end,
+            end_ix: ((span.len() + 1 + eof_pad) & 0x7ff) as u16,
+        });
+        tally.words += clause.codes.iter().filter(|c| c.source.is_some()).count() as u32;
+        tally.new_sentence = clause.terminator.is_sentence() || (blank && tally.new_sentence);
+        relocate(&mut clause.codes, tally.start_char);
+        tally.start_char = end;
+    }
+    clauses
+}
+
+/// Makes the word positions relative to the clause start, as the reader's `charix` is, and
+/// gives each word a `||` in its pronunciation splits off the position after its own.
+fn relocate(codes: &mut [PhonemeCode], start_char: u32) {
+    for code in codes.iter_mut() {
+        if let Some(s) = code.source.as_mut() {
+            s.ix = s.ix.saturating_sub(start_char);
+        }
+    }
+    let mut word: Option<SourceIx> = None;
+    for at in 0..codes.len() {
+        match codes[at].source {
+            Some(s) => word = Some(s),
+            None if ends_word(&codes[at]) && !word_follows(&codes[at + 1..]) => {
+                codes[at].source = word.map(next_position);
+            }
+            None => {}
+        }
+    }
+}
+
+/// A `||` in a pronunciation, or the boundary of a word.
+fn ends_word(code: &PhonemeCode) -> bool {
+    code.code == PHON_END_WORD || (code.is_boundary && code.code == 0)
+}
+
+/// Whether the next sounding code after a word end starts a word of its own.
+fn word_follows(rest: &[PhonemeCode]) -> bool {
+    rest.iter()
+        .find(|c| c.source.is_some() || !(ends_word(c) || c.marker.is_some()))
+        .is_some_and(|c| c.source.is_some())
+}
+
+/// `srcix = source_ix + 1` of `TranslateWord2` for a `||` in the pronunciation: the packed
+/// index and length of the word, one up.
+fn next_position(word: SourceIx) -> SourceIx {
+    let packed = (word.ix as i32 & SOURCE_IX_MASK) | (i32::from(word.len) << 11);
+    let next = packed + 1;
+    SourceIx { ix: (next & SOURCE_IX_MASK) as u32, len: ((next >> 11) & 0x1f) as u8 }
+}

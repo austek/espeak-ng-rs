@@ -368,7 +368,7 @@ impl<'a> Renderer<'a> {
         let mut c = phlist::build_list(codes, phdata, &self.switched, post_pause, start_sentence, self.tr.stress_flags);
         if let Some(k) = clause.counters {
             let end = c.list.len().saturating_sub(2);
-            c.list[end].source = Some(crate::translate::SourceIx { ix: k.end_ix, len: 0 });
+            c.list[end].source = Some(crate::translate::SourceIx { ix: u32::from(k.end_ix), len: 0 });
         }
         pitches::calc_pitches(&mut c.list, &self.tr, &self.tunes, clause_type, phdata);
         let speeds = speeds_along(&c.list, &mut self.wpm_s, &self.voice);

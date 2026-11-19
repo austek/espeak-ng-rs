@@ -486,6 +486,35 @@ impl Synthesizer {
         Ok((out, events))
     }
 
+    /// As [`synthesize_clauses_with_events`](Self::synthesize_clauses_with_events), handing each
+    /// clause's audio to `sink` when the next one starts.  The last clause is returned with the
+    /// events instead, so the caller can mark it final; `sink` returns `true` to stop.
+    pub fn synthesize_clauses_streaming_with_events(
+        &self,
+        clauses: &[cgen::phlist::ClauseCodes],
+        phdata: &crate::phoneme::PhonemeData,
+        sink: &mut dyn FnMut(&[i16], bool) -> bool,
+    ) -> Result<(PcmBuffer, Vec<cgen::RawEvent>)> {
+        let Some(dir) = self.voice.data_dir.clone() else {
+            let codes: Vec<_> = clauses.iter().flat_map(|c| c.codes.iter().cloned()).collect();
+            let (tail, _, _) = self.synthesize_codes_streaming_with_marks(&codes, phdata, sink)?;
+            return Ok((tail, Vec::new()));
+        };
+        let mut held: Vec<i16> = Vec::new();
+        let mut stopped = false;
+        let mut emit = |pcm: &[i16]| {
+            if !stopped && !held.is_empty() {
+                stopped = sink(&held, false);
+                held.clear();
+            }
+            if !stopped {
+                held.extend_from_slice(pcm);
+            }
+        };
+        let events = cgen::render_clauses(clauses, phdata, &dir, &self.voice, &std::collections::HashMap::new(), &[], &mut emit);
+        Ok((held, events))
+    }
+
     /// Build the MBROLA phoneme list for a clause (`MbrolaTranslate`'s input).
     ///
     /// The same annotate + intonation passes as
