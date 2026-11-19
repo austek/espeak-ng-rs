@@ -357,6 +357,7 @@ jobs:
           --test char_plus_apostrophe
           --test irish_upper_case_in_word
           --test punct_within_word
+          --test url_scheme_phrase
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

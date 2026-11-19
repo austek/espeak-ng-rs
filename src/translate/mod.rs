@@ -8850,7 +8850,10 @@ fn apply_time_reading(tokens: &mut Vec<Token>) {
                 Some((before, after)) => out.extend(colon_word(&before, &after)),
                 None => {
                     out.extend(std::iter::repeat_n(Token::Punctuation(':'), end - i));
-                    out.push(Token::Space);
+                    // C keeps the symbols right behind the colon (`://`) in the same word.
+                    if tokens.get(end).and_then(symbol_char).is_none() {
+                        out.push(Token::Space);
+                    }
                 }
             }
             i = end;
@@ -9354,15 +9357,23 @@ fn next_word_opening(tokens: &[Token], from: usize, lang: &str) -> [u8; 8] {
 /// words and spaces ends the run.
 fn follow_text(tokens: &[Token], from: usize, lang: &str) -> [u8; 32] {
     let mut text = String::new();
-    for t in &tokens[from..] {
-        match t {
-            Token::Space | Token::WordJoin | Token::Embedded(_) => {}
-            Token::Word(w) => {
-                text.push_str(&lowercase_for_lang(w, lang));
-                text.push(' ');
+    let mut ix = from;
+    while let Some(t) = tokens.get(ix) {
+        if let Some(end) = symbol_run_end(tokens, ix) {
+            text.extend(tokens[ix..end].iter().filter_map(symbol_char));
+            text.push(' ');
+            ix = end;
+        } else {
+            match t {
+                Token::Space | Token::WordJoin | Token::Embedded(_) => {}
+                Token::Word(w) => {
+                    text.push_str(&lowercase_for_lang(w, lang));
+                    text.push(' ');
+                }
+                Token::Punctuation('.') => text.push_str(". "),
+                _ => break,
             }
-            Token::Punctuation('.') => text.push_str(". "),
-            _ => break,
+            ix += 1;
         }
         if text.len() >= 31 {
             break;
@@ -9378,17 +9389,43 @@ fn follow_text(tokens: &[Token], from: usize, lang: &str) -> [u8; 32] {
 fn follow_emphasis(tokens: &[Token], emphasized: &[bool], from: usize) -> u32 {
     let mut mask = 0u32;
     let mut words = 0u32;
-    for (ix, t) in tokens.iter().enumerate().skip(from) {
+    let mut ix = from;
+    while let Some(t) = tokens.get(ix) {
+        let run_end = symbol_run_end(tokens, ix);
         match t {
-            Token::Space | Token::WordJoin | Token::Embedded(_) => {}
-            Token::Word(_) | Token::Punctuation('.') if words < 31 => {
+            Token::Space | Token::WordJoin | Token::Embedded(_) if run_end.is_none() => {}
+            Token::Word(_) | Token::Punctuation(_) | Token::Operator(_)
+                if words < 31 && (run_end.is_some() || matches!(t, Token::Word(_) | Token::Punctuation('.'))) =>
+            {
                 mask |= u32::from(emphasized.get(ix).copied().unwrap_or(false)) << words;
                 words += 1;
             }
             _ => break,
         }
+        ix = run_end.unwrap_or(ix + 1);
     }
     mask
+}
+
+/// A character C's `TranslateClause` leaves in the clause buffer as part of a word of symbols:
+/// not a letter, digit, blank or bracket, and not one of the marks that become a blank or
+/// end the clause.
+fn is_symbol_run_char(c: char) -> bool {
+    c.is_ascii_punctuation() && !matches!(c, '.' | '-' | '\'' | '_' | ',' | '!' | '?' | ';') && !is_bracket(c)
+}
+
+fn symbol_char(token: &Token) -> Option<char> {
+    match token {
+        Token::Punctuation(c) | Token::Operator(c) if is_symbol_run_char(*c) => Some(*c),
+        _ => None,
+    }
+}
+
+/// C cuts a run of adjacent symbols such as the `://` of a URL as one word: the index after the
+/// run that starts at `at`.
+fn symbol_run_end(tokens: &[Token], at: usize) -> Option<usize> {
+    symbol_char(tokens.get(at)?)?;
+    Some(at + tokens[at..].iter().take_while(|t| symbol_char(t).is_some()).count())
 }
 
 /// [`follow_emphasis`] with the word at `at` as bit 0.
@@ -9514,6 +9551,7 @@ pub(crate) fn build_translate_entries(
 
     // Words a multi-word list entry already pronounced with its first word.
     let mut skip_words = 0usize;
+    let mut swallowed_run_end = 0usize;
     let mut dot_removed_at: Option<usize> = None;
     let mut swallowed = vec![false; tokens.len()];
     replace_trace::take();
@@ -9522,11 +9560,30 @@ pub(crate) fn build_translate_entries(
         if token_ix > 0 {
             replaced.push(replace_trace::take());
         }
+        if skip_words > 0 && token_ix >= swallowed_run_end {
+            if let Some(end) = symbol_run_end(tokens, token_ix) {
+                swallowed_run_end = end;
+                skip_words -= 1;
+            }
+        }
+        let in_swallowed_run = token_ix < swallowed_run_end;
         swallowed[token_ix] = (matches!(token, Token::Word(_) | Token::Punctuation('.'))
             && skip_words > 0
             && dot_removed_at != Some(token_ix))
+            || in_swallowed_run
             || (matches!(token, Token::Punctuation('.')) && point_after_number(tokens, token_ix));
         match token {
+            _ if in_swallowed_run => {
+                entries.push(TranslateEntry {
+                    phonemes: Vec::new(),
+                    dict_flags: 0,
+                    found_in_list: false,
+                    kind: TranslateEntryKind::Word,
+                    word_lower: None,
+                    word_group: None,
+                    spelled: false,
+                });
+            }
             Token::Punctuation('.') if dot_removed_at == Some(token_ix) => {
                 entries.push(TranslateEntry {
                     phonemes: Vec::new(),
