@@ -49,8 +49,9 @@ pub(super) fn clause_words(tokens: &[Token], from: usize) -> Vec<(usize, &str)> 
                 continue;
             }
             Token::ClauseBoundary(_) => break,
+            // C ends the word in front of a symbol with a blank (translate.c:1295).
             _ => {
-                if !blank && !apostrophe_s_after(tokens, ix.saturating_sub(1)) {
+                if !blank && super::symbol_char(token).is_none() && !apostrophe_s_after(tokens, ix.saturating_sub(1)) {
                     words.pop();
                 }
                 break;

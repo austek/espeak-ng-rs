@@ -368,6 +368,7 @@ jobs:
           --test char_plus_apostrophe_blank
           --test apostrophe_unpronounceable
           --test symbol_run_max3
+          --test dotted_initials_symbol
           --test voice_apostrophe
       - name: C ABI tests
         run: |
