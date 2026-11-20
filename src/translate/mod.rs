@@ -9521,6 +9521,32 @@ fn symbol_run_end(tokens: &[Token], at: usize) -> Option<usize> {
     Some(at + tokens[at..].iter().take(CLAUSE_SOURCE_BYTES).take_while(|t| symbol_char(t).is_some()).count())
 }
 
+/// C's `phonemes_repeat_count`: the symbol whose `$max3` entry was read last and how many times
+/// in a row, so that the fourth reading and every one after it is dropped.
+#[derive(Default)]
+struct Max3Run {
+    symbol: Option<char>,
+    count: u32,
+}
+
+impl Max3Run {
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// `phonemes` as read for `symbol`, or nothing when it is the fourth repeat or later.
+    fn admit(&mut self, symbol: char, max3: bool, phonemes: Vec<u8>) -> Vec<u8> {
+        if max3 && self.symbol == Some(symbol) {
+            self.count += 1;
+            if self.count > 3 { Vec::new() } else { phonemes }
+        } else {
+            self.symbol = max3.then_some(symbol);
+            self.count = 1;
+            phonemes
+        }
+    }
+}
+
 /// The unstressed reading of one symbol of a run: C's rules first, then `LookupLetter` with a
 /// next byte of -1, which takes the character's own list entry.  `None` when the character
 /// needs another language, which re-translates the whole word in C.
@@ -9531,6 +9557,7 @@ fn run_symbol_reading(
     stress_opts: &StressOpts,
     options: &LangOptions,
     english_word: &dyn Fn(char) -> Option<String>,
+    repeat: &mut Max3Run,
 ) -> Option<Vec<u8>> {
     let key = c.to_string();
     let buf = format!(" {key} \0");
@@ -9538,33 +9565,31 @@ fn run_symbol_reading(
     let by_rules = translate_rules_phdata(
         dict, buf.as_bytes(), 1, 0, 0, &dict.letter_bits, options.dict_condition, &mut vowels, &mut stressed, Some(phdata),
     );
-    let by_list = PosExpect { defer_stress: true, ..PosExpect::default() };
-    let wr = if !crate::dictionary::rules::last_call_left_symbol_unmatched() {
-        let phonemes = by_rules.phonemes.into_iter().take_while(|&b| b != 0).collect::<Vec<u8>>();
-        if phonemes.first() == Some(&crate::phoneme::PHON_SWITCH) {
-            return None;
-        }
-        return Some(phonemes);
-    } else if lookup(dict, &key, &LookupCtx { lookup_symbol: true, dict_condition: options.dict_condition, ..Default::default() })
-        .is_some_and(|r| r.flags1.found() && !r.phonemes.is_empty())
-    {
-        word_to_phonemes_pos(&key, dict, phdata, stress_opts, options, by_list)
-    } else if has_underscore_name(dict, c, options.dict_condition)
-        || primary_bcp47_subtag(&options.lang) == "en"
-    {
-        return Some(Vec::new());
-    } else {
-        return english_word(c).is_none().then(Vec::new);
-    };
-    if wr.phonemes.first() == Some(&crate::phoneme::PHON_SWITCH) {
-        return None;
+    let spoken = |phonemes: Vec<u8>| (phonemes.first() != Some(&crate::phoneme::PHON_SWITCH)).then_some(phonemes);
+    if !crate::dictionary::rules::last_call_left_symbol_unmatched() {
+        repeat.clear();
+        return spoken(by_rules.phonemes.into_iter().take_while(|&b| b != 0).collect());
     }
-    Some(wr.phonemes.into_iter().take_while(|&b| b != 0).collect())
+    let ctx = LookupCtx { lookup_symbol: true, dict_condition: options.dict_condition, ..Default::default() };
+    let Some(entry) = lookup(dict, &key, &ctx).filter(|r| r.flags1.found() && !r.phonemes.is_empty()) else {
+        repeat.clear();
+        return if has_underscore_name(dict, c, options.dict_condition) || primary_bcp47_subtag(&options.lang) == "en" {
+            Some(Vec::new())
+        } else {
+            english_word(c).is_none().then(Vec::new)
+        };
+    };
+    let by_list = PosExpect { defer_stress: true, ..PosExpect::default() };
+    let wr = word_to_phonemes_pos(&key, dict, phdata, stress_opts, options, by_list);
+    let max3 = entry.flags1.0 & crate::dictionary::FLAG_MAX3 != 0;
+    let phonemes = wr.phonemes.into_iter().take_while(|&b| b != 0).collect();
+    spoken(repeat.admit(c, max3, phonemes))
 }
 
 /// How C translates a word made of symbols such as the `://` of a URL: the list entry of the
 /// whole run, else the readings of its characters joined into one word that is stressed as a
 /// whole.  `None` when a character needs another language.
+#[allow(clippy::too_many_arguments)] // each argument is an independent voice or text setting
 fn symbol_run_word(
     run: &str,
     dict: &Dictionary,
@@ -9573,6 +9598,7 @@ fn symbol_run_word(
     options: &LangOptions,
     expect: PosExpect,
     english_word: &dyn Fn(char) -> Option<String>,
+    repeat: &mut Max3Run,
 ) -> WordResult {
     let listed = word_to_phonemes_pos(run, dict, phdata, stress_opts, options, expect);
     let ctx = LookupCtx { lookup_symbol: true, dict_condition: options.dict_condition, ..Default::default() };
@@ -9581,7 +9607,7 @@ fn symbol_run_word(
     }
     let mut phonemes = Vec::new();
     for c in run.chars() {
-        let Some(reading) = run_symbol_reading(c, dict, phdata, stress_opts, options, english_word) else {
+        let Some(reading) = run_symbol_reading(c, dict, phdata, stress_opts, options, english_word, repeat) else {
             let phonemes = vec![crate::phoneme::PHON_SWITCH, b'e', b'n', 0];
             return WordResult { phonemes, dict_flags: 0, found_in_list: false, prefix: None, skip_words: 0, late_suffix: Vec::new() };
         };
@@ -9623,9 +9649,7 @@ pub(crate) fn build_translate_entries(
 ) -> (Vec<TranslateEntry>, Vec<bool>, Vec<Vec<String>>) {
     crate::dictionary::rules::clear_uncovered_brackets();
     let mut entries: Vec<TranslateEntry> = Vec::with_capacity(tokens.len());
-    // `$max3` bookkeeping: which symbol is repeating, and how many times so far.
-    let mut repeat_of_symbol: Option<char> = None;
-    let mut repeat_count = 0u32;
+    let mut repeat = Max3Run::default();
     // Part-of-speech homograph selection: a verb-triggering function word ("to",
     // a modal) makes the next word take its `$verb` pronunciation ("to lˈɪv" not
     // "lˈaɪv"); a perfect/passive auxiliary ("had"/"have"/"was") selects `$past`
@@ -9744,9 +9768,10 @@ pub(crate) fn build_translate_entries(
                     at_clause_start: at_start[token_ix],
                     ..PosExpect::default()
                 };
-                let wr = symbol_run_word(&run, dict, phdata, stress_opts, options, expect, &|c| english_word(c, false));
+                let wr = symbol_run_word(&run, dict, phdata, stress_opts, options, expect, &|c| english_word(c, false), &mut repeat);
                 (run, wr)
             });
+        let starts_run = run_word.is_some();
         swallowed[token_ix] = (matches!(token, Token::Word(_) | Token::Punctuation('.'))
             && skip_words > 0
             && dot_removed_at != Some(token_ix))
@@ -10381,14 +10406,7 @@ pub(crate) fn build_translate_entries(
                     && !dict_names_symbol(dict, *c, options.dict_condition))
                 .then(|| english_word(*c, symbol_ends_clause(tokens, token_ix)));
                 let phonemes = if english_reading == Some(None) { Vec::new() } else { phonemes };
-                let phonemes = if max3 && repeat_of_symbol == Some(*c) {
-                    repeat_count += 1;
-                    if repeat_count > 3 { Vec::new() } else { phonemes }
-                } else {
-                    repeat_of_symbol = max3.then_some(*c);
-                    repeat_count = 1;
-                    phonemes
-                };
+                let phonemes = repeat.admit(*c, max3, phonemes);
                 if phonemes.is_empty() {
                     entries.push(TranslateEntry {
                         phonemes, dict_flags: 0,
@@ -10469,14 +10487,13 @@ pub(crate) fn build_translate_entries(
         // `phonemes_repeat_count` for every word without the flag: the three
         // tildes of `~ a ~ ~ ~ ~` start again after the "a".
         let same_symbol = match token {
-            Token::Punctuation(c) | Token::Operator(c) => repeat_of_symbol == Some(*c),
+            Token::Punctuation(c) | Token::Operator(c) => repeat.symbol == Some(*c),
             _ => false,
         };
-        if !same_symbol
+        if !same_symbol && !starts_run
             && entries.last().is_some_and(|e| e.phonemes.iter().any(|&b| b != 0))
         {
-            repeat_of_symbol = None;
-            repeat_count = 0;
+            repeat.clear();
         }
     }
     // Retag words whose translation is a language-switch marker so that

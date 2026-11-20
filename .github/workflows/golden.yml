@@ -367,6 +367,7 @@ jobs:
           --test spaced_dash_named_hyphen
           --test char_plus_apostrophe_blank
           --test apostrophe_unpronounceable
+          --test symbol_run_max3
           --test voice_apostrophe
       - name: C ABI tests
         run: |
