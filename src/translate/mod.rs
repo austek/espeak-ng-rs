@@ -2089,7 +2089,9 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     let text = dots_blanked_before_hyphens(text.as_ref());
     let text = text.as_ref();
     let mut tokens = Vec::new();
+    let mut clause_words = ClauseWords::default();
     let mut chars = text.chars().peekable();
+    let bytes_after_last_alnum = text.len() - text.trim_end_matches(|ch: char| !ch.is_alphanumeric()).len();
     let mut before: Option<char> = None;
     let mut blank_run = 0usize;
 
@@ -2195,7 +2197,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 chars.next();
                 before = Some(' ');
             }
-            if clause_has_word(&tokens) {
+            if clause_words.update(&tokens) {
                 tokens.push(Token::ClauseBoundary(c));
             } else {
                 tokens.push(Token::Operator(c));
@@ -2214,7 +2216,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 continue;
             }
             let apart = previous.is_none_or(|p| p.is_whitespace() || p == CTRL_EMBEDDED || p == '-' || is_bracket(p));
-            if c == '.' && apart && (grammar.clause_text || (clause_has_word(&tokens) && dot_stays_in_clause(chars.clone(), grammar.lowercase_sentence))) {
+            if c == '.' && apart && (grammar.clause_text || (clause_words.update(&tokens) && dot_stays_in_clause(chars.clone(), grammar.lowercase_sentence))) {
                 tokens.push(Token::Punctuation('.'));
                 continue;
             }
@@ -2236,7 +2238,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 continue;
             }
             if c == '.' && chars.peek() == Some(&'.') {
-                if apart && clause_has_word(&tokens) && dot_stays_in_clause(chars.clone().skip(1), grammar.lowercase_sentence) {
+                if apart && clause_words.update(&tokens) && dot_stays_in_clause(chars.clone().skip(1), grammar.lowercase_sentence) {
                     tokens.push(Token::Punctuation('.'));
                 }
                 tokens.push(Token::Space);
@@ -2246,8 +2248,8 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 while chars.next_if(|n| matches!(n, '?' | '!')).is_some() {}
             }
             let ends_clause = ascii_clause_end_follows(c, chars.clone());
-            if !clause_has_word(&tokens) {
-                let text_ends = chars.clone().all(|ch| !ch.is_alphanumeric());
+            if !clause_words.update(&tokens) {
+                let text_ends = remaining_bytes(&mut chars) <= bytes_after_last_alnum;
                 tokens.push(match c {
                     '.' if text_ends && !empty_clause_pending(&tokens) => Token::ClauseBoundary(c),
                     '.' if text_ends => Token::Space,
@@ -6689,14 +6691,39 @@ fn hyphen_flags_at(tokens: &[Token], ix: usize) -> u32 {
         | (if joined_after { crate::dictionary::FLAG_HYPHEN_AFTER } else { 0 })
 }
 
-/// C ends a clause at punctuation only after a letter or digit has been read
-/// in it (`any_alnum`).
-fn clause_has_word(tokens: &[Token]) -> bool {
-    tokens
-        .iter()
-        .rev()
-        .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
-        .any(|t| matches!(t, Token::Word(_) | Token::Number(_)))
+/// The bytes of text the iterator has left, in constant time.
+fn remaining_bytes(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> usize {
+    // `Peekable::size_hint` adds one for the peeked character on top of the bytes left in `Chars`.
+    match chars.peek().map(|c| c.len_utf8()) {
+        Some(peeked) => chars.size_hint().1.map_or(peeked, |upper| upper - 1 + peeked),
+        None => 0,
+    }
+}
+
+/// Whether a letter or digit has been read in the clause so far, the condition under which C
+/// ends a clause at punctuation (`any_alnum`).  Kept up to date as tokens are appended, so a
+/// long clause of symbols costs one pass instead of one scan per symbol.
+#[derive(Default)]
+struct ClauseWords {
+    seen: usize,
+    has_word: bool,
+}
+
+impl ClauseWords {
+    fn update(&mut self, tokens: &[Token]) -> bool {
+        if tokens.len() < self.seen {
+            *self = Self::default();
+        }
+        for t in &tokens[self.seen..] {
+            match t {
+                Token::ClauseBoundary(_) => self.has_word = false,
+                Token::Word(_) | Token::Number(_) => self.has_word = true,
+                _ => {}
+            }
+        }
+        self.seen = tokens.len();
+        self.has_word
+    }
 }
 
 /// A mark written right after a clause end with no space (`3.,`) belongs to
@@ -7564,25 +7591,48 @@ fn stream_switch_kept(e: &TranslateEntry, current: &str) -> bool {
         .is_some_and(|t| t != current)
 }
 
+/// For every token, the index of the nearest word-like entry before it that speaks, and the
+/// nearest one after it.  One pass: a scan from each token costs a quadratic run of silent
+/// words (`~ ~ ~ …`, all but three dropped by `$max3`).
+fn spoken_neighbours(tokens: &[Token], entries: &[TranslateEntry]) -> (Vec<Option<usize>>, Vec<Option<usize>>) {
+    let speaks = |k: usize| {
+        !matches!(tokens[k], Token::Space | Token::WordJoin)
+            && entries.get(k).is_some_and(|e| e.phonemes.iter().any(|&b| b != 0))
+    };
+    let mut before = Vec::with_capacity(tokens.len());
+    let mut last = None;
+    for k in 0..tokens.len() {
+        before.push(last);
+        if speaks(k) {
+            last = Some(k);
+        }
+    }
+    let mut after = vec![None; tokens.len()];
+    let mut next = None;
+    for k in (0..tokens.len()).rev() {
+        after[k] = next;
+        if speaks(k) {
+            next = Some(k);
+        }
+    }
+    (before, after)
+}
+
 /// The entry of the nearest word-like token before `token_ix` that speaks.
 fn previous_entry<'a>(
-    tokens: &[Token],
+    before: &[Option<usize>],
     entries: &'a [TranslateEntry],
     token_ix: usize,
 ) -> Option<&'a TranslateEntry> {
-    (0..token_ix)
-        .rev()
-        .filter(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
-        .filter_map(|k| entries.get(k))
-        .find(|e| e.phonemes.iter().any(|&b| b != 0))
+    before[token_ix].and_then(|k| entries.get(k))
 }
 
 fn previous_entry_kind<'a>(
-    tokens: &[Token],
+    before: &[Option<usize>],
     entries: &'a [TranslateEntry],
     token_ix: usize,
 ) -> Option<&'a TranslateEntryKind> {
-    previous_entry(tokens, entries, token_ix).map(|e| &e.kind)
+    previous_entry(before, entries, token_ix).map(|e| &e.kind)
 }
 
 /// A spelled word whose own phonemes put a word break (`||`) right after the
@@ -11472,6 +11522,21 @@ impl Translator {
         }
 
         debug_assert_eq!(tokens.len(), entries.len());
+        let (prev_spoken_at, next_spoken_at) = spoken_neighbours(&tokens, &entries);
+        let word_follows_in_text: Vec<bool> = {
+            let mut seen = false;
+            let mut flags: Vec<bool> = tokens
+                .iter()
+                .rev()
+                .map(|t| {
+                    let before = seen;
+                    seen |= matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_));
+                    before
+                })
+                .collect();
+            flags.reverse();
+            flags
+        };
         let mut codes: Vec<PhonemeCode> = Vec::new();
         // Parallel to `codes`: did this phoneme come from an explicit
         // translation (a dictionary entry or a number key) rather than the
@@ -11625,7 +11690,7 @@ impl Translator {
                             .rposition(|k| k.marker.is_none())
                             .is_some_and(|i| !codes[i].is_boundary)
                             && !only_pauses_since_clause_start(&codes);
-                        let follows_stream = previous_entry_kind(&tokens, &entries, token_ix)
+                        let follows_stream = previous_entry_kind(&prev_spoken_at, &entries, token_ix)
                             == Some(&TranslateEntryKind::Stream);
                         if word_open && open_switch.is_none() && !hyphen_joined && !follows_stream {
                             codes.push(PhonemeCode { code: 15, is_boundary: true, ..Default::default() });
@@ -11808,9 +11873,7 @@ impl Translator {
                         if entry.phonemes.is_empty()
                             && (matches!(token, Token::Operator(_)) && is_clause_punctuation(*c)
                                 || matches!(token, Token::Punctuation(_)) && matches!(c, '(' | '[' | '{' | '<' | '\u{300a}'))
-                            && !tokens[token_ix + 1..].iter().any(|t| {
-                                matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_))
-                            })
+                            && !word_follows_in_text[token_ix]
                             && trailing_clause_ends(&codes) == 1
                         {
                             codes.push(PhonemeCode {
@@ -11845,7 +11908,7 @@ impl Translator {
                         })
                         .any(|c| c.code != crate::phoneme::PHON_PAUSE);
                     let stream_run = paused_stream(entry)
-                        && previous_entry(&tokens, &entries, token_ix).is_some_and(|p| {
+                        && previous_entry(&prev_spoken_at, &entries, token_ix).is_some_and(|p| {
                             match p.kind {
                                 TranslateEntryKind::Stream => own_break_stream(entry),
                                 TranslateEntryKind::LangSwitch => true,
@@ -12084,12 +12147,9 @@ impl Translator {
                 // space in the output.
                 Token::WordJoin | Token::DotEndsClause => {}
                 Token::Space => {
-                    let before_entry = previous_entry(&tokens, &entries, token_ix);
+                    let before_entry = previous_entry(&prev_spoken_at, &entries, token_ix);
                     let before = before_entry.map(|e| &e.kind);
-                    let after = (token_ix + 1..tokens.len())
-                        .filter(|&k| !matches!(tokens[k], Token::Space | Token::WordJoin))
-                        .filter_map(|k| entries.get(k))
-                        .find(|e| e.phonemes.iter().any(|&b| b != 0));
+                    let after = next_spoken_at[token_ix].and_then(|k| entries.get(k));
                     use TranslateEntryKind::{LangSwitch, Stream};
                     // A spelled word carries its own word break after its
                     // opening pause, so none comes before it when a spelled or

@@ -53,6 +53,17 @@ fn irish_capitals_inside_one_endless_word_are_linear() {
     assert!(large < small * 14, "200 KB took {small:?}, 1.6 MB took {large:?}");
 }
 
+/// A long clause with no word in it once cost a scan of the whole text per symbol, and a scan of
+/// the whole clause per symbol after it.
+#[test]
+fn clauses_of_symbols_without_a_word_are_linear() {
+    for (name, unit) in [("colon_slashes", "://"), ("colon_slash", ":/"), ("tildes", "~ ")] {
+        let (small, _) = run_fill(&format!("{name}_small"), unit, 200_000, "en");
+        let (large, _) = run_fill(&format!("{name}_large"), unit, 1_600_000, "en");
+        assert!(large < small * 14, "{name}: 200 KB took {small:?}, 1.6 MB took {large:?}");
+    }
+}
+
 #[test]
 fn language_switched_words_load_their_data_once() {
     for (name, unit) in [("arabic", "مرحبا "), ("hindi", "नमस्ते "), ("korean", "한국어 ")] {
