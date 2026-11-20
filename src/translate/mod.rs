@@ -9655,6 +9655,7 @@ fn symbol_run_word(
     english_word: &dyn Fn(char) -> Option<String>,
     repeat: &mut Max3Run,
 ) -> WordResult {
+    repeat.clear();
     let listed = word_to_phonemes_pos(run, dict, phdata, stress_opts, options, expect);
     let ctx = LookupCtx { lookup_symbol: true, dict_condition: options.dict_condition, ..Default::default() };
     if lookup(dict, run, &ctx).is_some_and(|r| r.flags1.found()) {
@@ -10388,6 +10389,7 @@ pub(crate) fn build_translate_entries(
                 // `--punct` names were split into their own clause beforehand
                 // (`announce_clause_punctuation`).
                 prev_word = None;
+                repeat.clear();
                 entries.push(TranslateEntry {
                     phonemes:   Vec::new(),
                     dict_flags: if matches!(*punct, '.' | ssml_driver::TAG_CLAUSE_END) { abbreviation_flags(&entries) } else { 0 },
