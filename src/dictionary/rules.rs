@@ -1186,6 +1186,7 @@ pub fn translate_rules_ext(
     let mut buf = word_buf_in.to_vec();
 
     let mut pending_del_fwd = MatchRecord::NONE;
+    let mut bracket_recorded = false;
     while pos < buf.len() {
         if pending_del_fwd != MatchRecord::NONE {
             buf[pending_del_fwd] = REPLACED_E;
@@ -1311,8 +1312,14 @@ pub fn translate_rules_ext(
                     next_pos1 = np;
                 }
 
-                if match1.points == 0 && char::from_u32(wc).is_some_and(crate::translate::is_bracket) {
+                // The record holds the whole word, so one per call is enough; one per bracket
+                // copied a word of brackets once for each of them.
+                if match1.points == 0
+                    && !bracket_recorded
+                    && char::from_u32(wc).is_some_and(crate::translate::is_bracket)
+                {
                     record_uncovered_bracket(word_buf, word_start);
+                    bracket_recorded = true;
                 }
 
                 // No rule for an accented letter inside a word: replace it by its

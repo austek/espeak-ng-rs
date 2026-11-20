@@ -2251,7 +2251,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             if !clause_words.update(&tokens) {
                 let text_ends = chars.remaining_bytes() <= bytes_after_last_alnum;
                 tokens.push(match c {
-                    '.' if text_ends && !empty_clause_pending(&tokens) => Token::ClauseBoundary(c),
+                    '.' if text_ends && !empty_clause_pending(clause_words.solid(&tokens)) => Token::ClauseBoundary(c),
                     '.' if text_ends => Token::Space,
                     '.' => Token::Punctuation(' '),
                     _ if glued_to_clause_mark(&tokens, previous) => Token::Punctuation(' '),
@@ -6738,14 +6738,24 @@ impl Iterator for CountedChars<'_> {
 struct ClauseWords {
     seen: usize,
     has_word: bool,
+    /// The token count up to the last token that is not a blank.
+    solid: usize,
 }
 
 impl ClauseWords {
+    /// The tokens up to the last one that is not a blank.
+    fn solid<'t>(&self, tokens: &'t [Token]) -> &'t [Token] {
+        &tokens[..self.solid.min(tokens.len())]
+    }
+
     fn update(&mut self, tokens: &[Token]) -> bool {
         if tokens.len() < self.seen {
             *self = Self::default();
         }
-        for t in &tokens[self.seen..] {
+        for (ix, t) in tokens.iter().enumerate().skip(self.seen) {
+            if !matches!(t, Token::Space) {
+                self.solid = ix + 1;
+            }
             match t {
                 Token::ClauseBoundary(_) => self.has_word = false,
                 Token::Word(_) | Token::Number(_) => self.has_word = true,
@@ -6769,11 +6779,18 @@ fn glued_to_clause_mark(tokens: &[Token], previous: Option<char>) -> bool {
 
 /// How many clause ends close the code list, markers aside.
 pub(crate) fn trailing_clause_ends(codes: &[PhonemeCode]) -> usize {
+    trailing_clause_ends_up_to(codes, usize::MAX)
+}
+
+/// [`trailing_clause_ends`] that stops counting at `cap`, so a list that ends in thousands of
+/// clause ends costs a few steps.
+fn trailing_clause_ends_up_to(codes: &[PhonemeCode], cap: usize) -> usize {
     codes
         .iter()
         .rev()
         .filter(|c| c.marker.is_none() && !(c.code == 15 && c.clause_char.is_none()))
         .take_while(|c| c.is_boundary && c.clause_char.is_some())
+        .take(cap)
         .count()
 }
 
@@ -9289,21 +9306,21 @@ fn is_mark_char(token: &Token) -> Option<char> {
     }
 }
 
-/// Start of the run of consecutive mark characters that contains `ix`.
-fn mark_run_start(tokens: &[Token], ix: usize) -> usize {
-    (0..ix).rev().take_while(|&k| is_mark_char(&tokens[k]).is_some()).last().unwrap_or(ix)
-}
+/// The marks of a run a mark in its middle reads when the run's own start says nothing: reading
+/// the whole rest of a run of silent marks for each of them costs a pass per mark.
+const MARK_WINDOW: usize = 16;
 
-/// The rules' reading of the whole run of marks that starts at `ix`.
+/// The rules' reading of the run of marks that starts at `ix`, at most `limit` marks of it.
 fn mark_reading(
     tokens: &[Token],
+    limit: usize,
     ix: usize,
     dict: &Dictionary,
     phdata: &PhonemeData,
     stress_opts: &StressOpts,
     options: &LangOptions,
 ) -> Option<Vec<u8>> {
-    let run: String = tokens[ix..].iter().map_while(is_mark_char).collect();
+    let run: String = tokens[ix..].iter().take(limit).map_while(is_mark_char).collect();
     if run.is_empty() {
         return None;
     }
@@ -9782,6 +9799,24 @@ pub(crate) fn build_translate_entries(
     let mut swallowed_run_end = 0usize;
     let mut dot_removed_at: Option<usize> = None;
     let mut swallowed = vec![false; tokens.len()];
+    // Each mark reads the run of marks that starts at it, so a long run costs one reading per
+    // mark unless the readings are kept.
+    let mut mark_starts = vec![0usize; tokens.len()];
+    for ix in 0..tokens.len() {
+        let continues = ix > 0 && is_mark_char(&tokens[ix]).is_some() && is_mark_char(&tokens[ix - 1]).is_some();
+        mark_starts[ix] = if continues { mark_starts[ix - 1] } else { ix };
+    }
+    let mark_memo: std::cell::RefCell<std::collections::HashMap<usize, Option<Vec<u8>>>> = Default::default();
+    let read_mark = |ix: usize| {
+        mark_memo
+            .borrow_mut()
+            .entry(ix)
+            .or_insert_with(|| {
+                let limit = if mark_starts[ix] == ix { usize::MAX } else { MARK_WINDOW };
+                mark_reading(tokens, limit, ix, dict, phdata, stress_opts, options)
+            })
+            .clone()
+    };
     replace_trace::take();
     let mut replaced: Vec<Vec<String>> = Vec::with_capacity(tokens.len());
     for (token_ix, token) in tokens.iter().enumerate() {
@@ -10481,9 +10516,8 @@ pub(crate) fn build_translate_entries(
             }
             Token::Punctuation(_)
                 if is_mark_char(token).is_some()
-                    && mark_run_start(tokens, token_ix) != token_ix
-                    && mark_reading(tokens, mark_run_start(tokens, token_ix), dict, phdata, stress_opts, options)
-                        .is_some() =>
+                    && mark_starts[token_ix] != token_ix
+                    && read_mark(mark_starts[token_ix]).is_some() =>
             {
                 entries.push(TranslateEntry {
                     phonemes: Vec::new(), dict_flags: 0,
@@ -10493,12 +10527,10 @@ pub(crate) fn build_translate_entries(
                 });
             }
             Token::Punctuation(c)
-                if mark_reading(tokens, token_ix, dict, phdata, stress_opts, options).is_some()
-                    && is_mark_char(token).is_some() =>
+                if is_mark_char(token).is_some() && read_mark(token_ix).is_some() =>
             {
                 entries.push(TranslateEntry {
-                    phonemes: mark_reading(tokens, token_ix, dict, phdata, stress_opts, options)
-                        .unwrap_or_default(),
+                    phonemes: read_mark(token_ix).unwrap_or_default(),
                     dict_flags: 0,
                     kind: TranslateEntryKind::Word,
                     word_lower: Some(c.to_string()),
@@ -11379,7 +11411,7 @@ impl Translator {
     /// one more clause boundary, as C reports it.
     pub fn translate_to_clause_codes(&self, text: &str) -> Result<Vec<PhonemeCode>> {
         let mut codes = self.translate_to_codes(text)?;
-        if closes_after_mark(text) && trailing_clause_ends(&codes) < 2 {
+        if closes_after_mark(text) && trailing_clause_ends_up_to(&codes, 2) < 2 {
             let boundary = || PhonemeCode { is_boundary: true, clause_char: Some('.'), ..Default::default() };
             let ends_clause = codes
                 .iter()
@@ -11958,7 +11990,7 @@ impl Translator {
                             && (matches!(token, Token::Operator(_)) && is_clause_punctuation(*c)
                                 || matches!(token, Token::Punctuation(_)) && matches!(c, '(' | '[' | '{' | '<' | '\u{300a}'))
                             && !word_follows_in_text[token_ix]
-                            && trailing_clause_ends(&codes) == 1
+                            && trailing_clause_ends_up_to(&codes, 2) == 1
                         {
                             codes.push(PhonemeCode {
                                 code: 0, is_boundary: true, clause_char: Some(*c), marker: None,
