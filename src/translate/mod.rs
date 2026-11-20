@@ -2685,9 +2685,10 @@ where
 }
 
 /// A mark that follows a word's apostrophe without a blank stays in the word in C (`σ'(`), and
-/// `Unpronouncable` takes a word with such a character in it for pronounceable.
+/// `Unpronouncable` takes a word with such a character in it for pronounceable, but only when the
+/// apostrophe follows the first letter (`l'`); a longer word is still tested.
 fn punctuation_glued_to_apostrophe(word: &str, next: Option<&Token>) -> bool {
-    word.ends_with('\'') && matches!(next, Some(Token::Punctuation(c)) if c.is_ascii_punctuation() || is_bracket(*c))
+    word.strip_suffix('\'').is_some_and(|letters| letters.chars().count() == 1) && matches!(next, Some(Token::Punctuation(c)) if c.is_ascii_punctuation() || is_bracket(*c))
 }
 
 /// C's `char_plus_apostrophe` test: `word` is one letter of the language's set.
