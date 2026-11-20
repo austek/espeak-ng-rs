@@ -1902,7 +1902,7 @@ pub struct EmbeddedCmd {
 /// Read the `[±]<value><letter>` that follows a `\x01`, advancing `chars` past it only when the
 /// letter is a command.  C's `EmbeddedCommand` leaves the source untouched otherwise, so the
 /// sign, digits and letter stay text.
-fn read_embedded_command(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<EmbeddedCmd> {
+fn read_embedded_command(chars: &mut CountedChars<'_>) -> Option<EmbeddedCmd> {
     let mut ahead = chars.clone();
     let relative = match ahead.peek() {
         Some('+') => { ahead.next(); 1 }
@@ -1929,7 +1929,7 @@ fn read_embedded_command(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -
 pub fn parse_embedded_commands(text: &str) -> (String, Vec<EmbeddedCmd>) {
     let mut out = String::with_capacity(text.len());
     let mut cmds = Vec::new();
-    let mut chars = text.chars().peekable();
+    let mut chars = CountedChars::new(text);
     while let Some(c) = chars.next() {
         if c != CTRL_EMBEDDED {
             out.push(c);
@@ -2090,7 +2090,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     let text = text.as_ref();
     let mut tokens = Vec::new();
     let mut clause_words = ClauseWords::default();
-    let mut chars = text.chars().peekable();
+    let mut chars = CountedChars::new(text);
     let bytes_after_last_alnum = text.len() - text.trim_end_matches(|ch: char| !ch.is_alphanumeric()).len();
     let mut before: Option<char> = None;
     let mut blank_run = 0usize;
@@ -2249,7 +2249,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             }
             let ends_clause = ascii_clause_end_follows(c, chars.clone());
             if !clause_words.update(&tokens) {
-                let text_ends = remaining_bytes(&mut chars) <= bytes_after_last_alnum;
+                let text_ends = chars.remaining_bytes() <= bytes_after_last_alnum;
                 tokens.push(match c {
                     '.' if text_ends && !empty_clause_pending(&tokens) => Token::ClauseBoundary(c),
                     '.' if text_ends => Token::Space,
@@ -2660,7 +2660,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
 /// its front (already `peek`ed), so the clone skips it before reading the two
 /// look-ahead characters, mirroring C's `next_in` / `next2_in`.
 fn caps_run_ends_here<I>(
-    chars: &std::iter::Peekable<I>,
+    chars: &I,
     next: char,
     word: &str,
     prev_char: char,
@@ -6692,12 +6692,42 @@ fn hyphen_flags_at(tokens: &[Token], ix: usize) -> u32 {
         | (if joined_after { crate::dictionary::FLAG_HYPHEN_AFTER } else { 0 })
 }
 
-/// The bytes of text the iterator has left, in constant time.
-fn remaining_bytes(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> usize {
-    // `Peekable::size_hint` adds one for the peeked character on top of the bytes left in `Chars`.
-    match chars.peek().map(|c| c.len_utf8()) {
-        Some(peeked) => chars.size_hint().1.map_or(peeked, |upper| upper - 1 + peeked),
-        None => 0,
+/// The characters of a text with a count of the bytes read, so that the bytes left cost nothing
+/// to know.
+#[derive(Clone)]
+struct CountedChars<'a> {
+    chars: std::iter::Peekable<std::str::Chars<'a>>,
+    len: usize,
+    read: usize,
+}
+
+impl<'a> CountedChars<'a> {
+    fn new(text: &'a str) -> Self {
+        Self { chars: text.chars().peekable(), len: text.len(), read: 0 }
+    }
+
+    fn peek(&mut self) -> Option<&char> {
+        self.chars.peek()
+    }
+
+    fn next_if(&mut self, accept: impl FnOnce(&char) -> bool) -> Option<char> {
+        let c = self.chars.next_if(accept)?;
+        self.read += c.len_utf8();
+        Some(c)
+    }
+
+    fn remaining_bytes(&self) -> usize {
+        self.len - self.read
+    }
+}
+
+impl Iterator for CountedChars<'_> {
+    type Item = char;
+
+    fn next(&mut self) -> Option<char> {
+        let c = self.chars.next()?;
+        self.read += c.len_utf8();
+        Some(c)
     }
 }
 
@@ -7245,7 +7275,7 @@ fn hyphen_after_blanks(tokens: &[Token], ix: usize) -> bool {
         && word_before_blanks(&tokens[..ix])
 }
 
-fn minus_precedes_number<I>(chars: &std::iter::Peekable<I>) -> bool
+fn minus_precedes_number<I>(chars: &I) -> bool
 where
     I: Iterator<Item = char> + Clone,
 {
@@ -14264,6 +14294,20 @@ fn push_replaced(codes: &mut Vec<PhonemeCode>, lines: &[String]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn counted_chars_know_the_bytes_left_after_a_peek_and_a_multibyte_read() {
+        let mut chars = CountedChars::new("a\u{e9}\u{2026}b");
+        assert_eq!(chars.remaining_bytes(), 7);
+        assert_eq!(chars.next(), Some('a'));
+        assert_eq!(chars.peek(), Some(&'\u{e9}'));
+        assert_eq!(chars.remaining_bytes(), 6);
+        assert_eq!(chars.next_if(|c| *c == '\u{e9}'), Some('\u{e9}'));
+        assert_eq!(chars.next(), Some('\u{2026}'));
+        assert_eq!(chars.remaining_bytes(), 1);
+        assert_eq!(chars.by_ref().count(), 1);
+        assert_eq!(chars.remaining_bytes(), 0);
+    }
 
     /// Regression guard for the C `SelectTranslator()` "missing break" bug class
     /// (upstream #2476): assert each language's number grammar is its *own*, with
