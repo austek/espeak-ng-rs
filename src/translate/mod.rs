@@ -9547,6 +9547,14 @@ impl Max3Run {
     }
 }
 
+/// The symbol run that follows the word at `at`, after any blanks: the index behind it and its
+/// characters.
+fn symbols_after_word(tokens: &[Token], at: usize) -> Option<(usize, String)> {
+    let start = at + 1 + tokens[at + 1..].iter().take_while(|t| matches!(t, Token::Space)).count();
+    let end = symbol_run_end(tokens, start)?;
+    Some((end, tokens[start..end].iter().filter_map(symbol_char).collect()))
+}
+
 /// The unstressed reading of one symbol of a run: C's rules first, then `LookupLetter` with a
 /// next byte of -1, which takes the character's own list entry.  `None` when the character
 /// needs another language, which re-translates the whole word in C.
@@ -11181,6 +11189,16 @@ impl Translator {
         None
     }
 
+    /// Whether a multi-word list entry of the language starts with `word` and takes the single
+    /// word `follow` behind it, as English `(http ://)` does.
+    fn list_takes_next_word(&self, word: &str, follow: &str) -> bool {
+        let Ok(loaded) = self.loaded_data() else { return false };
+        let ctx = LookupCtx { dict_condition: loaded.dict.dict_condition, ..Default::default() };
+        let follow = format!("{} ", lowercase_for_lang(follow, &self.options.lang));
+        lookup_with_follow(&loaded.dict, &lowercase_for_lang(word, &self.options.lang), &ctx, follow.as_bytes())
+            .is_some_and(|r| r.skipwords == 1 && !r.phonemes.is_empty())
+    }
+
     /// Run the phoneme programs over a letter name taken straight from the list:
     /// English `f` is stored as `E2f`, and only the program turns `E2` into `E`.
     fn resolve_programs(&self, codes: &mut Vec<PhonemeCode>) {
@@ -11574,6 +11592,8 @@ impl Translator {
         let mut char_name_cache: std::collections::HashMap<(String, char), Option<Vec<u8>>> =
             std::collections::HashMap::new();
         let mut open_switch: Option<String> = None;
+        // Tokens up to this index belong to the switched word before them (the `://` of `http`).
+        let mut taken_by_switched_word = 0usize;
         let mut stream_tail: Option<letters::StreamTail> = None;
 
         // Parallel to `codes` when tracking: the token each code came from.
@@ -11597,6 +11617,9 @@ impl Translator {
             if tracking {
                 owners.resize(codes.len(), owner_now);
                 owner_now = token_ix;
+            }
+            if token_ix < taken_by_switched_word {
+                continue;
             }
             // C's `SFLAG_DICTIONARY`: the *pronunciation* came from the list,
             // not merely some flags — a flags-only `$` entry still leaves the
@@ -11649,6 +11672,18 @@ impl Translator {
                         _ => word,
                     };
                     let kept_apostrophe = cased_word.starts_with('\'') && cased_word.chars().count() > 1;
+                    // C translates the words behind a switched word in the target language too,
+                    // so the symbols that a multi-word list entry takes with it go along.
+                    let symbols = symbols_after_word(&tokens, token_ix)
+                        .filter(|(_, run)| {
+                            char_name.is_none()
+                                && !kept_apostrophe
+                                && switch_cache.get(&target).is_some_and(|tr| tr.list_takes_next_word(cased_word, run))
+                        });
+                    let switched_text = symbols.as_ref().map_or_else(
+                        || cased_word.to_string(),
+                        |(_, run)| format!("{cased_word}{run}"),
+                    );
                     let sw = match char_name {
                         None if kept_apostrophe => switch_cache.get(&target).and_then(|tr| {
                             tr.kept_apostrophe_word(cased_word).map(|ph| {
@@ -11676,7 +11711,7 @@ impl Translator {
                         }),
                         None => switch_cache
                             .get(&target)
-                            .and_then(|tr| tr.translate_to_codes_inner(cased_word, false).ok()),
+                            .and_then(|tr| tr.translate_to_codes_inner(&switched_text, false).ok()),
                     };
                     // A switch whose target says nothing leaves no markers:
                     // they would print as an empty `(en)(ru)` pair.
@@ -11691,7 +11726,8 @@ impl Translator {
                         continue;
                     }
                     if let Some(sw) = sw {
-                        let hyphen_joined = token_ix > 0 && matches!(tokens[token_ix - 1], Token::WordJoin);
+                        taken_by_switched_word = symbols.map_or(0, |(end, _)| end);
+                        let hyphen_joined =token_ix > 0 && matches!(tokens[token_ix - 1], Token::WordJoin);
                         if hyphen_joined
                             && codes.last().is_some_and(|c| c.is_boundary && c.marker.is_none()) {
                                 codes.pop();
