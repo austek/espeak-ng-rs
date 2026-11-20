@@ -1163,6 +1163,7 @@ pub fn translate_rules_ext(
     phdata: Option<&crate::phoneme::load::PhonemeData>,
     want_ending: bool,
 ) -> RulesResult {
+    SYMBOL_UNMATCHED.with(|u| u.set(false));
     if dict.rules().is_empty() {
         return RulesResult::default();
     }
@@ -1174,7 +1175,6 @@ pub fn translate_rules_ext(
     let mut out_stem_ph_len = 0usize; // length of stem phonemes when suffix rule fired
     let mut spellword = false;
     let mut aborted = false;
-    SYMBOL_UNMATCHED.with(|u| u.set(false));
     let mut any_alpha = 0u32;
 
     // word_buf is indexed with word_start pointing to the first char.
@@ -1674,6 +1674,19 @@ mod tests {
         // The bucket should start within the word-list region
         assert!(bucket_start >= 8 && bucket_start < dict.rules_offset,
             "bucket for 'the' should be in word-list region");
+    }
+
+    #[test]
+    fn a_dictionary_without_rules_clears_the_unmatched_symbol_flag() {
+        let n = crate::dictionary::N_HASH_DICT;
+        let mut data = vec![0u8; 8 + n];
+        data[..4].copy_from_slice(&u32::try_from(n).unwrap().to_le_bytes());
+        let rules_offset = u32::try_from(data.len()).unwrap();
+        data[4..8].copy_from_slice(&rules_offset.to_le_bytes());
+        let dict = Dictionary::from_bytes("xx", data).unwrap();
+        SYMBOL_UNMATCHED.with(|u| u.set(true));
+        let _ = translate_rules_ext(&dict, b" a \0", 1, 0, 0, &[0u8; 256], 0, &mut 0, &mut 0, None, false);
+        assert!(!last_call_left_symbol_unmatched());
     }
 
     #[test]
