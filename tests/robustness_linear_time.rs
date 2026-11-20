@@ -117,6 +117,19 @@ fn clauses_of_symbols_without_a_word_are_linear() {
 }
 
 #[test]
+fn dotted_abbreviations_followed_by_a_letter_are_linear() {
+    for (name, unit, lang) in [
+        ("eg_at", "e.g. a@ ", "en"),
+        ("eg_a", "e.g. a ", "en"),
+        ("eg_ab", "e.g. ab ", "en"),
+        ("ab_c", "a.b. c ", "en"),
+        ("zb_a", "z.B. a ", "de"),
+    ] {
+        assert_linear_between(name, unit, lang, 20_000, 160_000);
+    }
+}
+
+#[test]
 fn language_switched_words_load_their_data_once() {
     for (name, unit) in [("arabic", "مرحبا "), ("hindi", "नमस्ते "), ("korean", "한국어 ")] {
         assert_linear_between(name, unit, "en", 25_000, 200_000);
