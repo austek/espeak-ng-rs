@@ -41,6 +41,9 @@ fn run_fill(name: &str, unit: &str, bytes: usize, lang: &str) -> (Duration, Vec<
 
 /// The fastest of three runs at `small` against one run at `large`, one after the other.
 fn assert_linear_between(name: &str, unit: &str, lang: &str, small: usize, large: usize) -> Vec<u8> {
+    // A debug build is about ten times slower, so it gets an eighth of the input; the ratio
+    // still separates linear from quadratic growth.
+    let (small, large) = if cfg!(debug_assertions) { (small / 8, large / 8) } else { (small, large) };
     let _alone = ONE_GUARD_AT_A_TIME.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let fastest = (0..3)
         .map(|_| run_fill(&format!("{name}_small"), unit, small, lang).0)
