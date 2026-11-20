@@ -2,9 +2,15 @@
 // the wall-clock bounds are far above any CI noise while still catching it.
 
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+/// Tests run on parallel threads; two long inputs at once starve each other and the clock of
+/// the absolute bounds measures the neighbour.
+static ONE_RUN_AT_A_TIME: Mutex<()> = Mutex::new(());
+
 fn run_fill(name: &str, unit: &str, bytes: usize, lang: &str) -> (Duration, Vec<u8>) {
+    let _alone = ONE_RUN_AT_A_TIME.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let path = std::env::temp_dir().join(format!("robustness_linear_{name}.txt"));
     let mut text = unit.repeat(bytes / unit.len() + 1);
     text.truncate(text.floor_char_boundary(bytes));
