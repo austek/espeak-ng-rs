@@ -369,6 +369,7 @@ jobs:
           --test apostrophe_unpronounceable
           --test symbol_run_max3
           --test symbol_run_max3_reset
+          --test dotted_initials_emphasis_order
           --test dotted_initials_symbol
           --test url_scheme_switched_word
           --test voice_apostrophe

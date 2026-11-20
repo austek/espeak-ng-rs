@@ -6850,48 +6850,48 @@ fn is_dotted_letters_and_dot(word: &str) -> bool {
 /// between the words move behind the joined word.
 fn join_spaced_letter_dots(
     tokens: &mut Vec<Token>,
-    lists_phrase: &dyn Fn(&[Token], usize) -> Option<usize>,
+    lists_phrase: &dyn Fn(&[Token], i32) -> Option<usize>,
     hands_over: &dyn Fn(&str) -> bool,
+    start_emphasis: i32,
 ) {
-    let mut text = JoinedText::new(std::mem::take(tokens));
-    let mut ix = 0;
-    while ix < text.rest().len() {
+    let mut text = JoinedText::new(std::mem::take(tokens), start_emphasis);
+    while let Some(first) = text.rest().first() {
         let rest = text.rest();
-        let run = match &rest[ix] {
-            Token::Word(w) if is_single_letter_word(w) || is_dotted_letters_and_dot(w) => dotted_abbrev::check(rest, ix),
+        let run = match first {
+            Token::Word(w) if is_single_letter_word(w) || is_dotted_letters_and_dot(w) => dotted_abbrev::check(rest, 0),
             _ => None,
         };
         let Some(run) = run else {
-            ix += 1;
+            text.retire(1);
             continue;
         };
         let spelled = !hands_over(&run.letters);
-        if spelled && run.last == ix && !run.possessive {
-            ix += 1;
-            continue;
+        if spelled && run.last == 0 && !run.possessive {
+            text.retire(1);
+        } else if let Some(phrase_end) = lists_phrase(rest, text.level) {
+            text.retire(phrase_end + 1);
+        } else {
+            let replacement = joined_run_tokens(rest, &run, spelled);
+            text.replace(run.last + 1 + genitive_tokens(rest, &run), replacement);
+            text.retire(1);
         }
-        if let Some(phrase_end) = lists_phrase(rest, ix) {
-            ix = phrase_end + 1;
-            continue;
-        }
-        let replacement = joined_run_tokens(rest, ix, &run, spelled);
-        text.replace(ix, run.last - ix + 1 + genitive_tokens(rest, &run), replacement);
-        ix = 1;
     }
     *tokens = text.finish();
 }
 
-/// Tokens of the clause text with a done prefix and a live rest: a replacement that is no longer
-/// than what it replaces slides the live start forward instead of moving the whole tail.
+/// Tokens of the clause text with a done prefix and a live rest, and the emphasis level the done
+/// part leaves: a replacement that is no longer than what it replaces slides the live start
+/// forward instead of moving the whole tail.
 struct JoinedText {
     done: Vec<Token>,
     live: Vec<Token>,
     start: usize,
+    level: i32,
 }
 
 impl JoinedText {
-    fn new(live: Vec<Token>) -> Self {
-        Self { done: Vec::with_capacity(live.len()), live, start: 0 }
+    fn new(live: Vec<Token>, level: i32) -> Self {
+        Self { done: Vec::with_capacity(live.len()), live, start: 0, level }
     }
 
     fn rest(&self) -> &[Token] {
@@ -6904,14 +6904,20 @@ impl JoinedText {
     }
 
     fn retire(&mut self, count: usize) {
-        let moved = self.live[self.start..self.start + count].iter_mut().map(|t| std::mem::replace(t, Token::Space));
-        self.done.extend(moved);
+        for at in self.start..self.start + count {
+            let token = std::mem::replace(&mut self.live[at], Token::Space);
+            if let Token::Embedded(cmd) = &token {
+                if cmd.letter == 'F' {
+                    self.level = cmd.value.max(0);
+                }
+            }
+            self.done.push(token);
+        }
         self.start += count;
     }
 
-    /// Replaces `len` tokens of the rest from `at` on.
-    fn replace(&mut self, at: usize, len: usize, replacement: Vec<Token>) {
-        self.retire(at);
+    /// Replaces the first `len` tokens of the rest.
+    fn replace(&mut self, len: usize, replacement: Vec<Token>) {
         match len.checked_sub(replacement.len()) {
             Some(gap) => {
                 self.start += gap;
@@ -6926,13 +6932,13 @@ impl JoinedText {
 
 /// The word that replaces a run (its letters dotted when C spells them), the embedded commands
 /// of the run behind it, and the words a second voice reads from the joined letters.
-fn joined_run_tokens(rest: &[Token], ix: usize, run: &dotted_abbrev::Run, spelled: bool) -> Vec<Token> {
+fn joined_run_tokens(rest: &[Token], run: &dotted_abbrev::Run, spelled: bool) -> Vec<Token> {
     let (word, echoes) = if spelled {
         (run.letters.chars().map(String::from).collect::<Vec<_>>().join("."), Vec::new())
     } else {
         (run.letters.clone(), overwritten_words(&run.letters))
     };
-    let moved = rest[ix + 1..=run.last].iter().filter(|t| matches!(t, Token::Embedded(_))).cloned();
+    let moved = rest[1..=run.last].iter().filter(|t| matches!(t, Token::Embedded(_))).cloned();
     let genitive = genitive_tokens(rest, run);
     let tail = rest[run.last + 1..run.last + 1 + genitive].iter().filter_map(|t| match t {
         Token::Word(w) => Some(Token::Word(format!("'{w}"))),
@@ -6970,29 +6976,14 @@ fn overwritten_words(letters: &str) -> Vec<String> {
     offsets.into_iter().filter_map(|at| letters.get(at..)).filter(|rest| !rest.is_empty()).map(String::from).collect()
 }
 
-/// The emphasis level the commands before `ix` leave.  `memo` holds the last answer; the calls
-/// come with rising `ix` and change only the tokens from `ix` on, so each token is scanned once.
-fn emphasis_before(tokens: &[Token], memo: &std::cell::Cell<(usize, i32)>, start: i32, ix: usize) -> i32 {
-    let (from, level) = Some(memo.get()).filter(|&(at, _)| at <= ix).unwrap_or((0, start));
-    let (_, level) = emphasized_tokens(&tokens[from..ix], level);
-    memo.set((ix, level));
-    level
-}
-
-/// Whether a multi-word list entry takes the words that follow the one at `ix`, dots counted
-/// as words.
-fn list_takes_phrase(
-    tokens: &[Token],
-    ix: usize,
-    dict: &Dictionary,
-    lang: &str,
-    level_before: i32,
-) -> Option<usize> {
-    let words = dotted_abbrev::clause_words(tokens, ix);
-    let end = words[..words.len().min(31)].last().map_or(ix, |&(at, _)| at);
-    let (emphasized, _) = emphasized_tokens(&tokens[ix..=end.max(ix)], level_before);
+/// Whether a multi-word list entry takes the words that follow the first of `tokens`, dots
+/// counted as words.  `level_before` is the emphasis level the commands before it leave.
+fn list_takes_phrase(tokens: &[Token], dict: &Dictionary, lang: &str, level_before: i32) -> Option<usize> {
+    let words = dotted_abbrev::clause_words(tokens, 0);
+    let end = words[..words.len().min(31)].last().map_or(0, |&(at, _)| at);
+    let (emphasized, _) = emphasized_tokens(&tokens[..=end], level_before);
     let mask = words.iter().take(31).enumerate().fold(0u32, |m, (n, &(at, _))| {
-        m | u32::from(emphasized.get(at - ix).copied().unwrap_or(false)) << n
+        m | u32::from(emphasized.get(at).copied().unwrap_or(false)) << n
     });
     let follow: String = words.iter().skip(1).map(|&(_, w)| format!("{} ", lowercase_for_lang(w, lang))).collect();
     let ctx = LookupCtx { dict_condition: dict.dict_condition, emphasized_words: mask, ..Default::default() };
@@ -11630,14 +11621,11 @@ impl Translator {
                 && letters.chars().any(hands)
         };
         join_dot_hyphen(&mut tokens);
-        let emphasis_memo = std::cell::Cell::new((0, start_emphasis));
         join_spaced_letter_dots(
             &mut tokens,
-            &|tokens, ix| {
-                let level = emphasis_before(tokens, &emphasis_memo, start_emphasis, ix);
-                list_takes_phrase(tokens, ix, dict, lang, level)
-            },
+            &|tokens, level| list_takes_phrase(tokens, dict, lang, level),
             &run_hands_over,
+            start_emphasis,
         );
         if number_grammar.c_numbers != 0 {
             apply_time_reading(&mut tokens, number_grammar.clause_text);
