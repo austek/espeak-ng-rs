@@ -102,11 +102,9 @@ fn phoneme_ph_matches_inline_phonemes() {
 #[test]
 fn sub_uses_alias() {
     let Some(t) = en() else { eprintln!("[SKIP] no en data"); return };
-    assert_markup_eq_plain(
-        &t,
-        "<sub alias=\"World Health Organization\">WHO</sub>",
-        "World Health Organization",
-    );
+    // C gives alias words past charix_top sourceix 0, so it writes no word gaps.
+    let got = t.text_to_ipa_ssml("<sub alias=\"World Health Organization\">WHO</sub>").expect("ssml ipa");
+    assert_eq!(got, "wˈɜːldhˈɛlθˌɔːɡɐnaɪzˈeɪʃən");
 }
 
 #[test]
