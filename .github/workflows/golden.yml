@@ -380,6 +380,8 @@ jobs:
           --test voice_apostrophe
           --test length_mods_equal_table
           --test switched_word_gap
+          --test max3_reading_voice
+          --test max3_textmode_long_reading
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

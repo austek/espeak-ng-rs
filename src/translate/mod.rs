@@ -9367,7 +9367,7 @@ pub(crate) fn is_bracket(c: char) -> bool {
 /// consulted here — C speaks those only when spelling or announcing
 /// punctuation, which is why `a ( b` is silent while `a − b` is not.
 fn dict_names_symbol(dict: &Dictionary, c: char, dict_condition: u32) -> bool {
-    dict_symbol_flags(dict, c, dict_condition).is_some()
+    dict_symbol_flags(dict, c, dict_condition, false).is_some()
 }
 
 /// Whether the dictionary has a `_<char>` name entry for the character.
@@ -9377,10 +9377,9 @@ fn has_underscore_name(dict: &Dictionary, c: char, dict_condition: u32) -> bool 
 }
 
 /// The dictionary flags of a bare single-character entry, when it has one.
-/// `$max3` lives here: a symbol entry carrying it is spoken at most three times
-/// in a row (C's `phonemes_repeat_count`), which is what keeps `~ ~ ~ ~ ~ ~`
-/// to three tildes.
-fn dict_symbol_flags(dict: &Dictionary, c: char, dict_condition: u32) -> Option<u32> {
+/// A symbol entry is spoken at most three times in a row (C's `phonemes_repeat_count`),
+/// which is what keeps `~ ~ ~ ~ ~ ~` to three tildes; see `symbol_entry_flags`.
+fn dict_symbol_flags(dict: &Dictionary, c: char, dict_condition: u32, reversed_textmode: bool) -> Option<u32> {
     // Clause punctuation goes to the clause path, not the dictionary: Hindi
     // `।`, Ethiopic `።` and CJK `。` all have list entries naming them, and C
     // speaks none of them (`a ❓ b` → "a b").
@@ -9393,7 +9392,22 @@ fn dict_symbol_flags(dict: &Dictionary, c: char, dict_condition: u32) -> Option<
     let ctx = LookupCtx { lookup_symbol: true, dict_condition, ..Default::default() };
     lookup(dict, &c.to_string(), &ctx)
         .filter(|r| r.flags1.found() && !r.phonemes.is_empty())
-        .map(|r| r.flags1.0)
+        .map(|r| symbol_entry_flags(c, r.flags1.0, reversed_textmode))
+}
+
+/// The flags of a dictionary hit for the one-character word `c`: C's `LookupDict2` adds
+/// `FLAG_MAX3` to every hit on a character that is not a letter, `$max3` or not.  A replacement
+/// text is translated again as a word of its own, which ends the run.  cmn and yue store
+/// `FLAG_TEXTMODE` on their phoneme entries instead (`reversed_textmode`).
+fn symbol_entry_flags(c: char, flags: u32, reversed_textmode: bool) -> u32 {
+    use crate::dictionary::{FLAG_MAX3, FLAG_TEXTMODE};
+    if (flags & FLAG_TEXTMODE != 0) != reversed_textmode {
+        flags & !FLAG_MAX3
+    } else if crate::dictionary::rules::is_alpha_c(u32::from(c)) {
+        flags
+    } else {
+        flags | FLAG_MAX3
+    }
 }
 
 /// What the letter-to-sound rules make of a non-ASCII character that is not a
@@ -9673,24 +9687,34 @@ fn symbol_run_end(tokens: &[Token], at: usize) -> Option<usize> {
 #[derive(Default)]
 struct Max3Run {
     symbol: Option<char>,
+    reading: Vec<u8>,
     count: u32,
 }
 
+/// C stores the last reading in `phonemes_repeat[20]`: a longer one never equals its copy.
+const REPEAT_READING_MAX: usize = 19;
+
 impl Max3Run {
     fn clear(&mut self) {
-        *self = Self::default();
+        self.symbol = None;
+        self.count = 0;
     }
 
-    /// `phonemes` as read for `symbol`, or nothing when it is the fourth repeat or later.
+    /// `phonemes` as read for `symbol`, or nothing when it is the fourth repeat or later.  C
+    /// compares the readings, not the symbols, and keeps the last reading across a clear.
     fn admit(&mut self, symbol: char, max3: bool, phonemes: Vec<u8>) -> Vec<u8> {
-        if max3 && self.symbol == Some(symbol) {
-            self.count += 1;
-            if self.count > 3 { Vec::new() } else { phonemes }
-        } else {
-            self.symbol = max3.then_some(symbol);
-            self.count = 1;
-            phonemes
+        if !max3 {
+            self.clear();
+            return phonemes;
         }
+        self.symbol = Some(symbol);
+        if phonemes.len() <= REPEAT_READING_MAX && phonemes == self.reading {
+            self.count += 1;
+            return if self.count > 3 { Vec::new() } else { phonemes };
+        }
+        self.reading = phonemes.iter().take(REPEAT_READING_MAX).copied().collect();
+        self.count = 1;
+        phonemes
     }
 }
 
@@ -9736,7 +9760,7 @@ fn run_symbol_reading(
     };
     let by_list = PosExpect { defer_stress: true, ..PosExpect::default() };
     let wr = word_to_phonemes_pos(&key, dict, phdata, stress_opts, options, by_list);
-    let max3 = entry.flags1.0 & crate::dictionary::FLAG_MAX3 != 0;
+    let max3 = symbol_entry_flags(c, entry.flags1.0, options.reversed_textmode) & crate::dictionary::FLAG_MAX3 != 0;
     let phonemes = wr.phonemes.into_iter().take_while(|&b| b != 0).collect();
     spoken(repeat.admit(c, max3, phonemes))
 }
@@ -10562,7 +10586,7 @@ pub(crate) fn build_translate_entries(
                 // `~ ~ ~ ~ ~ ~` is three tildes.  Letters are *not* limited —
                 // C limits them too, which upstream #2551 reports as a bug and
                 // #2552 fixes; this port already reads all the repeats.
-                let max3 = dict_symbol_flags(dict, *c, options.dict_condition)
+                let max3 = dict_symbol_flags(dict, *c, options.dict_condition, options.reversed_textmode)
                     .is_some_and(|f| f & crate::dictionary::FLAG_MAX3 != 0);
                 let (phonemes, symbol_from_dict) = lookup_symbol_name(
                     *c, dict, phdata, stress_opts, options, mode,
