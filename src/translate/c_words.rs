@@ -73,7 +73,7 @@ struct Cut<'a> {
 /// The words C cuts from `text` (the clause as the reader left it, closing space included),
 /// with the reader's `charix` (the value of a character sits at the byte after it).
 pub(crate) fn cut_words(text: &str, charix: &[i32], sayas: i32, sayas_digits: usize, o: &CutOptions) -> Vec<CutWord> {
-    let top = text.len().saturating_sub(1);
+    let top = charix.len().saturating_sub(1);
     let mut ix = charix.to_vec();
     ix.resize(top + 4, 0);
     ix[top + 1] = 0;
@@ -120,7 +120,7 @@ impl super::Translator {
 pub(crate) fn apply_cut_words(codes: &mut [super::PhonemeCode], cut: &[CutWord]) {
     let switched: Vec<bool> = (0..codes.len()).map(|i| opens_switch(&codes[i..])).collect();
     let starts = codes.iter().filter(|c| c.source.is_some()).count();
-    let in_order = starts == cut.len() && cut.iter().any(|w| w.first == 0);
+    let in_order = starts == cut.len() && cut.iter().any(|w| w.first == 0 || w.sourceix == 0);
     let mut nth = 0;
     for (code, switched) in codes.iter_mut().zip(switched) {
         let Some(source) = code.source.as_mut() else { continue };

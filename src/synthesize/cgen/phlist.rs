@@ -293,9 +293,15 @@ pub fn build_list(
         let s = entry_stress(before, t.typ, &mut stress, || follows_vowel(&codes[idx + 1..], table));
         let leading_pause =
             matches!(c.code, PHON_PAUSE | PHON_PAUSE_NOLINK) && newword & PHLIST_START_OF_CLAUSE != 0 && word_source.is_none();
-        let mut p = Ph::new(t.clone(), s, if leading_pause { 0 } else { newword });
+        // C starts a word only where its `sourceix` is not 0; the sentence and clause starts
+        // wait for the next word that has one.
+        let sourceless = !leading_pause && word_source.is_some_and(|s| s.ix == 0 && s.len == 0);
+        if sourceless {
+            carried |= newword & (PHLIST_START_OF_SENTENCE | PHLIST_START_OF_CLAUSE);
+        }
+        let mut p = Ph::new(t.clone(), s, if leading_pause || sourceless { 0 } else { newword });
         if !leading_pause {
-            p.source = word_source.take();
+            p.source = word_source.take().filter(|_| !sourceless);
             p.split_word = std::mem::take(&mut split_word);
             newword = 0;
         }

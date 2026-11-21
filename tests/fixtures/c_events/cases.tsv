@@ -147,3 +147,28 @@ word_ru_digit_groups_ten	0	ru	0x1000	1234567890
 word_it_digit_groups_seven	0	it	0x1000	1234567
 word_es_digit_groups_seven	0	es	0x1000	1234567
 word_pl_digit_groups_seven	0	pl	0x1000	1234567
+sub_alias_end_en	0	en	0x1010	<speak>a <sub alias="foo">x</sub></speak>
+sub_alias_mark_en	0	en	0x1010	<speak>a <sub alias="foo">x</sub><mark name="m"/></speak>
+sub_alias_mark_only_en	0	en	0x1010	<speak><sub alias="foo">x</sub><mark name="m"/></speak>
+sub_alias_two_words_mark_en	0	en	0x1010	<speak>a <sub alias="foo bar">x</sub><mark name="m"/></speak>
+sub_alias_mark_then_word_en	0	en	0x1010	<speak>a <sub alias="foo">x</sub> <mark name="m"/> b</speak>
+sub_alias_break_en	0	en	0x1010	<speak>a <sub alias="foo">x</sub><break time="100ms"/></speak>
+sub_alias_voice_en	0	en	0x1010	<speak>a <sub alias="foo">x</sub><voice name="de">welt</voice></speak>
+sub_alias_mark_de	0	de	0x1010	<speak>a <sub alias="Welt">x</sub><mark name="m"/></speak>
+sub_alias_mark_ku	0	ku	0x1010	<speak>roj <sub alias="baş">x</sub><mark name="m"/></speak>
+sub_alias_mark_ru	0	ru	0x1010	<speak>мир <sub alias="привет">x</sub><mark name="m"/></speak>
+sub_alias_mark_phonemes_en	1	en	0x1010	<speak>a <sub alias="foo">x</sub><mark name="m"/></speak>
+voice_name_de_en	0	en	0x1010	<speak>Hello <voice name="de">welt</voice> end.</speak>
+voice_lang_ru_en	0	en	0x1010	<speak>Hello <voice xml:lang="ru">мир</voice> end.</speak>
+voice_name_ku_en	0	en	0x1010	<speak>Hello <voice name="ku">roj</voice> end.</speak>
+voice_gender_male_en	0	en	0x1010	<speak>Hello <voice gender="male">world</voice> end.</speak>
+voice_gender_female_en	0	en	0x1010	<speak>Hello <voice gender="female">world</voice> end.</speak>
+voice_lang_en_de	0	de	0x1010	<speak>Hallo <voice xml:lang="en">world</voice> Ende.</speak>
+voice_name_en_ku	0	ku	0x1010	<speak>Roj <voice name="en">hello</voice> baş.</speak>
+voice_lang_en_ru	0	ru	0x1010	<speak>Привет <voice xml:lang="en">hello</voice> мир.</speak>
+voice_base_variant_m3_en	0	en+m3	0x1010	<speak>Hello <voice xml:lang="de">welt</voice> end.</speak>
+voice_base_variant_f1_en	0	en+f1	0x1010	<speak>Hello <voice xml:lang="de">welt</voice> end.</speak>
+voice_base_variant_croak_en	0	en+croak	0x1010	<speak>Hello <voice xml:lang="de">welt</voice> end.</speak>
+voice_base_variant_croak_same	0	en+croak	0x1010	<speak>Hello <voice name="en">world</voice> end.</speak>
+voice_base_variant_m2_ru	0	ru+m2	0x1010	<speak>Привет <voice xml:lang="en">hello</voice> мир.</speak>
+voice_base_variant_m3_phonemes	1	en+m3	0x1010	<speak>Hello <voice xml:lang="de">welt</voice> end.</speak>

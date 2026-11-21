@@ -47,6 +47,9 @@ pub struct BaseVoice {
     pub gender: i32,
     pub age: i32,
     pub variant: i32,
+    /// The gender `espeak_GetCurrentVoice` reports when it differs from the selector's
+    /// `gender` that frame 0 holds (`SetVoiceByName` leaves that at 0).
+    pub current_gender: Option<i32>,
 }
 
 impl BaseVoice {
@@ -248,13 +251,16 @@ impl VoiceStack {
         }
     }
 
-    /// `LoadVoice` of a voice with `languages` (its `language` lines, `variant` excluded).
-    pub fn voice_loaded(&mut self, languages: Vec<String>) {
+    /// `LoadVoice` of the voice `identifier` with `languages` (its `language` lines, `variant`
+    /// excluded). The base voice's identifier is the static buffer `LoadVoice` rewrites.
+    pub fn voice_loaded(&mut self, languages: Vec<String>, identifier: &str) {
         self.loaded_languages = languages;
+        self.base.identifier = Some(identifier.to_string());
     }
 
     fn keep_base_variant(&self, id: String, sel: &VoiceSelect) -> String {
-        let unspecified = sel.gender == ENGENDER_UNKNOWN || sel.gender == self.base.gender;
+        let base_gender = self.base.current_gender.unwrap_or(self.base.gender);
+        let unspecified = sel.gender == ENGENDER_UNKNOWN || sel.gender == base_gender;
         if !id.contains('+') && unspecified && !self.base_variant.is_empty() {
             let joined = format!("{id}+{}", self.base_variant);
             return joined.chars().take(VOICE_NAME_LEN - 1).collect();

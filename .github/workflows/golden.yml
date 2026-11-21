@@ -123,6 +123,8 @@ jobs:
           --test ssml_clause_reader
           --test ssml_clause_audio
           --test ssml_voice_audio
+          --test ssml_voice_change_audio
+          --test ssml_sub_alias_audio
           --test ssml_prosody_audio
           --test abbreviation_clause_pause
           --test ssml_audio_icon

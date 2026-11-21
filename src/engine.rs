@@ -885,6 +885,7 @@ impl EspeakNg {
         let settings = crate::translate::ssml_driver::SsmlSettings {
             rate_wpm: self.rate as i32,
             break_mul: self.ssml_break as i32,
+            base_variant: self.voice_spec.variant.clone().unwrap_or_default(),
         };
         let table = std::cell::RefCell::new(self.soundicons.clone());
         let base = self.soundicon_base_dir();

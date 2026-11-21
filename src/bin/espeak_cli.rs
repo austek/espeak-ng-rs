@@ -897,6 +897,7 @@ fn markup_phoneme_lines(cli: &Cli, translator: &Translator, text: &str) -> std::
     let settings = espeak_ng::translate::ssml_driver::SsmlSettings {
         rate_wpm: cli.rate.map_or(175, |r| r as i32),
         break_mul: cli.ssml_break.map_or(100, |b| b as i32),
+        base_variant: espeak_ng::translate::split_voice_variant(&cli.voice).1.unwrap_or_default().to_string(),
     };
     let base = resolved_data_dir(cli.path_override.as_deref()).join("soundicons");
     let table = std::cell::RefCell::new(espeak_ng::SoundIconTable::new(22_050));

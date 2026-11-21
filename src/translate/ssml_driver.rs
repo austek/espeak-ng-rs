@@ -117,17 +117,70 @@ fn single_clause(mut tokens: Vec<Token>) -> Vec<Token> {
     tokens
 }
 
+/// Index of the first sounding code of each word group, words being what the boundary codes
+/// delimit.
+fn word_group_starts(codes: &[PhonemeCode]) -> Vec<usize> {
+    let mut starts = Vec::new();
+    let mut open = true;
+    for (i, c) in codes.iter().enumerate() {
+        if c.is_boundary {
+            open = true;
+        } else if open && c.marker.is_none() {
+            starts.push(i);
+            open = false;
+        }
+    }
+    starts
+}
+
+/// C gives a word whose `CalcWordLength` read no `charix` (the alias text of `<sub>` past the
+/// reader's `charix_top`) a `sourceix` of 0: it starts no word in the phoneme list.
+fn mark_sourceless_words(codes: &mut [PhonemeCode], cut: &[super::c_words::CutWord]) {
+    let starts = word_group_starts(codes);
+    if starts.len() != cut.len() {
+        return;
+    }
+    for (&at, word) in starts.iter().zip(cut) {
+        if word.sourceix == 0 && word.length == 0 && codes[at].source.is_none() {
+            codes[at].source = Some(super::SourceIx::default());
+        }
+    }
+}
+
+fn variant_gender(gender: char) -> i32 {
+    match gender {
+        'M' => 1,
+        'F' => 2,
+        _ => 0,
+    }
+}
+
+/// The codes with the word boundary before each sourceless word removed: C writes no space
+/// where `sourceix` is 0, because that phoneme starts no word.
+fn without_sourceless_gaps(codes: &[PhonemeCode]) -> Vec<PhonemeCode> {
+    let sourceless = Some(super::SourceIx::default());
+    let mut gap = vec![false; codes.len()];
+    let is_gap = |k: &PhonemeCode| k.is_boundary && k.code == super::PHON_END_WORD;
+    for at in (0..codes.len()).filter(|&i| codes[i].source == sourceless) {
+        let run = codes[..at].iter().rev().take_while(|k| k.marker.is_some() || is_gap(k)).count();
+        (at - run..at).filter(|&i| is_gap(&codes[i])).for_each(|i| gap[i] = true);
+    }
+    codes.iter().zip(gap).filter(|(_, g)| !g).map(|(c, _)| c.clone()).collect()
+}
+
 /// Speech settings the SSML parameter stack starts from (C `param_stack[0]`).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct SsmlSettings {
     pub rate_wpm: i32,
     /// `espeakSSML_BREAK_MUL` as a percentage.
     pub break_mul: i32,
+    /// The `+variant` of the base voice as it was named (`m3`, `whisper`, `3`); empty for none.
+    pub base_variant: String,
 }
 
 impl Default for SsmlSettings {
     fn default() -> Self {
-        SsmlSettings { rate_wpm: 175, break_mul: 100 }
+        SsmlSettings { rate_wpm: 175, break_mul: 100, base_variant: String::new() }
     }
 }
 
@@ -244,7 +297,8 @@ impl Translator {
             load_sound,
             uri_callback,
         };
-        let mut state = SsmlState::new(self.speech_defaults(settings), self.base_voice(&voices), "");
+        let variant = crate::voices::variant_file_name(&settings.base_variant);
+        let mut state = SsmlState::new(self.speech_defaults(&settings), self.base_voice(&voices, &settings.base_variant), &variant);
         state.voice.current_voice_id = state.voice.voice_from_stack(&catalog, 1);
         let mut reader = ClauseReader::new(text, self.reader_options(), SsmlTags::new(state, env));
         let mut doc = SsmlDocument {
@@ -263,7 +317,7 @@ impl Translator {
             if let Some(id) = &translated.voice_after {
                 voice = doc.voice_for(id, &voices);
                 if let Some(entry) = voice_file_entry(&all_voices, id) {
-                    reader.tags_mut().state.voice.voice_loaded(language_names(entry));
+                    reader.tags_mut().state.voice.voice_loaded(language_names(entry), id);
                 }
             }
             doc.clauses.push(translated);
@@ -283,6 +337,7 @@ impl Translator {
         let mut codes = self.translate_clause(&clause.text, no_tonic, carry, &clause.charix)?;
         let cut = self.cut_clause_words(&clause.text, &clause.charix, say_as.mode, say_as.digits());
         super::c_words::apply_cut_words(&mut codes, &cut);
+        mark_sourceless_words(&mut codes, &cut);
         let abbreviated = clause.terminator.dot_after_last_word()
             && codes.iter().any(|c| matches!(c.marker, Some(CodeMarker::AbbreviationDot)));
         let terminator = if abbreviated { terminator.after_abbreviation() } else { terminator };
@@ -290,7 +345,7 @@ impl Translator {
         Ok(TranslatedClause { codes, terminator, eof: clause.eof, voice_after: clause.voice_change, voice, counters })
     }
 
-    fn speech_defaults(&self, settings: SsmlSettings) -> [i32; N_SPEECH_PARAM] {
+    fn speech_defaults(&self, settings: &SsmlSettings) -> [i32; N_SPEECH_PARAM] {
         let mut d = [0; N_SPEECH_PARAM];
         d[P_RATE] = settings.rate_wpm;
         d[2] = 100;
@@ -307,13 +362,23 @@ impl Translator {
             .or_else(|| voices.iter().find(|v| v.language.eq_ignore_ascii_case(&self.options.lang)))
     }
 
-    /// `SetVoiceStack` after `espeak_ng_SetVoiceByName`: no identifier, the voice file's language.
-    fn base_voice(&self, voices: &[VoiceEntry]) -> BaseVoice {
-        let languages = self
-            .own_voice_entry(voices)
+    /// `SetVoiceStack` after `espeak_ng_SetVoiceByName`: the name as given, the identifier of the
+    /// voice file that `LoadVoice` loaded and its language. The variant file's `gender` line sets
+    /// the gender `espeak_GetCurrentVoice` reports.
+    fn base_voice(&self, voices: &[VoiceEntry], variant: &str) -> BaseVoice {
+        let entry = self.own_voice_entry(voices);
+        let languages = entry
             .map(|v| v.languages.iter().map(|(l, _)| l.clone()).collect())
             .unwrap_or_else(|| vec![self.options.lang.clone()]);
-        BaseVoice { identifier: None, name: self.options.lang.clone(), languages, ..BaseVoice::default() }
+        let with_variant = |stem: &str, v: &str| if variant.is_empty() { stem.to_string() } else { format!("{stem}+{v}") };
+        let file = crate::voices::load_variant(&self.data_dir, variant).filter(|_| !variant.is_empty());
+        BaseVoice {
+            identifier: entry.map(|v| with_variant(&v.file, &crate::voices::variant_file_name(variant))),
+            name: with_variant(&self.options.lang, variant),
+            languages,
+            current_gender: file.map(|v| variant_gender(v.gender)),
+            ..BaseVoice::default()
+        }
     }
 
     pub(super) fn reader_options(&self) -> ReaderOptions {
@@ -333,7 +398,7 @@ impl Translator {
 
     fn clause_ipa(&self, codes: &[PhonemeCode], preserve_punctuation: bool) -> Result<String> {
         let loaded = self.loaded_data()?;
-        let codes = super::lower_stress_before_emphasis(codes, &loaded.phdata);
+        let codes = super::lower_stress_before_emphasis(&without_sourceless_gaps(codes), &loaded.phdata);
         let ipa = super::phoneme_ipa::codes_to_ipa_opts(
             &codes,
             &loaded.phdata,
@@ -348,7 +413,7 @@ impl Translator {
 
     fn clause_mnemonics(&self, codes: &[PhonemeCode], sep: Option<char>, tie: Option<char>) -> Result<String> {
         let loaded = self.loaded_data()?;
-        let codes = super::lower_stress_before_emphasis(codes, &loaded.phdata);
+        let codes = super::lower_stress_before_emphasis(&without_sourceless_gaps(codes), &loaded.phdata);
         let x = crate::phoneme_text::format_mnemonics(&codes, &loaded.phdata, sep, tie, &self.data_dir, &self.options.lang);
         Ok(x.trim_end_matches('\n').replace('\n', " "))
     }
