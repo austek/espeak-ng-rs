@@ -96,6 +96,10 @@ fn closing_pause_ix(source: &SourceClause, codes: &[PhonemeCode]) -> u16 {
 /// never maps it from text, where it is an ordinary private-use character as in C.
 pub(crate) const TAG_CLAUSE_END: char = '\u{E002}';
 
+/// Character of the [`Token::ClauseBoundary`] that ends the clause at an embedded voice change,
+/// which C ends with `CLAUSE_VOICE`: no pause, no intonation, no sentence.
+pub(crate) const VOICE_CLAUSE_END: char = '\u{E003}';
+
 fn single_clause(mut tokens: Vec<Token>) -> Vec<Token> {
     let last = tokens.iter().rposition(|t| !matches!(t, Token::Space));
     let closing = last.filter(|&i| matches!(tokens[i], Token::ClauseBoundary(_)));

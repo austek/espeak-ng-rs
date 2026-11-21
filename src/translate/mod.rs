@@ -1087,7 +1087,7 @@ impl Default for LangOptions {
 /// "all punctuation" (`--punct` with no argument); the SSML clause-break
 /// sentinel is never announced.
 fn punct_covers(opts: &LangOptions, c: char) -> bool {
-    if c == ssml_driver::TAG_CLAUSE_END {
+    if c == ssml_driver::TAG_CLAUSE_END || c == ssml_driver::VOICE_CLAUSE_END {
         return false;
     }
     match &opts.punct {
@@ -1922,6 +1922,29 @@ fn read_embedded_command(chars: &mut CountedChars<'_>) -> Option<EmbeddedCmd> {
     })
 }
 
+fn is_bare_voice_change(cmd: EmbeddedCmd) -> bool {
+    cmd.letter == 'V' && cmd.value < 0 && cmd.relative == 0
+}
+
+/// C's `ReadClause` returns `CLAUSE_VOICE` at `\x01V`: the clause ends there and the voice name
+/// up to the next blank, that blank included, is not text.
+fn end_clause_at_voice_change(chars: &mut CountedChars<'_>, tokens: &mut Vec<Token>) {
+    while chars.next_if(|c| !c.is_whitespace()).is_some() {}
+    chars.next_if(|c| c.is_whitespace());
+    tokens.push(Token::ClauseBoundary(ssml_driver::VOICE_CLAUSE_END));
+    chars.end_clause();
+}
+
+/// `any_alnum` after the command `letter`.  C's `ReadClause` ends the clause at a voice change
+/// and reads a punctuation change without testing its characters; it tests the rest as text.
+fn embedded_keeps_any_alnum(cmd: EmbeddedCmd, before: bool) -> bool {
+    match cmd.letter {
+        'V' if is_bare_voice_change(cmd) => false,
+        'B' if cmd.value < 0 && cmd.relative == 0 => before,
+        _ => true,
+    }
+}
+
 /// Parse and strip inline embedded commands (`\x01…`) from `text`, returning the
 /// command-free text and the commands in order.  Mirrors C's handling of
 /// `CTRL_EMBEDDED`: a `\x01` that does not start a command (no valid letter) becomes a
@@ -2089,9 +2112,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     let text = dots_blanked_before_hyphens(text.as_ref());
     let text = text.as_ref();
     let mut tokens = Vec::new();
-    let mut clause_words = ClauseWords::default();
     let mut chars = CountedChars::new(text);
-    let bytes_after_last_alnum = text.len() - text.trim_end_matches(|ch: char| !ch.is_alphanumeric()).len();
     let mut before: Option<char> = None;
     let mut blank_run = 0usize;
 
@@ -2105,9 +2126,16 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
         // letter only the `\x01` is blanked, as C does.
         let mut blanks = 1;
         let c = if c == CTRL_EMBEDDED {
+            let was_alnum = chars.any_alnum();
             match read_embedded_command(&mut chars) {
                 Some(cmd) => {
-                    tokens.push(Token::Embedded(cmd));
+                    chars.any_alnum = embedded_keeps_any_alnum(cmd, was_alnum);
+                    if is_bare_voice_change(cmd) {
+                        end_clause_at_voice_change(&mut chars, &mut tokens);
+                        before = None;
+                    } else {
+                        tokens.push(Token::Embedded(cmd));
+                    }
                     continue;
                 }
                 None => {
@@ -2193,12 +2221,14 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // stop and comma, the Armenian/Syriac/Ethiopic/Mongolian/Tibetan
             // terminators, the ellipsis, the en/em dash.  Unspaced (`a–b`) they
             // are dropped instead, which is C's behaviour too.
+            let newline = newline_follows(chars.clone());
             while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
                 chars.next();
                 before = Some(' ');
             }
-            if clause_words.update(&tokens) {
+            if chars.any_alnum() || newline {
                 tokens.push(Token::ClauseBoundary(c));
+                chars.end_clause();
             } else {
                 tokens.push(Token::Operator(c));
             }
@@ -2216,7 +2246,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 continue;
             }
             let apart = previous.is_none_or(|p| p.is_whitespace() || p == CTRL_EMBEDDED || p == '-' || is_bracket(p));
-            if c == '.' && apart && (grammar.clause_text || (clause_words.update(&tokens) && dot_stays_in_clause(chars.clone(), grammar.lowercase_sentence))) {
+            if c == '.' && apart && (grammar.clause_text || (chars.any_alnum() && dot_stays_in_clause(chars.clone(), grammar.lowercase_sentence))) {
                 tokens.push(Token::Punctuation('.'));
                 continue;
             }
@@ -2238,7 +2268,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 continue;
             }
             if c == '.' && chars.peek() == Some(&'.') {
-                if apart && clause_words.update(&tokens) && dot_stays_in_clause(chars.clone().skip(1), grammar.lowercase_sentence) {
+                if apart && chars.any_alnum() && dot_stays_in_clause(chars.clone().skip(1), grammar.lowercase_sentence) {
                     tokens.push(Token::Punctuation('.'));
                 }
                 tokens.push(Token::Space);
@@ -2248,12 +2278,14 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 while chars.next_if(|n| matches!(n, '?' | '!')).is_some() {}
             }
             let ends_clause = ascii_clause_end_follows(c, chars.clone());
-            if !clause_words.update(&tokens) {
-                let text_ends = chars.remaining_bytes() <= bytes_after_last_alnum;
+            if !chars.any_alnum() && !(ends_clause && newline_follows(chars.clone())) {
+                if c == '.' && ends_clause || matches!(c, '?' | '!') && !ends_clause {
+                    chars.blank_dot();
+                }
                 tokens.push(match c {
-                    '.' if text_ends && !empty_clause_pending(clause_words.solid(&tokens)) => Token::ClauseBoundary(c),
-                    '.' if text_ends => Token::Space,
+                    '.' if ends_clause => blanked_dot(&tokens),
                     '.' => Token::Punctuation(' '),
+                    '?' | '!' if !ends_clause => Token::Punctuation(c),
                     _ if glued_to_clause_mark(&tokens, previous) => Token::Punctuation(' '),
                     _ => Token::Operator(c),
                 });
@@ -2272,6 +2304,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                 before = Some(' ');
             }
             tokens.push(Token::ClauseBoundary(c));
+            chars.end_clause();
             if dot_ends {
                 tokens.push(Token::DotEndsClause);
             }
@@ -2649,7 +2682,41 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
         }
     }
 
+    if chars.has_blanked_dot() {
+        close_text_after_blanked_dot(&mut tokens);
+    }
     tokens
+}
+
+/// The token of a blanked `.` that a blank follows.  It is a plain space after a token of its
+/// clause, so that a language switch closes before the pause that follows.  It stays a separate
+/// token at the start of a clause, where the switch reopens, and after a dash or a bracket,
+/// so that a dash after the `.` is no second half of a pair.
+fn blanked_dot(tokens: &[Token]) -> Token {
+    let last = tokens.iter().rev().take(4).find(|t| !matches!(t, Token::Space | Token::Punctuation(' ')));
+    match last {
+        None | Some(Token::ClauseBoundary(_)) => Token::Punctuation(' '),
+        Some(Token::Punctuation(c) | Token::Operator(c)) if *c == '-' || is_bracket(*c) => Token::Punctuation(' '),
+        Some(_) => Token::Space,
+    }
+}
+
+/// A text whose last clause holds a blanked `.` or a mark that read as text.  C ends the last clause at the end of the text with
+/// `CLAUSE_EOF`, no full stop; when that clause holds no word after an earlier clause, it is
+/// still reported as an empty clause, unless marks in it already report it.  The blanks at the
+/// end are plain spaces, so a language switch closes before the pause.
+fn close_text_after_blanked_dot(tokens: &mut Vec<Token>) {
+    let is_blank = |t: &Token| matches!(t, Token::Space | Token::Punctuation(' '));
+    let blanks = tokens.iter().rev().take_while(|t| is_blank(t)).count();
+    let end = tokens.len();
+    tokens[end - blanks..].fill(Token::Space);
+    let tail = || tokens.iter().rev().take_while(|t| !matches!(t, Token::ClauseBoundary(_)));
+    let is_word = |t: &Token| matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_));
+    let is_mark = |t: &Token| matches!(t, Token::Operator(c) if is_clause_punctuation(*c));
+    let after_clause = tail().count() < end;
+    if after_clause && !tail().any(|t| is_word(t) || is_mark(t)) {
+        tokens.push(Token::ClauseBoundary('.'));
+    }
 }
 
 /// Whether an uppercase `next` is the last uppercase of a run that should be
@@ -6692,18 +6759,18 @@ fn hyphen_flags_at(tokens: &[Token], ix: usize) -> u32 {
         | (if joined_after { crate::dictionary::FLAG_HYPHEN_AFTER } else { 0 })
 }
 
-/// The characters of a text with a count of the bytes read, so that the bytes left cost nothing
-/// to know.
+/// The characters of a text with C's per-clause `any_alnum` flag: set by every alphanumeric
+/// character read, so a long clause of symbols costs one pass instead of one scan per symbol.
 #[derive(Clone)]
 struct CountedChars<'a> {
     chars: std::iter::Peekable<std::str::Chars<'a>>,
-    len: usize,
-    read: usize,
+    any_alnum: bool,
+    blanked_dot: bool,
 }
 
 impl<'a> CountedChars<'a> {
     fn new(text: &'a str) -> Self {
-        Self { chars: text.chars().peekable(), len: text.len(), read: 0 }
+        Self { chars: text.chars().peekable(), any_alnum: false, blanked_dot: false }
     }
 
     fn peek(&mut self) -> Option<&char> {
@@ -6712,12 +6779,35 @@ impl<'a> CountedChars<'a> {
 
     fn next_if(&mut self, accept: impl FnOnce(&char) -> bool) -> Option<char> {
         let c = self.chars.next_if(accept)?;
-        self.read += c.len_utf8();
-        Some(c)
+        Some(self.counted(c))
     }
 
-    fn remaining_bytes(&self) -> usize {
-        self.len - self.read
+    fn counted(&mut self, c: char) -> char {
+        self.any_alnum |= c.is_alphanumeric();
+        c
+    }
+
+    /// Whether a letter or digit has been read since the clause began.
+    fn any_alnum(&self) -> bool {
+        self.any_alnum
+    }
+
+    /// A mark before any letter or digit left the clause open: a `.` became a blank, or another
+    /// mark that no blank follows stayed text.
+    fn blank_dot(&mut self) {
+        self.blanked_dot = true;
+    }
+
+    /// Whether the clause read so far holds such a mark: at the end of the text C reports the
+    /// clause even when nothing is spoken in it.
+    fn has_blanked_dot(&self) -> bool {
+        self.blanked_dot
+    }
+
+    /// The clause ended: the next one has read nothing yet.
+    fn end_clause(&mut self) {
+        self.any_alnum = false;
+        self.blanked_dot = false;
     }
 }
 
@@ -6726,44 +6816,7 @@ impl Iterator for CountedChars<'_> {
 
     fn next(&mut self) -> Option<char> {
         let c = self.chars.next()?;
-        self.read += c.len_utf8();
-        Some(c)
-    }
-}
-
-/// Whether a letter or digit has been read in the clause so far, the condition under which C
-/// ends a clause at punctuation (`any_alnum`).  Kept up to date as tokens are appended, so a
-/// long clause of symbols costs one pass instead of one scan per symbol.
-#[derive(Default)]
-struct ClauseWords {
-    seen: usize,
-    has_word: bool,
-    /// The token count up to the last token that is not a blank.
-    solid: usize,
-}
-
-impl ClauseWords {
-    /// The tokens up to the last one that is not a blank.
-    fn solid<'t>(&self, tokens: &'t [Token]) -> &'t [Token] {
-        &tokens[..self.solid.min(tokens.len())]
-    }
-
-    fn update(&mut self, tokens: &[Token]) -> bool {
-        if tokens.len() < self.seen {
-            *self = Self::default();
-        }
-        for (ix, t) in tokens.iter().enumerate().skip(self.seen) {
-            if !matches!(t, Token::Space) {
-                self.solid = ix + 1;
-            }
-            match t {
-                Token::ClauseBoundary(_) => self.has_word = false,
-                Token::Word(_) | Token::Number(_) => self.has_word = true,
-                _ => {}
-            }
-        }
-        self.seen = tokens.len();
-        self.has_word
+        Some(self.counted(c))
     }
 }
 
@@ -6804,18 +6857,6 @@ fn spelled_run_start(tokens: &[Token], ix: usize) -> usize {
         }
     }
     start
-}
-
-/// Whether the text so far ends with a clause that holds no word, which C
-/// reports once however many marks follow.
-fn empty_clause_pending(tokens: &[Token]) -> bool {
-    let mut rest = tokens.iter().rev().skip_while(|t| matches!(t, Token::Space));
-    let next = rest.next();
-    matches!(next, Some(Token::Operator(m)) if is_clause_punctuation(*m))
-        || matches!(next, Some(Token::ClauseBoundary(_)))
-            && !rest
-            .take_while(|t| !matches!(t, Token::ClauseBoundary(_)))
-            .any(|t| matches!(t, Token::Word(_) | Token::Number(_)))
 }
 
 /// C turns the hyphen after a kept dot into a blank that joins the next word (translate.c:1497),
@@ -7229,6 +7270,12 @@ where
         while after.next_if(|n| matches!(n, '?' | '!')).is_some() {}
     }
     after.peek().is_none_or(|&n| n.is_whitespace() || is_bracket(n) || n == '?' || n == CTRL_EMBEDDED)
+}
+
+/// Whether a newline is among the blanks after a clause mark, the case where C ends the clause
+/// without asking for a letter or digit before it (`nl_count`).
+fn newline_follows<I: Iterator<Item = char>>(after: I) -> bool {
+    after.take_while(|c| c.is_whitespace()).any(|c| c == '\n')
 }
 
 /// C reads `e.g.` as the words `e . g .`, which a multi-word list entry
@@ -8925,7 +8972,9 @@ fn suppress_abbreviation_periods(tokens: &mut Vec<Token>) {
                 tokens[i] = Token::Space;
             }
         }
-        if !matches!(tokens[i], Token::Space | Token::WordJoin | Token::ClauseBoundary(_) | Token::DotEndsClause) {
+        if matches!(tokens[i], Token::ClauseBoundary(ssml_driver::VOICE_CLAUSE_END)) {
+            next_word = None;
+        } else if !matches!(tokens[i], Token::Space | Token::WordJoin | Token::ClauseBoundary(_) | Token::DotEndsClause) {
             next_word = Some(i);
         }
     }
@@ -11679,10 +11728,12 @@ impl Translator {
             let mut seen = false;
             let mut flags: Vec<bool> = tokens
                 .iter()
+                .zip(&entries)
                 .rev()
-                .map(|t| {
+                .map(|(t, e)| {
                     let before = seen;
-                    seen |= matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_));
+                    seen |= matches!(t, Token::Word(_) | Token::Number(_) | Token::InlinePhonemes(_))
+                        || (matches!(t, Token::Punctuation(_) | Token::Operator(_)) && e.phonemes.iter().any(|&b| b != 0));
                     before
                 })
                 .collect();
@@ -11903,12 +11954,15 @@ impl Translator {
             // `ru "a , b"` is `(en)'eI(ru) (en)b'i:(ru)`, two groups, not one
             // spanning the comma — and at a bracket, whose pause belongs to the
             // base language (`(en)'eI(ru)_:_: (en)b'i:(ru)`).
-            let bracket_here = matches!(token, Token::Punctuation(c) if is_bracket(*c))
+            let bracket_here = (matches!(token, Token::Punctuation(c) if is_bracket(*c))
+                || (matches!(token, Token::Punctuation('-') | Token::Operator('-')) && spaced_dash(&tokens, token_ix)))
                 && entry.phonemes.is_empty()
                 && !(matches!(token, Token::Punctuation('\'')) && plural_possessive_quote(&tokens, token_ix));
+            let trailing_mark = matches!(token, Token::Operator(c) if is_clause_punctuation(*c)) && !word_follows_in_text[token_ix];
             if open_switch.is_some()
                 && (entry.phonemes.iter().any(|&b| b != 0 && b != crate::phoneme::PHON_END_WORD)
                     || bracket_here
+                    || trailing_mark
                     || entry.kind == TranslateEntryKind::ClauseBoundary)
             {
                 open_switch = None;
@@ -14382,17 +14436,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn counted_chars_know_the_bytes_left_after_a_peek_and_a_multibyte_read() {
-        let mut chars = CountedChars::new("a\u{e9}\u{2026}b");
-        assert_eq!(chars.remaining_bytes(), 7);
-        assert_eq!(chars.next(), Some('a'));
-        assert_eq!(chars.peek(), Some(&'\u{e9}'));
-        assert_eq!(chars.remaining_bytes(), 6);
-        assert_eq!(chars.next_if(|c| *c == '\u{e9}'), Some('\u{e9}'));
-        assert_eq!(chars.next(), Some('\u{2026}'));
-        assert_eq!(chars.remaining_bytes(), 1);
+    fn counted_chars_set_any_alnum_on_a_peek_free_read_and_clear_it_at_a_clause_end() {
+        let mut chars = CountedChars::new("~\u{b2}.");
+        assert!(!chars.any_alnum());
+        assert_eq!(chars.peek(), Some(&'~'));
+        assert_eq!(chars.next_if(|c| *c == '~'), Some('~'));
+        assert!(!chars.any_alnum());
+        assert_eq!(chars.next(), Some('\u{b2}'));
+        assert!(chars.any_alnum());
+        chars.end_clause();
+        assert!(!chars.any_alnum());
         assert_eq!(chars.by_ref().count(), 1);
-        assert_eq!(chars.remaining_bytes(), 0);
+        assert!(!chars.any_alnum());
     }
 
     /// Regression guard for the C `SelectTranslator()` "missing break" bug class

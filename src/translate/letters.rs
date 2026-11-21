@@ -277,9 +277,14 @@ fn opens_with_switch(items: &[Item]) -> bool {
     )
 }
 
+/// A word break: a clause end is not one, since each clause closes its own switch.
+fn word_gap(c: &PhonemeCode) -> bool {
+    c.is_boundary && c.marker.is_none() && c.clause_char.is_none()
+}
+
 /// A switch back to the voice that closed another word's region just before.
 fn closing_marker(codes: &[PhonemeCode], voice: &str) -> Option<StreamTail> {
-    let at = codes.iter().rposition(|c| !(c.is_boundary && c.marker.is_none()))?;
+    let at = codes.iter().rposition(|c| !word_gap(c))?;
     let is_voice = |c: &PhonemeCode| matches!(&c.marker, Some(CodeMarker::LangSwitch(t)) if t == voice);
     if !is_voice(&codes[at]) {
         return None;
@@ -308,7 +313,7 @@ pub(super) fn push_stream(
         *tail = closing_marker(codes, voice);
     }
     if let Some(t) = tail.take() {
-        let only_gaps = codes[t.at + 1..].iter().all(|c| c.is_boundary && c.marker.is_none());
+        let only_gaps = codes[t.at + 1..].iter().all(word_gap);
         if only_gaps && opens_with_switch(&items) {
             codes.remove(t.at);
             current = t.before;

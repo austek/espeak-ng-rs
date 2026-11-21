@@ -133,7 +133,11 @@ pub struct ClauseCounters {
 
 impl ClauseCodes {
     fn plain(codes: Vec<PhonemeCode>, clause_char: Option<char>) -> Self {
-        let terminator = clause_char.and_then(|c| Terminator::from_codepoint(c as u32)).unwrap_or(Terminator::PERIOD);
+        let terminator = if clause_char == Some(crate::translate::ssml_driver::VOICE_CLAUSE_END) {
+            Terminator::VOICE
+        } else {
+            clause_char.and_then(|c| Terminator::from_codepoint(c as u32)).unwrap_or(Terminator::PERIOD)
+        };
         ClauseCodes { codes, terminator, eof: false, voice_after: None, counters: None }
     }
 }

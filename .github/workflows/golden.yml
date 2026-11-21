@@ -104,6 +104,10 @@ jobs:
           --test ssml_dot_next_to_tag
           --test private_use_separator
           --test standalone_dot_in_clause
+          --test any_alnum_clause
+          --test any_alnum_clause_edges
+          --test any_alnum_voice_clause
+          --test any_alnum_switch_clause
           --test dot_clause_end
           --test ssml_say_as_digit_groups
           --test ssml_say_as_key_names
