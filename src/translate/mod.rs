@@ -12585,7 +12585,7 @@ impl Translator {
             );
         }
         // The inter-word pause insertion runs over the finished list.
-        if self.options.word_gap == 0 {
+        if self.options.word_gap == 0 && !self.options.switched {
             insert_word_gaps(
                 &mut out,
                 phdata,
