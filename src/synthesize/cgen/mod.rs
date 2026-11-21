@@ -244,8 +244,12 @@ pub struct Renderer<'a> {
     max_clause_pause: i32,
     switched: std::collections::HashMap<String, PhonemeData>,
     emitted: usize,
+    leftovers: Vec<Leftover>,
     pub events: Vec<RawEvent>,
 }
+
+/// The `amp` and pitches of one slot of C's static `phoneme_list`.
+type Leftover = (i32, i32, i32);
 
 impl<'a> Renderer<'a> {
     pub fn new(phdata: &'a PhonemeData, data_dir: &Path, params: &VoiceParams) -> Self {
@@ -281,7 +285,26 @@ impl<'a> Renderer<'a> {
             max_clause_pause: 0,
             switched: std::collections::HashMap::new(),
             emitted: 0,
+            leftovers: Vec::new(),
             events: Vec::new(),
+        }
+    }
+
+    /// `MakePhonemeList` never writes `amp` or the pitches of the two closing pauses, so they
+    /// keep what the previous clause left in those slots of the static `phoneme_list`.
+    fn inherit_closing_pauses(leftovers: &[Leftover], list: &mut [Ph]) {
+        let n = list.len();
+        for (i, p) in list.iter_mut().enumerate().skip(n.saturating_sub(2)) {
+            (p.amp, p.pitch1, p.pitch2) = leftovers.get(i).copied().unwrap_or_default();
+        }
+    }
+
+    fn remember_slots(leftovers: &mut Vec<Leftover>, list: &[Ph]) {
+        if leftovers.len() < list.len() {
+            leftovers.resize(list.len(), Leftover::default());
+        }
+        for (slot, p) in leftovers.iter_mut().zip(list) {
+            *slot = (p.amp, p.pitch1, p.pitch2);
         }
     }
 
@@ -382,6 +405,7 @@ impl<'a> Renderer<'a> {
             let end = c.list.len().saturating_sub(2);
             c.list[end].source = Some(crate::translate::SourceIx { ix: u32::from(k.end_ix), len: 0 });
         }
+        Self::inherit_closing_pauses(&self.leftovers, &mut c.list);
         pitches::calc_pitches(&mut c.list, &self.tr, &self.tunes, clause_type, phdata);
         let speeds = speeds_along(&c.list, &mut self.wpm_s, &self.voice);
         lengths::calc_lengths(&mut c.list, &self.tr, &|i| speeds[i.min(speeds.len() - 1)]);
@@ -392,6 +416,7 @@ impl<'a> Renderer<'a> {
             .with_counters(clause.counters)
             .with_phoneme_events(self.phoneme_events);
         g.generate(&mut c.list);
+        Self::remember_slots(&mut self.leftovers, &c.list);
         self.speed = g.speed;
         self.wpm_s2 = g.embedded_s2_value();
         self.wave_flag = g.wave_flag();

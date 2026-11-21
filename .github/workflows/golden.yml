@@ -378,6 +378,7 @@ jobs:
           --test dotted_initials_symbol
           --test url_scheme_switched_word
           --test voice_apostrophe
+          --test length_mods_equal_table
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

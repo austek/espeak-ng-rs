@@ -129,10 +129,11 @@ pub static LENGTH_MODS_EN0: [u8; 100] = [
 /// `length_mods_equal`.
 pub static LENGTH_MODS_EQUAL: [u8; 100] = {
     let row = [110, 120, 100, 110, 110, 110, 110, 110, 110, 110];
+    let t_row = [110, 120, 100, 110, 100, 110, 110, 110, 100, 110];
     let mut t = [0u8; 100];
     let mut i = 0;
     while i < 100 {
-        t[i] = row[i % 10];
+        t[i] = if i / 10 == 2 { t_row[i % 10] } else { row[i % 10] };
         i += 1;
     }
     t
