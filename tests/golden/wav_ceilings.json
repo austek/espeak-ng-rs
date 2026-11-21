@@ -1,0 +1,606 @@
+{
+  "ab": {
+    "events": 8,
+    "wav": 11
+  },
+  "af": {
+    "events": 3,
+    "wav": 2
+  },
+  "am": {
+    "events": 1,
+    "wav": 1
+  },
+  "an": {
+    "events": 5,
+    "wav": 4
+  },
+  "ar": {
+    "events": 0,
+    "wav": 0
+  },
+  "as": {
+    "events": 7,
+    "wav": 7
+  },
+  "az": {
+    "events": 0,
+    "wav": 0
+  },
+  "ba": {
+    "events": 5,
+    "wav": 2
+  },
+  "be": {
+    "events": 1,
+    "wav": 0
+  },
+  "bg": {
+    "events": 5,
+    "wav": 3
+  },
+  "bn": {
+    "events": 3,
+    "wav": 1
+  },
+  "bpy": {
+    "events": 3,
+    "wav": 1
+  },
+  "bs": {
+    "events": 2,
+    "wav": 2
+  },
+  "ca": {
+    "events": 2,
+    "wav": 2
+  },
+  "ca-ba": {
+    "events": 3,
+    "wav": 3
+  },
+  "ca-nw": {
+    "events": 4,
+    "wav": 4
+  },
+  "ca-va": {
+    "events": 4,
+    "wav": 4
+  },
+  "chr": {
+    "events": 38,
+    "wav": 38
+  },
+  "cmn": {
+    "events": 12,
+    "wav": 12
+  },
+  "cmn-latn-pinyin": {
+    "events": 15,
+    "wav": 15
+  },
+  "crh": {
+    "events": 3,
+    "wav": 3
+  },
+  "cs": {
+    "events": 1,
+    "wav": 0
+  },
+  "cv": {
+    "events": 16,
+    "wav": 15
+  },
+  "cy": {
+    "events": 0,
+    "wav": 0
+  },
+  "da": {
+    "events": 0,
+    "wav": 0
+  },
+  "de": {
+    "events": 0,
+    "wav": 0
+  },
+  "el": {
+    "events": 2,
+    "wav": 1
+  },
+  "en": {
+    "events": 0,
+    "wav": 0
+  },
+  "en-029": {
+    "events": 4,
+    "wav": 2
+  },
+  "en-gb": {
+    "events": 1,
+    "wav": 0
+  },
+  "en-gb-scotland": {
+    "events": 3,
+    "wav": 1
+  },
+  "en-gb-x-gbclan": {
+    "events": 5,
+    "wav": 3
+  },
+  "en-gb-x-gbcwmd": {
+    "events": 3,
+    "wav": 1
+  },
+  "en-gb-x-rp": {
+    "events": 3,
+    "wav": 1
+  },
+  "en-shaw": {
+    "events": 3,
+    "wav": 1
+  },
+  "en-us": {
+    "events": 3,
+    "wav": 1
+  },
+  "en-us-nyc": {
+    "events": 3,
+    "wav": 1
+  },
+  "eo": {
+    "events": 3,
+    "wav": 3
+  },
+  "es": {
+    "events": 0,
+    "wav": 0
+  },
+  "es-419": {
+    "events": 1,
+    "wav": 0
+  },
+  "et": {
+    "events": 0,
+    "wav": 0
+  },
+  "eu": {
+    "events": 3,
+    "wav": 3
+  },
+  "fa": {
+    "events": 3,
+    "wav": 3
+  },
+  "fa-latn": {
+    "events": 5,
+    "wav": 5
+  },
+  "fi": {
+    "events": 1,
+    "wav": 1
+  },
+  "fo": {
+    "events": 2,
+    "wav": 1
+  },
+  "fr": {
+    "events": 0,
+    "wav": 0
+  },
+  "fr-be": {
+    "events": 2,
+    "wav": 2
+  },
+  "fr-ch": {
+    "events": 2,
+    "wav": 2
+  },
+  "ga": {
+    "events": 3,
+    "wav": 2
+  },
+  "gd": {
+    "events": 1,
+    "wav": 1
+  },
+  "gn": {
+    "events": 1,
+    "wav": 1
+  },
+  "grc": {
+    "events": 6,
+    "wav": 5
+  },
+  "gu": {
+    "events": 0,
+    "wav": 0
+  },
+  "hak": {
+    "events": 3,
+    "wav": 2
+  },
+  "haw": {
+    "events": 2,
+    "wav": 2
+  },
+  "he": {
+    "events": 2,
+    "wav": 0
+  },
+  "hi": {
+    "events": 1,
+    "wav": 1
+  },
+  "hr": {
+    "events": 2,
+    "wav": 2
+  },
+  "ht": {
+    "events": 1,
+    "wav": 4
+  },
+  "hu": {
+    "events": 4,
+    "wav": 4
+  },
+  "hy": {
+    "events": 1,
+    "wav": 1
+  },
+  "hyw": {
+    "events": 7,
+    "wav": 4
+  },
+  "ia": {
+    "events": 6,
+    "wav": 6
+  },
+  "id": {
+    "events": 1,
+    "wav": 1
+  },
+  "io": {
+    "events": 0,
+    "wav": 0
+  },
+  "is": {
+    "events": 2,
+    "wav": 1
+  },
+  "it": {
+    "events": 0,
+    "wav": 0
+  },
+  "ja": {
+    "events": 11,
+    "wav": 7
+  },
+  "jbo": {
+    "events": 4,
+    "wav": 2
+  },
+  "ka": {
+    "events": 2,
+    "wav": 0
+  },
+  "kaa": {
+    "events": 3,
+    "wav": 6
+  },
+  "kk": {
+    "events": 1,
+    "wav": 1
+  },
+  "kl": {
+    "events": 0,
+    "wav": 0
+  },
+  "kn": {
+    "events": 2,
+    "wav": 0
+  },
+  "ko": {
+    "events": 1,
+    "wav": 1
+  },
+  "kok": {
+    "events": 5,
+    "wav": 2
+  },
+  "ku": {
+    "events": 0,
+    "wav": 0
+  },
+  "ky": {
+    "events": 3,
+    "wav": 3
+  },
+  "la": {
+    "events": 2,
+    "wav": 1
+  },
+  "lb": {
+    "events": 8,
+    "wav": 8
+  },
+  "lfn": {
+    "events": 0,
+    "wav": 0
+  },
+  "lij": {
+    "events": 9,
+    "wav": 9
+  },
+  "lt": {
+    "events": 1,
+    "wav": 0
+  },
+  "ltg": {
+    "events": 0,
+    "wav": 1
+  },
+  "lv": {
+    "events": 3,
+    "wav": 1
+  },
+  "mi": {
+    "events": 3,
+    "wav": 2
+  },
+  "mk": {
+    "events": 2,
+    "wav": 2
+  },
+  "ml": {
+    "events": 2,
+    "wav": 0
+  },
+  "mn": {
+    "events": 37,
+    "wav": 37
+  },
+  "mr": {
+    "events": 4,
+    "wav": 1
+  },
+  "ms": {
+    "events": 3,
+    "wav": 3
+  },
+  "mt": {
+    "events": 2,
+    "wav": 2
+  },
+  "mto": {
+    "events": 6,
+    "wav": 4
+  },
+  "my": {
+    "events": 15,
+    "wav": 12
+  },
+  "nb": {
+    "events": 1,
+    "wav": 0
+  },
+  "nci": {
+    "events": 3,
+    "wav": 4
+  },
+  "ne": {
+    "events": 5,
+    "wav": 2
+  },
+  "nl": {
+    "events": 0,
+    "wav": 0
+  },
+  "nog": {
+    "events": 7,
+    "wav": 4
+  },
+  "om": {
+    "events": 1,
+    "wav": 0
+  },
+  "or": {
+    "events": 1,
+    "wav": 0
+  },
+  "pa": {
+    "events": 5,
+    "wav": 2
+  },
+  "pap": {
+    "events": 2,
+    "wav": 1
+  },
+  "piqd": {
+    "events": 5,
+    "wav": 3
+  },
+  "pl": {
+    "events": 0,
+    "wav": 0
+  },
+  "ps": {
+    "events": 4,
+    "wav": 1
+  },
+  "ps-x-northwest": {
+    "events": 7,
+    "wav": 4
+  },
+  "ps-x-southeast": {
+    "events": 8,
+    "wav": 5
+  },
+  "ps-x-yusufzai": {
+    "events": 7,
+    "wav": 4
+  },
+  "pt": {
+    "events": 0,
+    "wav": 0
+  },
+  "pt-br": {
+    "events": 0,
+    "wav": 0
+  },
+  "py": {
+    "events": 3,
+    "wav": 1
+  },
+  "qdb": {
+    "events": 7,
+    "wav": 5
+  },
+  "qu": {
+    "events": 3,
+    "wav": 2
+  },
+  "quc": {
+    "events": 6,
+    "wav": 3
+  },
+  "qya": {
+    "events": 6,
+    "wav": 5
+  },
+  "ro": {
+    "events": 0,
+    "wav": 0
+  },
+  "ru": {
+    "events": 0,
+    "wav": 0
+  },
+  "ru-cl": {
+    "events": 2,
+    "wav": 3
+  },
+  "ru-lv": {
+    "events": 4,
+    "wav": 5
+  },
+  "rup": {
+    "events": 0,
+    "wav": 0
+  },
+  "sd": {
+    "events": 1,
+    "wav": 0
+  },
+  "shn": {
+    "events": 8,
+    "wav": 1
+  },
+  "si": {
+    "events": 2,
+    "wav": 1
+  },
+  "sjn": {
+    "events": 14,
+    "wav": 13
+  },
+  "sk": {
+    "events": 0,
+    "wav": 0
+  },
+  "sl": {
+    "events": 3,
+    "wav": 3
+  },
+  "smj": {
+    "events": 0,
+    "wav": 0
+  },
+  "sq": {
+    "events": 0,
+    "wav": 0
+  },
+  "sr": {
+    "events": 2,
+    "wav": 2
+  },
+  "sv": {
+    "events": 0,
+    "wav": 0
+  },
+  "sw": {
+    "events": 1,
+    "wav": 1
+  },
+  "ta": {
+    "events": 2,
+    "wav": 1
+  },
+  "te": {
+    "events": 2,
+    "wav": 0
+  },
+  "th": {
+    "events": 21,
+    "wav": 21
+  },
+  "ti": {
+    "events": 6,
+    "wav": 3
+  },
+  "tk": {
+    "events": 3,
+    "wav": 2
+  },
+  "tn": {
+    "events": 3,
+    "wav": 3
+  },
+  "tr": {
+    "events": 0,
+    "wav": 0
+  },
+  "tt": {
+    "events": 1,
+    "wav": 1
+  },
+  "ug": {
+    "events": 5,
+    "wav": 4
+  },
+  "uk": {
+    "events": 2,
+    "wav": 1
+  },
+  "ur": {
+    "events": 1,
+    "wav": 0
+  },
+  "uz": {
+    "events": 2,
+    "wav": 1
+  },
+  "vi": {
+    "events": 5,
+    "wav": 3
+  },
+  "vi-vn-x-central": {
+    "events": 39,
+    "wav": 39
+  },
+  "vi-vn-x-south": {
+    "events": 39,
+    "wav": 39
+  },
+  "xex": {
+    "events": 9,
+    "wav": 7
+  },
+  "yue": {
+    "events": 6,
+    "wav": 5
+  },
+  "yue-latn-jyutping": {
+    "events": 4,
+    "wav": 4
+  }
+}

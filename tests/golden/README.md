@@ -25,6 +25,32 @@ When a change fixes rows, the script prints `LOWER THE CEILING` for that languag
 
 and commit the new `ceilings.json`. Ceilings may only go down. Raising one needs a stated reason in the commit.
 
+## WAV and event ratchet
+
+`check.py` covers only `--ipa` and `-x`. `wav_events.py` covers the audio and the synthesis events on a sample of the same corpora.
+
+Sampling rule: for each of the 151 corpora, row `i*len//40` for `i` in 0..40, or every row when the corpus has 40 or fewer. The rule is deterministic, so a corpus edit moves the sample and needs a recapture (the check refuses to run on a stale baseline). 6040 rows in all.
+
+`wav/<lang>.tsv` holds per row: text, md5 (first 16 hex digits) of the WAV file C `espeak-ng -w -v <lang>` writes, md5 of the event transcript, and the C sample total. The transcript is `probe.c evflat` output for options 0, flags `0x1000` (the CLI's end pause): one `ev <type> <pos> <len> <apos> <sample> <value>` line per event, then `samples=<n>`. The Rust side runs `espeak-ng-rs -w` for the WAV and the ignored test `tests/golden_events.rs` for the events, in the same format. `wav_ceilings.json` holds per language the number of rows whose WAV (`wav`) and events (`events`) differ from C. Both only go down.
+
+Breath voices: C seeds the `breath` noise from `time(NULL)` (`speech.c`) and the C CLI has no fixed-seed option, so the WAV bytes of a voice file with a `breath` line change on every run. For those voices (`mn` among the corpora) the WAV column is the file length (`len<bytes>`) instead of the md5; events and sample totals are exact. Two captures give identical files.
+
+Check (about 1 minute on 8 cores, 3 to 4 minutes on a CI runner):
+
+    cargo build --release
+    python3 -I tests/golden/wav_events.py
+
+Options: `--binary`, `--data`, `--events-bin` (prebuilt `golden_events` executable; cargo builds it otherwise), `--langs a,b`, `--show N` (print N differing rows per language). It exits 1 when a language exceeds a ceiling, or has none. The logic is tested by `python3 -I tests/golden/test_wav_events.py`, which also checks that every baseline holds exactly the sampled rows.
+
+Capture the baseline from C `f0fb11a8` (build from `git archive f0fb11a8`, not a stale checkout; static build with USE_MBROLA, LIBSONIC, LIBPCAUDIO and ASYNC off). Link the probe against the C libraries:
+
+    gcc -O1 -I <c>/src/include -o probec capi/tests/c/probe.c <b>/src/libespeak-ng/libespeak-ng.a <b>/src/speechPlayer/libspeechPlayer.a <b>/src/ucd-tools/libucd.a -lstdc++ -lm -lpthread
+    python3 -I tests/golden/wav_events.py --capture --c-bin <b>/src/espeak-ng --c-probe ./probec --c-data <b> [--langs a,b]
+
+`<c>` is the C source tree and `<b>` its CMake build directory (`<b>/espeak-ng-data` is the data). Then set the ceilings to the true counts with `python3 -I tests/golden/wav_events.py --write-ceilings` (only for the captured languages; other entries stay).
+
+Lower a ceiling: when the check prints `LOWER THE CEILING`, run `--write-ceilings` and commit `wav_ceilings.json`. Raising one needs a stated reason in the commit.
+
 ## Measured on dengjen.3 (refreshed bundled data)
 
 | lang | dengjen.2 | ceiling |
