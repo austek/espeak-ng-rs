@@ -8952,6 +8952,14 @@ fn merge_digit_follow(tokens: &mut Vec<Token>, dict: &Dictionary) {
     *tokens = out;
 }
 
+/// Whether the token before `at` is the digit string after a `:`.  C leaves the unblanked
+/// dot right behind it, so `apply_time_reading` reads the string as `30.` and the colon
+/// rule sees no word break after the digits.
+pub(crate) fn follows_colon_digits(tokens: &[Token], at: usize) -> bool {
+    matches!(tokens.get(at.wrapping_sub(1)), Some(Token::Number(_)))
+        && matches!(tokens.get(at.wrapping_sub(2)), Some(Token::Punctuation(':')))
+}
+
 /// Downgrade a clause-ending period that is not followed by a capitalised
 /// word to a plain word break, and a comma between two numbers to a space.
 fn suppress_abbreviation_periods(tokens: &mut Vec<Token>) {
@@ -8969,7 +8977,7 @@ fn suppress_abbreviation_periods(tokens: &mut Vec<Token>) {
                 _ => true,
             };
             if !ends_sentence {
-                tokens[i] = Token::Space;
+                tokens[i] = if follows_colon_digits(tokens, i) { Token::Punctuation(' ') } else { Token::Space };
             }
         }
         if matches!(tokens[i], Token::ClauseBoundary(ssml_driver::VOICE_CLAUSE_END)) {
@@ -9008,6 +9016,7 @@ fn word_after_colon(tokens: &[Token], at: usize, digits: &str, clause_text: bool
         (Some(Token::Punctuation('.')), Some(Token::Number(n))) => format!("{digits}.{}", n.surface()),
         // A dot that does not end the clause stays on the number, so no blank follows the digits.
         (Some(Token::Punctuation('.')), _) => format!("{digits}."),
+        (Some(Token::Punctuation(' ')), _) => format!("{digits}."),
         _ => digits.to_string(),
     }
 }
@@ -9051,13 +9060,14 @@ fn apply_time_reading(tokens: &mut Vec<Token>, clause_text: bool) {
             let colons = colon_run_end(tokens, i + 1);
             if let Some(minute) = colons.and_then(|e| two_digit(tokens.get(e))) {
                 let minute_at = colons.unwrap_or(i + 1);
-                let h_norm = if h.len() <= 2 { normalized_hour(&h) } else { h.clone() };
+                let after_minute = word_after_colon(tokens, minute_at, &minute, clause_text);
+                let h_norm = if h.len() <= 2 && after_minute == minute { normalized_hour(&h) } else { h.clone() };
                 out.push(Token::Number(NumberToken::Cardinal(h_norm)));
                 out.push(Token::Space);
-                out.extend(colon_word(&h, &word_after_colon(tokens, minute_at, &minute, clause_text)));
+                out.extend(colon_word(&h, &after_minute));
                 let seconds_follow = colon_run_end(tokens, minute_at + 1)
-                    .and_then(|e| two_digit(tokens.get(e)))
-                    .is_some();
+                    .and_then(|e| two_digit(tokens.get(e)).map(|sec| word_after_colon(tokens, e, &sec, clause_text) == sec))
+                    .unwrap_or(false);
                 let minute_spoken = if seconds_follow { normalized_hour(&minute) } else { minute.clone() };
                 out.push(Token::Number(NumberToken::Cardinal(minute_spoken)));
                 let mut j = minute_at + 1;

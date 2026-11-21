@@ -110,6 +110,7 @@ jobs:
           --test any_alnum_voice_clause
           --test any_alnum_switch_clause
           --test dot_clause_end
+          --test time_colon_reading
           --test ssml_say_as_digit_groups
           --test ssml_say_as_key_names
           --test ssml_emphasis_multiword_entries

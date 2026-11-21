@@ -103,9 +103,11 @@ pub(crate) const VOICE_CLAUSE_END: char = '\u{E003}';
 fn single_clause(mut tokens: Vec<Token>) -> Vec<Token> {
     let last = tokens.iter().rposition(|t| !matches!(t, Token::Space));
     let closing = last.filter(|&i| matches!(tokens[i], Token::ClauseBoundary(_)));
+    let kept_dots: Vec<bool> = (0..tokens.len()).map(|i| super::follows_colon_digits(&tokens, i)).collect();
     for (i, t) in tokens.iter_mut().enumerate() {
         match *t {
             Token::ClauseBoundary(_) if Some(i) == closing => {}
+            Token::ClauseBoundary('.') if kept_dots[i] => *t = Token::Punctuation(' '),
             Token::ClauseBoundary('.') => *t = Token::Space,
             Token::ClauseBoundary(c) => *t = Token::Punctuation(c),
             _ => {}
