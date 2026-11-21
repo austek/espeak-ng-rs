@@ -1,11 +1,11 @@
 {
   "ab": {
     "events": 8,
-    "wav": 11
+    "wav": 8
   },
   "af": {
-    "events": 3,
-    "wav": 2
+    "events": 2,
+    "wav": 1
   },
   "am": {
     "events": 1,
@@ -89,7 +89,7 @@
   },
   "cv": {
     "events": 16,
-    "wav": 15
+    "wav": 14
   },
   "cy": {
     "events": 0,
@@ -237,11 +237,11 @@
   },
   "ht": {
     "events": 1,
-    "wav": 4
+    "wav": 1
   },
   "hu": {
-    "events": 4,
-    "wav": 4
+    "events": 0,
+    "wav": 0
   },
   "hy": {
     "events": 1,
@@ -285,11 +285,11 @@
   },
   "kaa": {
     "events": 3,
-    "wav": 6
+    "wav": 3
   },
   "kk": {
-    "events": 1,
-    "wav": 1
+    "events": 0,
+    "wav": 0
   },
   "kl": {
     "events": 0,
@@ -301,7 +301,7 @@
   },
   "ko": {
     "events": 1,
-    "wav": 1
+    "wav": 0
   },
   "kok": {
     "events": 5,
@@ -313,7 +313,7 @@
   },
   "ky": {
     "events": 3,
-    "wav": 3
+    "wav": 1
   },
   "la": {
     "events": 2,
@@ -385,7 +385,7 @@
   },
   "nci": {
     "events": 3,
-    "wav": 4
+    "wav": 3
   },
   "ne": {
     "events": 5,
@@ -477,11 +477,11 @@
   },
   "ru-cl": {
     "events": 2,
-    "wav": 3
+    "wav": 2
   },
   "ru-lv": {
     "events": 4,
-    "wav": 5
+    "wav": 4
   },
   "rup": {
     "events": 0,
@@ -501,7 +501,7 @@
   },
   "sjn": {
     "events": 14,
-    "wav": 13
+    "wav": 12
   },
   "sk": {
     "events": 0,
@@ -541,7 +541,7 @@
   },
   "th": {
     "events": 21,
-    "wav": 21
+    "wav": 20
   },
   "ti": {
     "events": 6,
