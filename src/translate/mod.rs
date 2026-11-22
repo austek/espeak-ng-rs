@@ -1917,13 +1917,22 @@ fn read_embedded_command(chars: &mut CountedChars<'_>) -> Option<EmbeddedCmd> {
     *chars = ahead;
     Some(EmbeddedCmd {
         letter,
-        value: digits.parse().unwrap_or(-1),
+        value: atoi(&digits),
         relative,
     })
 }
 
+/// C's `atoi` on digits: `strtol` saturates at `i64::MAX`, then the cast keeps the low 32 bits.
+/// No digits give `-1`, which a command reads as "use the default".
+fn atoi(digits: &str) -> i32 {
+    if digits.is_empty() {
+        return -1;
+    }
+    digits.parse::<i64>().unwrap_or(i64::MAX) as i32
+}
+
 fn is_bare_voice_change(cmd: EmbeddedCmd) -> bool {
-    cmd.letter == 'V' && cmd.value < 0 && cmd.relative == 0
+    cmd.letter == 'V' && cmd.value == -1 && cmd.relative == 0
 }
 
 /// C's `ReadClause` returns `CLAUSE_VOICE` at `\x01V`: the clause ends there and the voice name
@@ -1935,14 +1944,47 @@ fn end_clause_at_voice_change(chars: &mut CountedChars<'_>, tokens: &mut Vec<Tok
     chars.end_clause();
 }
 
-/// `any_alnum` after the command `letter`.  C's `ReadClause` ends the clause at a voice change
-/// and reads a punctuation change without testing its characters; it tests the rest as text.
-fn embedded_keeps_any_alnum(cmd: EmbeddedCmd, before: bool) -> bool {
-    match cmd.letter {
-        'V' if is_bare_voice_change(cmd) => false,
-        'B' if cmd.value < 0 && cmd.relative == 0 => before,
-        _ => true,
+/// C's `EmbeddedCommand` gives a command without digits its `embedded_default` and drops the
+/// sign.
+fn with_default_value(cmd: EmbeddedCmd) -> EmbeddedCmd {
+    use crate::synthesize::cgen::{embed_code, wavegen::EMBEDDED_DEFAULT};
+    match embed_code(cmd.letter) {
+        Some(code) if cmd.value == -1 => EmbeddedCmd { value: EMBEDDED_DEFAULT[code], relative: 0, ..cmd },
+        _ => cmd,
     }
+}
+
+fn is_punctuation_command(cmd: EmbeddedCmd) -> bool {
+    cmd.letter == 'B' && cmd.value == -1 && cmd.relative == 0
+}
+
+/// Blanks C's `ReadClause` leaves for `\x01B`, before one per listed punctuation character.
+pub(crate) const PUNCTUATION_COMMAND_BLANKS: usize = 3;
+
+/// C's `N_PUNCTLIST`: a punctuation list holds at most one character fewer.
+const PUNCTUATION_LIST_MAX: usize = 59;
+
+/// Consumes what C's `ReadClause` reads after `\x01B`: one argument character, then for a list
+/// every character up to a blank, that blank included.  Returns the listed characters, each
+/// of which C blanks, and the characters consumed.  The text ending inside the list loses its
+/// last character unlisted.
+pub(crate) fn punctuation_argument(rest: &mut std::iter::Peekable<std::str::Chars<'_>>) -> (usize, usize) {
+    let Some(first) = rest.next() else { return (0, 0) };
+    if matches!(first, '0' | '1') {
+        return (0, 1);
+    }
+    let (mut current, mut listed) = (first, 0);
+    while rest.peek().is_some() && !current.is_whitespace() && listed < PUNCTUATION_LIST_MAX {
+        listed += 1;
+        current = rest.next().unwrap_or(' ');
+    }
+    (listed, listed + 1)
+}
+
+/// `any_alnum` after the command `letter`.  C's `ReadClause` ends the clause at a voice change
+/// and tests the other commands as text.
+fn embedded_keeps_any_alnum(cmd: EmbeddedCmd) -> bool {
+    !is_bare_voice_change(cmd)
 }
 
 /// Parse and strip inline embedded commands (`\x01…`) from `text`, returning the
@@ -2128,13 +2170,18 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
         let c = if c == CTRL_EMBEDDED {
             let was_alnum = chars.any_alnum();
             match read_embedded_command(&mut chars) {
+                Some(cmd) if is_punctuation_command(cmd) => {
+                    blanks = PUNCTUATION_COMMAND_BLANKS + punctuation_argument(&mut chars.chars).0;
+                    chars.any_alnum = was_alnum;
+                    ' '
+                }
                 Some(cmd) => {
-                    chars.any_alnum = embedded_keeps_any_alnum(cmd, was_alnum);
+                    chars.any_alnum = embedded_keeps_any_alnum(cmd);
                     if is_bare_voice_change(cmd) {
                         end_clause_at_voice_change(&mut chars, &mut tokens);
                         before = None;
                     } else {
-                        tokens.push(Token::Embedded(cmd));
+                        tokens.push(Token::Embedded(with_default_value(cmd)));
                     }
                     continue;
                 }

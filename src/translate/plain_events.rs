@@ -7,7 +7,7 @@ use super::readclause::{ClauseReader, NoTags, ReaderOptions, SourceClause};
 use super::c_words::{apply_cut_words, CutWord};
 use super::ssml_driver::ClauseLang;
 use super::{
-    split_after_sentences, PhonemeCode, SourceIx, TokenizeMode, Translator, SOURCE_IX_MASK, TRANSLATE_PIECE_BYTES,
+    punctuation_argument, split_after_sentences, CTRL_EMBEDDED, PUNCTUATION_COMMAND_BLANKS, PhonemeCode, SourceIx, TokenizeMode, Translator, SOURCE_IX_MASK, TRANSLATE_PIECE_BYTES,
 };
 use crate::error::Result;
 use crate::phoneme::PHON_END_WORD;
@@ -19,9 +19,9 @@ impl Translator {
         let mut codes = Vec::new();
         let mut base = 0;
         for piece in split_after_sentences(text, TRANSLATE_PIECE_BYTES) {
-            let charix = identity_charix(piece, base);
+            let (source, charix) = plain_source(piece, base);
             base += piece.chars().count();
-            codes.extend(self.translate_codes_in_mode(piece, true, None, TokenizeMode::Plain, None, Some(&charix))?);
+            codes.extend(self.translate_codes_in_mode(&source, true, None, TokenizeMode::Plain, None, Some(&charix))?);
         }
         Ok(plain_clauses(&codes, text, &self.plain_reads(text)))
     }
@@ -49,15 +49,35 @@ struct ClauseRead {
     cut: Vec<CutWord>,
 }
 
-/// The reader's `charix` for text it read without changing: the 1-based character index of
-/// each byte (`-1` inside a multibyte character), `0` on blanks.
-fn identity_charix(piece: &str, base: usize) -> Vec<i32> {
-    let mut out = Vec::with_capacity(piece.len());
-    for (n, c) in piece.chars().enumerate() {
-        out.push(if c.is_whitespace() { 0 } else { (base + n + 1) as i32 });
-        out.extend(std::iter::repeat_n(-1, c.len_utf8() - 1));
+/// The text the reader hands to `TranslateClause` and its `charix`: the 1-based character index
+/// of each byte (`-1` inside a multibyte character), `0` on blanks.  `\x01B` and its argument
+/// become blanks, and the blank that ends a punctuation list is dropped.
+fn plain_source(piece: &str, base: usize) -> (String, Vec<i32>) {
+    let mut source = (String::with_capacity(piece.len()), Vec::with_capacity(piece.len()));
+    let mut chars = piece.chars().peekable();
+    let mut read = 0;
+    while let Some(c) = chars.next() {
+        read += 1;
+        if c == CTRL_EMBEDDED && chars.next_if_eq(&'B').is_some() {
+            let (listed, consumed) = punctuation_argument(&mut chars);
+            read += 1 + consumed;
+            push_blanks(&mut source, PUNCTUATION_COMMAND_BLANKS + listed);
+        } else {
+            push_char(&mut source, c, (base + read) as i32);
+        }
     }
-    out
+    source
+}
+
+fn push_blanks((text, charix): &mut (String, Vec<i32>), count: usize) {
+    text.extend(std::iter::repeat_n(' ', count));
+    charix.extend(std::iter::repeat_n(0, count));
+}
+
+fn push_char((text, charix): &mut (String, Vec<i32>), c: char, index: i32) {
+    text.push(c);
+    charix.push(if c.is_whitespace() { 0 } else { index });
+    charix.extend(std::iter::repeat_n(-1, c.len_utf8() - 1));
 }
 
 /// `count_sentences`, `count_words` and `new_sentence` between clauses.

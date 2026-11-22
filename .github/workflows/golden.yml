@@ -109,6 +109,7 @@ jobs:
           --test any_alnum_clause_edges
           --test any_alnum_voice_clause
           --test any_alnum_switch_clause
+          --test embedded_command_argument
           --test dot_clause_end
           --test time_colon_reading
           --test ssml_say_as_digit_groups
