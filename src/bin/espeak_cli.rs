@@ -1,5 +1,6 @@
 // Shared CLI implementation for `espeak-ng` and `espeak-ng-rs` binaries.
 
+use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::io::{Read, Write as _};
 use std::path::{Path, PathBuf};
@@ -206,11 +207,21 @@ fn run() -> std::io::Result<()> {
     let texts = gather_texts(&cli)?;
     let text = texts.concat();
 
-    if cli.trace_rules || cli.pho || cli.ipa || cli.x_mnem {
-        return texts.iter().try_for_each(|t| text_output(&cli, t));
+    let mbrola_pho = cli.pho && espeak_ng::voices::load_mbrola_voice(&data, &cli.voice).is_some();
+    let spoken = speaks_to_wav(&cli, mbrola_pho);
+    // C splits `-w stdout` into the file `stdout_01`: only the bare name is the stream.
+    let split = cli
+        .split_minutes
+        .filter(|&m| spoken && m > 0)
+        .map(|m| (m, cli.wave_out.clone().unwrap_or_else(|| PathBuf::from("stdout"))));
+    if text_outputs && (!spoken || split.is_some()) {
+        texts.iter().try_for_each(|t| text_output(&cli, t, !spoken))?;
+        if !spoken {
+            return Ok(());
+        }
     }
 
-    if cli.quiet {
+    if cli.quiet || (spoken && texts.is_empty()) {
         return Ok(());
     }
 
@@ -262,42 +273,55 @@ fn run() -> std::io::Result<()> {
     }
 
     // `--split=<minutes>`: a new WAV file at the first sentence boundary past
-    // the limit.  Only for `-w` — a split stream makes no sense on stdout.
-    if let (Some(minutes), Some(path)) =
-        (cli.split_minutes.filter(|&m| m > 0), cli.wave_out.clone())
-    {
-        if !cli.stdout_wav {
-            let mut chunks: Vec<Vec<i16>> = Vec::new();
-            let mut events = Vec::new();
-            let rate = engine
-                .synth_streaming_with_events(&text, |chunk, _final, ev| {
-                    chunks.push(chunk.to_vec());
-                    events.extend_from_slice(ev);
-                    false
-                })
-                .map_err(|e| std::io::Error::other(format!("{e}")))?;
-            return write_split_wavs(&path, &chunks, rate, &events, minutes);
-        }
+    // the limit.
+    if let Some((minutes, path)) = split {
+        let mut chunks: Vec<Vec<i16>> = Vec::new();
+        let mut events = Vec::new();
+        let rate = engine
+            .synth_streaming_with_events(&text, |chunk, _final, ev| {
+                chunks.push(chunk.to_vec());
+                events.extend_from_slice(ev);
+                false
+            })
+            .map_err(|e| std::io::Error::other(format!("{e}")))?;
+        return write_split_wavs(&path, &chunks, rate, &events, minutes);
     }
 
+    let announce = |t: &str| announcement(&cli, t);
     if cli.stdout_wav {
-        return stream_wav(&engine, &text, wav_stdout_target());
+        let stream = WavStream::new(&cli, engine.sample_rate(), wav_stdout_target());
+        return stream_wav(&engine, &texts, stream, &announce);
     }
     if let Some(ref p) = cli.wave_out {
         return match std::fs::File::create(p) {
             Ok(file) => {
                 let file = std::io::BufWriter::with_capacity(1 << 16, file);
-                stream_wav(&engine, &text, Box::new(file) as Box<dyn WavOut>)
+                let stream = WavStream::new(&cli, engine.sample_rate(), Box::new(file) as Box<dyn WavOut>);
+                stream_wav(&engine, &texts, stream, &announce)
             }
-            Err(_) => {
-                eprintln!("Can't write to: '{}'", p.display());
-                Ok(())
-            }
+            Err(_) => report_unwritable(&cli, &texts, p, &announce),
         };
     }
 
     let _ = engine.synth(&text).map_err(std::io::Error::other)?;
     fail_with(ENS_AUDIO_ERROR)
+}
+
+/// C opens the `-w` file in the first audio callback, after that clause's phoneme
+/// line: every `espeak_Synth` prints its first line, reports the target and stops.
+fn report_unwritable(
+    cli: &Cli,
+    texts: &[String],
+    path: &Path,
+    announce: &dyn Fn(&str) -> std::io::Result<Announcement>,
+) -> std::io::Result<()> {
+    for text in texts {
+        let Announcement { trace, lines } = announce(text)?;
+        let first = lines.first().map_or_else(|| trace.clone(), |l| format!("{trace}{l}\n"));
+        emit(cli, &first)?;
+        eprintln!("Can't write to: '{}'", path.display());
+    }
+    Ok(())
 }
 
 /// C reports an unwritable `-w` target and still exits 0.
@@ -382,18 +406,39 @@ fn plays_audio(cli: &Cli) -> bool {
     !cli.quiet && cli.wave_out.is_none() && !cli.stdout_wav
 }
 
-/// One `espeak_Synth` call's phoneme output; `-q` silences `--pho`.
-fn text_output(cli: &Cli, text: &str) -> std::io::Result<()> {
+/// `-x`/`--ipa`/`-X`/`--pho` print phonemes and, given `-w`/`--stdout`, still
+/// write the WAV; `-q` suppresses the WAV. An MBROLA voice's `--pho` script
+/// replaces the audio.
+fn speaks_to_wav(cli: &Cli, mbrola_pho: bool) -> bool {
+    !cli.quiet && !mbrola_pho && (cli.wave_out.is_some() || cli.stdout_wav)
+}
+
+/// One `espeak_Synth` call's phoneme output. `-q` silences `--pho`, and so does
+/// speaking to a WAV, where C prints the script only for an MBROLA voice.
+fn text_output(cli: &Cli, text: &str, pho_script: bool) -> std::io::Result<()> {
     if cli.trace_rules {
         trace_output(cli, text, cli.x_mnem || cli.ipa)?;
     }
     if cli.x_mnem || cli.ipa {
         phoneme_output(cli, text)?;
     }
-    if cli.pho && !cli.quiet {
+    if cli.pho && !cli.quiet && pho_script {
         pho_output(cli, text)?;
     }
     Ok(())
+}
+
+/// What C prints for one synthesis input while it writes the WAV: the `-X`
+/// trace, then one phoneme line per clause.
+struct Announcement {
+    trace: String,
+    lines: Vec<String>,
+}
+
+fn announcement(cli: &Cli, text: &str) -> std::io::Result<Announcement> {
+    let trace = if cli.trace_rules { trace_text(cli, text, true)? } else { String::new() };
+    let lines = if cli.trace_rules || cli.x_mnem || cli.ipa { phoneme_lines(cli, text)? } else { Vec::new() };
+    Ok(Announcement { trace, lines })
 }
 
 /// `fopen(--phonout, "w")` at start-up, so an empty result still leaves a file.
@@ -699,6 +744,10 @@ fn decode_phonemes(codes: &[u8], phdata: &PhonemeData) -> String {
 /// rule: `<score>\t<rule> [<phonemes>]`, with a blank line between letter
 /// positions.  The rule is rendered back to source form by `DecodeRule`.
 fn trace_output(cli: &Cli, text: &str, phonemes_follow: bool) -> std::io::Result<()> {
+    emit(cli, &trace_text(cli, text, phonemes_follow)?)
+}
+
+fn trace_text(cli: &Cli, text: &str, phonemes_follow: bool) -> std::io::Result<String> {
     use espeak_ng::dictionary::rules::{trace_begin, trace_take, TraceEvent};
 
     let ioerr = |e: espeak_ng::Error| std::io::Error::other(format!("{e}"));
@@ -760,7 +809,7 @@ fn trace_output(cli: &Cli, text: &str, phonemes_follow: bool) -> std::io::Result
         out.push('\n');
     }
 
-    emit(cli, &out)
+    Ok(out)
 }
 
 /// Write phoneme output to `--phonout` (created empty at start-up) or stdout.
@@ -845,6 +894,12 @@ fn apply_voice_apostrophe(cli: &Cli, translator: &mut Translator) {
 }
 
 fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
+    let lines = phoneme_lines(cli, text)?;
+    emit(cli, &lines.iter().map(|l| format!("{l}\n")).collect::<String>())
+}
+
+/// The phoneme text of one synthesis input, one entry per clause line.
+fn phoneme_lines(cli: &Cli, text: &str) -> std::io::Result<Vec<String>> {
     let data_dir = resolved_data_dir(cli.path_override.as_deref());
     let mut translator = Translator::new(&cli.voice, Some(&data_dir)).map_err(|e| {
         std::io::Error::other(format!("{e}"))
@@ -865,7 +920,7 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
     translator.options.ipa_separator = cli.sep;
 
     if cli.markup {
-        return emit(cli, &markup_phoneme_lines(cli, &translator, text)?);
+        return markup_phoneme_lines(cli, &translator, text);
     }
     let line = if cli.ipa {
         translator.text_to_ipa_clauses(text).map_err(|e| std::io::Error::other(format!("{e}")))?
@@ -888,11 +943,11 @@ fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
         format_x(&codes, &phdata, cli.sep, cli.tie, &data_dir, translator.options.lang.as_str())
     };
 
-    emit(cli, &format!("{line}\n"))
+    Ok(line.split('\n').map(str::to_string).collect())
 }
 
 /// C `SpeakNextClause` prints `"%s\n"` for every clause the reader returns.
-fn markup_phoneme_lines(cli: &Cli, translator: &Translator, text: &str) -> std::io::Result<String> {
+fn markup_phoneme_lines(cli: &Cli, translator: &Translator, text: &str) -> std::io::Result<Vec<String>> {
     let ioerr = |e: espeak_ng::Error| std::io::Error::other(format!("{e}"));
     let settings = espeak_ng::translate::ssml_driver::SsmlSettings {
         rate_wpm: cli.rate.map_or(175, |r| r as i32),
@@ -904,7 +959,7 @@ fn markup_phoneme_lines(cli: &Cli, translator: &Translator, text: &str) -> std::
     let load = |path: &str| table.borrow_mut().load_file(path, &base).ok().map(|ix| ix as i32);
     let doc = translator.translate_ssml_with_sounds(text, settings, &load).map_err(ioerr)?;
     let lines = if cli.ipa { doc.ipa_lines(false) } else { doc.mnemonic_lines(cli.sep, cli.tie) }.map_err(ioerr)?;
-    Ok(lines.iter().map(|l| format!("{l}\n")).collect())
+    Ok(lines)
 }
 
 fn format_x(
@@ -1186,29 +1241,87 @@ fn wav_stdout_target() -> Box<dyn WavOut> {
     Box::new(std::io::BufWriter::with_capacity(1 << 16, std::io::stdout()))
 }
 
-/// Writes the utterance as a WAV clause by clause, so memory stays flat however
-/// long the text is. The header is a placeholder until the length is known.
-fn stream_wav(engine: &EspeakNg, text: &str, mut out: Box<dyn WavOut>) -> std::io::Result<()> {
-    let rate = engine.sample_rate();
-    let mut written: u64 = 0;
+/// One WAV plus the phoneme text printed while it is written. C's phoneme trace
+/// and `SynthCallback` share `stdout` for `-w stdout`, so the text lands inside
+/// the byte stream, and the header opens on the first audio callback.
+struct WavStream<'a> {
+    cli: &'a Cli,
+    out: Box<dyn WavOut>,
+    rate: u32,
+    written: u64,
+    started: bool,
+}
+
+impl<'a> WavStream<'a> {
+    fn new(cli: &'a Cli, rate: u32, out: Box<dyn WavOut>) -> Self {
+        Self { cli, out, rate, written: 0, started: false }
+    }
+
+    fn print(&mut self, text: &str) -> std::io::Result<()> {
+        match (self.cli.stdout_wav, &self.cli.phonout) {
+            (true, None) => self.out.write_all(text.as_bytes()),
+            _ => emit(self.cli, text),
+        }
+    }
+
+    fn open(&mut self) -> std::io::Result<()> {
+        if !self.started {
+            self.out.write_all(&wav_header(self.rate, None))?;
+            self.started = true;
+        }
+        Ok(())
+    }
+
+    fn audio(&mut self, chunk: &[i16]) -> std::io::Result<()> {
+        self.open()?;
+        let bytes: Vec<u8> = chunk.iter().flat_map(|s| s.to_le_bytes()).collect();
+        self.written += bytes.len() as u64;
+        self.out.write_all(&bytes)
+    }
+
+    /// A clause's phoneme line comes out before its audio; the final chunk also
+    /// flushes any lines the synthesizer did not split into their own chunk.
+    fn clause(&mut self, due: &mut VecDeque<String>, chunk: &[i16], last: bool) -> std::io::Result<()> {
+        let n = if last { due.len() } else { due.len().min(1) };
+        due.drain(..n).try_for_each(|text| self.print(&text))?;
+        self.audio(chunk)
+    }
+
+    fn finish(mut self) -> std::io::Result<()> {
+        self.open()?;
+        self.out.flush()?;
+        self.out.patch_header(&wav_header(self.rate, Some(self.written)))?;
+        Ok(())
+    }
+}
+
+/// Writes the inputs as one WAV, one `espeak_Synth` per input and clause by
+/// clause, so audio memory stays flat. The header is a placeholder until the
+/// length is known.
+fn stream_wav(
+    engine: &EspeakNg,
+    texts: &[String],
+    mut stream: WavStream,
+    announce: &dyn Fn(&str) -> std::io::Result<Announcement>,
+) -> std::io::Result<()> {
+    let mut due: VecDeque<String> = VecDeque::new();
+    for text in texts {
+        let Announcement { trace, lines } = announce(text)?;
+        let mut trace = Some(trace);
+        due.extend(lines.into_iter().map(|l| format!("{}{l}\n", trace.take().unwrap_or_default())));
+    }
     let mut failure: Option<std::io::Error> = None;
-    out.write_all(&wav_header(rate, None))?;
-    let mut buf: Vec<u8> = Vec::new();
     engine
-        .synth_streaming(text, |chunk, _final| {
-            buf.clear();
-            buf.extend(chunk.iter().flat_map(|s| s.to_le_bytes()));
-            written += buf.len() as u64;
-            failure = out.write_all(&buf).err();
+        .synth_streaming_texts(texts, |chunk, last| {
+            failure = stream.clause(&mut due, chunk, last).err();
             failure.is_some()
         })
         .map_err(std::io::Error::other)?;
     if let Some(e) = failure {
         return Err(e);
     }
-    out.flush()?;
-    out.patch_header(&wav_header(rate, Some(written)))?;
-    Ok(())
+    due.into_iter().try_for_each(|text| stream.print(&text))?;
+    stream.finish()
 }
 
 fn parse_args(args: Vec<OsString>) -> Cli {

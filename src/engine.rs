@@ -827,6 +827,48 @@ impl EspeakNg {
         Ok(rate)
     }
 
+    /// Markup inputs spoken as one stream of clauses: each input is parsed on its
+    /// own, the synthesizer state runs on from one into the next.
+    fn stream_markup_texts<S, F>(&self, texts: &[S], mut callback: F) -> Result<()>
+    where
+        S: AsRef<str>,
+        F: FnMut(&[i16], bool) -> bool,
+    {
+        let translator = self.make_translator()?;
+        let mut phdata = self.load_phdata()?;
+        crate::translate::select_phoneme_table(&mut phdata, &self.data_dir, self.voice_spec.effective_lang())
+            .map_err(|_| Error::VoiceNotFound(self.voice_spec.effective_lang().to_string()))?;
+        let settings = crate::translate::ssml_driver::SsmlSettings {
+            rate_wpm: self.rate as i32,
+            break_mul: self.ssml_break as i32,
+            base_variant: self.voice_spec.variant.clone().unwrap_or_default(),
+        };
+        let table = std::cell::RefCell::new(self.soundicons.clone());
+        let base = self.soundicon_base_dir();
+        let load = |path: &str| table.borrow_mut().load_file(path, &base).ok().map(|ix| ix as i32);
+        let uri_hook = self.uri_callback.as_deref().map(|f| f as &crate::translate::readclause::ssml_tag::UriCallback);
+        let mut clauses = Vec::new();
+        let mut voices: std::collections::HashMap<String, VoiceParams> = std::collections::HashMap::new();
+        for text in texts {
+            let doc = translator.translate_ssml_with_hooks(text.as_ref(), settings.clone(), &load, uri_hook)?;
+            voices.extend(
+                doc.clauses
+                    .iter()
+                    .filter_map(|c| c.voice_after.as_deref())
+                    .filter_map(|id| self.voice_params_for_id(id).map(|p| (id.to_string(), p))),
+            );
+            clauses.extend(doc.clause_codes());
+        }
+        let icons: Vec<Vec<i16>> = (0..table.borrow().len()).map(|ix| table.borrow().samples(ix).to_vec()).collect();
+        let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
+        let (mut chunks, _) = synth.synthesize_clauses_chunked(&clauses, &phdata, &voices, &icons)?;
+        let last = chunks.pop().unwrap_or_default();
+        if !chunks.iter().any(|chunk| callback(chunk, false)) {
+            callback(&last, true);
+        }
+        Ok(())
+    }
+
     /// Synthesize markup clause by clause, as C `SpeakNextClause` does.
     fn synth_markup(&self, text: &str) -> Result<PcmBuffer> {
         self.synth_markup_raw(text).map(|(pcm, _)| pcm)
@@ -1141,6 +1183,68 @@ impl EspeakNg {
         let codes = translator.translate_to_codes(text)?;
         let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
         synth.synthesize_codes_streaming(&codes, &phdata, &mut callback)?;
+        Ok(rate)
+    }
+
+    /// [`synth_streaming`](Self::synth_streaming) for several inputs spoken as
+    /// one continuous stream, the way the `espeak-ng` command line calls
+    /// `espeak_Synth` once per stdin line: each input is translated on its own
+    /// (so it ends in its own clause) but the synthesizer carries its state from
+    /// one input into the next. Audio arrives one chunk per clause, and
+    /// `is_final` is set only on the last chunk; no inputs give one empty final
+    /// chunk. Only sound icons and the tempo/pitch post-pass fall back to
+    /// speaking each input from scratch, as one chunk each.
+    pub fn synth_streaming_texts<S, F>(&self, texts: &[S], mut callback: F) -> Result<u32>
+    where
+        S: AsRef<str>,
+        F: FnMut(&[i16], bool) -> bool,
+    {
+        let rate = self.sample_rate();
+        let post_fx = (self.post_tempo - 1.0).abs() > 1e-3 || (self.post_pitch - 1.0).abs() > 1e-3;
+        if self.markup && self.soundicons.is_empty() && !post_fx {
+            self.stream_markup_texts(texts, callback)?;
+            return Ok(rate);
+        }
+        if !self.soundicons.is_empty() || self.markup || post_fx {
+            let mut stopped = false;
+            for (ix, text) in texts.iter().enumerate() {
+                let last_text = ix + 1 == texts.len();
+                self.synth_streaming(text.as_ref(), |chunk, fin| {
+                    stopped = callback(chunk, fin && last_text);
+                    stopped
+                })?;
+                if stopped {
+                    break;
+                }
+            }
+            return Ok(rate);
+        }
+
+        let translator = self.make_translator()?;
+        let mut phdata = self.load_phdata()?;
+        crate::translate::select_phoneme_table(
+            &mut phdata,
+            &self.data_dir,
+            self.voice_spec.effective_lang(),
+        )
+        .map_err(|_| Error::VoiceNotFound(self.voice_spec.effective_lang().to_string()))?;
+
+        let mut clauses = Vec::new();
+        for text in texts {
+            clauses.extend(translator.translate_plain_clauses(text.as_ref())?);
+        }
+        let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
+        let mut stopped = false;
+        let (tail, _) = {
+            let mut sink = |chunk: &[i16], _final: bool| -> bool {
+                stopped |= callback(chunk, false);
+                stopped
+            };
+            synth.synthesize_clauses_streaming_with_events(&clauses, &phdata, &mut sink)?
+        };
+        if !stopped {
+            callback(&tail, true);
+        }
         Ok(rate)
     }
 
