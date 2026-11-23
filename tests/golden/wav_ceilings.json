@@ -112,7 +112,7 @@
     "wav": 0
   },
   "en-029": {
-    "events": 4,
+    "events": 3,
     "wav": 2
   },
   "en-gb": {
@@ -120,31 +120,31 @@
     "wav": 0
   },
   "en-gb-scotland": {
-    "events": 3,
+    "events": 2,
     "wav": 1
   },
   "en-gb-x-gbclan": {
-    "events": 5,
+    "events": 4,
     "wav": 3
   },
   "en-gb-x-gbcwmd": {
-    "events": 3,
+    "events": 2,
     "wav": 1
   },
   "en-gb-x-rp": {
-    "events": 3,
+    "events": 2,
     "wav": 1
   },
   "en-shaw": {
-    "events": 3,
+    "events": 2,
     "wav": 1
   },
   "en-us": {
-    "events": 3,
+    "events": 2,
     "wav": 1
   },
   "en-us-nyc": {
-    "events": 3,
+    "events": 2,
     "wav": 1
   },
   "eo": {
@@ -280,7 +280,7 @@
     "wav": 2
   },
   "ka": {
-    "events": 2,
+    "events": 1,
     "wav": 0
   },
   "kaa": {
@@ -340,7 +340,7 @@
     "wav": 1
   },
   "lv": {
-    "events": 3,
+    "events": 2,
     "wav": 1
   },
   "mi": {
@@ -568,7 +568,7 @@
     "wav": 4
   },
   "uk": {
-    "events": 2,
+    "events": 1,
     "wav": 1
   },
   "ur": {

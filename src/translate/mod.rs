@@ -9424,7 +9424,7 @@ pub(crate) fn is_bracket(c: char) -> bool {
 /// consulted here — C speaks those only when spelling or announcing
 /// punctuation, which is why `a ( b` is silent while `a − b` is not.
 fn dict_names_symbol(dict: &Dictionary, c: char, dict_condition: u32) -> bool {
-    dict_symbol_flags(dict, c, dict_condition, false).is_some()
+    dict_symbol_entry(dict, c, dict_condition, false).is_some()
 }
 
 /// Whether the dictionary has a `_<char>` name entry for the character.
@@ -9433,23 +9433,29 @@ fn has_underscore_name(dict: &Dictionary, c: char, dict_condition: u32) -> bool 
     lookup(dict, &format!("_{c}"), &ctx).is_some_and(|r| r.flags1.found())
 }
 
-/// The dictionary flags of a bare single-character entry, when it has one.
+/// The dictionary flags and raw phoneme string of a bare single-character entry, when it has one.
 /// A symbol entry is spoken at most three times in a row (C's `phonemes_repeat_count`),
 /// which is what keeps `~ ~ ~ ~ ~ ~` to three tildes; see `symbol_entry_flags`.
-fn dict_symbol_flags(dict: &Dictionary, c: char, dict_condition: u32, reversed_textmode: bool) -> Option<u32> {
+fn dict_symbol_entry(dict: &Dictionary, c: char, dict_condition: u32, reversed_textmode: bool) -> Option<(u32, Vec<u8>)> {
     // Clause punctuation goes to the clause path, not the dictionary: Hindi
     // `।`, Ethiopic `።` and CJK `。` all have list entries naming them, and C
     // speaks none of them (`a ❓ b` → "a b").
     if is_clause_punctuation(c) && c != '.' {
         return None;
     }
+    char_list_entry(dict, c, dict_condition, reversed_textmode)
+}
+
+/// [`dict_symbol_entry`] for any character, clause punctuation included: a stray mark that is
+/// spoken is a one-character word to C's `LookupDict2` like any other.
+fn char_list_entry(dict: &Dictionary, c: char, dict_condition: u32, reversed_textmode: bool) -> Option<(u32, Vec<u8>)> {
     // The entry may be behind a `?n` condition — Portuguese names `§` twice,
     // once per variety (`?1 §` / `?2 §`) — so the language's own conditions have
     // to be in the context or neither matches.
     let ctx = LookupCtx { lookup_symbol: true, dict_condition, ..Default::default() };
     lookup(dict, &c.to_string(), &ctx)
         .filter(|r| r.flags1.found() && !r.phonemes.is_empty())
-        .map(|r| symbol_entry_flags(c, r.flags1.0, reversed_textmode))
+        .map(|r| (symbol_entry_flags(c, r.flags1.0, reversed_textmode), r.phonemes))
 }
 
 /// The flags of a dictionary hit for the one-character word `c`: C's `LookupDict2` adds
@@ -9748,7 +9754,7 @@ struct Max3Run {
     count: u32,
 }
 
-/// C stores the last reading in `phonemes_repeat[20]`: a longer one never equals its copy.
+/// C stores the last raw entry in `phonemes_repeat[20]`: a longer one never equals its copy.
 const REPEAT_READING_MAX: usize = 19;
 
 impl Max3Run {
@@ -9757,19 +9763,20 @@ impl Max3Run {
         self.count = 0;
     }
 
-    /// `phonemes` as read for `symbol`, or nothing when it is the fourth repeat or later.  C
-    /// compares the readings, not the symbols, and keeps the last reading across a clear.
-    fn admit(&mut self, symbol: char, max3: bool, phonemes: Vec<u8>) -> Vec<u8> {
+    /// `phonemes` as spoken for `symbol`, or nothing when it is the fourth repeat or later.  C
+    /// compares the raw dictionary strings (`raw`), not the symbols or the stressed phonemes, and
+    /// keeps the last string across a clear.
+    fn admit(&mut self, symbol: char, max3: bool, raw: &[u8], phonemes: Vec<u8>) -> Vec<u8> {
         if !max3 {
             self.clear();
             return phonemes;
         }
         self.symbol = Some(symbol);
-        if phonemes.len() <= REPEAT_READING_MAX && phonemes == self.reading {
+        if raw.len() <= REPEAT_READING_MAX && raw == self.reading {
             self.count += 1;
             return if self.count > 3 { Vec::new() } else { phonemes };
         }
-        self.reading = phonemes.iter().take(REPEAT_READING_MAX).copied().collect();
+        self.reading = raw.iter().take(REPEAT_READING_MAX).copied().collect();
         self.count = 1;
         phonemes
     }
@@ -9819,7 +9826,7 @@ fn run_symbol_reading(
     let wr = word_to_phonemes_pos(&key, dict, phdata, stress_opts, options, by_list);
     let max3 = symbol_entry_flags(c, entry.flags1.0, options.reversed_textmode) & crate::dictionary::FLAG_MAX3 != 0;
     let phonemes = wr.phonemes.into_iter().take_while(|&b| b != 0).collect();
-    spoken(repeat.admit(c, max3, phonemes))
+    spoken(repeat.admit(c, max3, &entry.phonemes, phonemes))
 }
 
 /// How C translates a word made of symbols such as the `://` of a URL: the list entry of the
@@ -10603,6 +10610,12 @@ pub(crate) fn build_translate_entries(
             {
                 let (phonemes, found_in_list) =
                     stray_mark_phonemes(*c, dict, phdata, stress_opts, options).unwrap_or_default();
+                // C reads an ellipsis through its clause terminator, not as a one-character
+                // word, so `…` is never counted.
+                let (max3, raw) = char_list_entry(dict, *c, options.dict_condition, options.reversed_textmode)
+                    .filter(|_| *c != '\u{2026}')
+                    .map_or((false, Vec::new()), |(f, raw)| (f & crate::dictionary::FLAG_MAX3 != 0, raw));
+                let phonemes = repeat.admit(*c, max3, &raw, phonemes);
                 entries.push(TranslateEntry {
                     phonemes, dict_flags: 0,
                     kind: TranslateEntryKind::Word, word_lower: Some(c.to_string()),
@@ -10643,8 +10656,8 @@ pub(crate) fn build_translate_entries(
                 // `~ ~ ~ ~ ~ ~` is three tildes.  Letters are *not* limited —
                 // C limits them too, which upstream #2551 reports as a bug and
                 // #2552 fixes; this port already reads all the repeats.
-                let max3 = dict_symbol_flags(dict, *c, options.dict_condition, options.reversed_textmode)
-                    .is_some_and(|f| f & crate::dictionary::FLAG_MAX3 != 0);
+                let (max3, raw) = dict_symbol_entry(dict, *c, options.dict_condition, options.reversed_textmode)
+                    .map_or((false, Vec::new()), |(f, raw)| (f & crate::dictionary::FLAG_MAX3 != 0, raw));
                 let (phonemes, symbol_from_dict) = lookup_symbol_name(
                     *c, dict, phdata, stress_opts, options, mode,
                     PosExpect {
@@ -10662,7 +10675,7 @@ pub(crate) fn build_translate_entries(
                     && !dict_names_symbol(dict, *c, options.dict_condition))
                 .then(|| english_word(*c, symbol_ends_clause(tokens, token_ix)));
                 let phonemes = if english_reading == Some(None) { Vec::new() } else { phonemes };
-                let phonemes = repeat.admit(*c, max3, phonemes);
+                let phonemes = repeat.admit(*c, max3, &raw, phonemes);
                 if phonemes.is_empty() {
                     entries.push(TranslateEntry {
                         phonemes, dict_flags: 0,
@@ -12971,9 +12984,27 @@ fn token_sources(
                 }
                 _ => Vec::new(),
             };
-            (Some(SourceIx { len: source.len.min(own.min(31) as u8), ..source }), groups)
+            let source = SourceIx { len: source.len.min(own.min(31) as u8), ..source };
+            let source = match (token, found) {
+                (Token::Punctuation(c) | Token::Operator(c), Some((start, _)))
+                    if plain && waiting.is_none() && *c != '.' && is_clause_punctuation(*c) =>
+                {
+                    stray_mark_source(&text[start..], source)
+                }
+                _ => source,
+            };
+            (Some(source), groups)
         })
         .unzip()
+}
+
+/// The word position C gives a clause mark that is read as a word: the character before the
+/// next word, so `! a` reports the mark at 2 and `!  a` at 3.  `rest` starts at the mark.
+fn stray_mark_source(rest: &str, source: SourceIx) -> SourceIx {
+    let tail = rest.chars().skip(1);
+    let marks = tail.clone().take_while(|&c| is_clause_punctuation(c)).count();
+    let blanks = tail.skip(marks).take_while(|c| c.is_whitespace()).count();
+    SourceIx { ix: source.ix + (marks + blanks) as u32, ..source }
 }
 
 /// Where each run of digits starts in `run` (counted from its first digit) when a number of
