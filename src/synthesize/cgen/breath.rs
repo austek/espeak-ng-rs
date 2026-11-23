@@ -41,6 +41,7 @@ impl Resonator {
 }
 
 /// `espeak_rand`, with its state: glibc's `random_r` step.
+#[derive(Clone)]
 pub struct Rand(u32);
 
 impl Rand {
@@ -58,6 +59,7 @@ impl Rand {
 }
 
 /// The breath resonators and the noise source that drives them.
+#[derive(Clone)]
 pub struct Breath {
     res: [Resonator; N_PEAKS],
     pub(super) rand: Rand,
@@ -69,6 +71,11 @@ impl Breath {
         let mut res = [Resonator::default(); N_PEAKS];
         res.iter_mut().for_each(|r| r.set(2000, 200, true));
         Breath { res, rand: Rand::seeded(seed) }
+    }
+
+    /// `InitBreath` again: the resonators start over, the noise generator goes on.
+    pub fn reset(&mut self) {
+        self.res.iter_mut().for_each(|r| r.set(2000, 200, true));
     }
 
     /// `SetBreath`: retune each breath formant to its peak's frequency.

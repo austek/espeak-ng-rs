@@ -152,6 +152,7 @@ struct WData {
 }
 
 /// The generator state that C keeps in `wavegen.c` statics.
+#[derive(Clone)]
 pub struct Wavegen {
     voice: WVoice,
     global_roughness: i32,
@@ -211,6 +212,10 @@ pub struct Wavegen {
     /// The part of an echo tail that did not fit the output buffer; the next
     /// pause command plays it instead of its own length.
     silence_left: Option<i32>,
+    /// The caller's callback stops after this many samples of the clause (`out_end` of the
+    /// buffer it stopped on); the generator freezes mid-command, as C's does.
+    limit: Option<usize>,
+    stopped: bool,
 }
 
 fn env_table(env: Env, phondata: &[u8]) -> &[u8] {
@@ -289,6 +294,8 @@ impl Wavegen {
             since_reset: 0,
             ended_full: false,
             silence_left: None,
+            limit: None,
+            stopped: false,
         };
         w.general_amplitude = w.get_amplitude();
         w.set_voice();
@@ -301,6 +308,44 @@ impl Wavegen {
         let f = self.embedded_value[EMBED_F].clamp(0, 4) as usize;
         self.general_amplitude = amp * AMP_EMPHASIS[f] / 16;
         self.general_amplitude
+    }
+
+    /// A new `espeak_Synth` call on the generator the previous call left. The file-scope state
+    /// (phase, formant peaks, noise, echo, the voice with its pitch-scaled formants) stays;
+    /// `SetParameter` only rewrites the embedded values. The voice is installed, as
+    /// `DoVoiceChange` queues it, only when it was selected since the last call.
+    pub fn resume(&mut self, voice: WVoice, embedded_value: [i32; N_EMBEDDED_VALUES], voice_changed: bool, volume_set: bool) {
+        let volume_set = volume_set || embedded_value[EMBED_A] != self.embedded_value[EMBED_A];
+        for ix in [EMBED_S, EMBED_S2, EMBED_P, EMBED_A, EMBED_R] {
+            self.embedded_value[ix] = embedded_value[ix];
+        }
+        if volume_set {
+            self.get_amplitude();
+        }
+        if voice_changed {
+            self.global_roughness = voice.roughness;
+            self.breath.reset();
+            self.change_voice(voice);
+        }
+    }
+
+    /// `WavegenInit` on a generator that already ran: it resets the counters, the phase, the
+    /// amplitudes, the embedded values and the Klatt synthesizer, and leaves the rest
+    /// (harmonics, peaks, echo, breath, AGC) as the last call left it.
+    pub fn reinit(&mut self) {
+        self.samplecount = 0;
+        self.nsamples = 0;
+        self.wavephase = 0x7fff_ffff;
+        self.wdata.amplitude = 32;
+        self.wdata.amplitude_fmt = 100;
+        self.embedded_value = EMBEDDED_DEFAULT;
+        self.klatt = Klatt::new();
+        self.player = SpeechPlayer::new();
+    }
+
+    /// `InitBreath`, which `LoadVoice` runs for every voice it loads.
+    pub fn reset_breath(&mut self) {
+        self.breath.reset();
     }
 
     /// `WavegenSetVoice`: the generator switches to `voice` and keeps its embedded values.
@@ -680,9 +725,33 @@ impl Wavegen {
         z2
     }
 
+    /// Freeze the next clause once it has produced `samples`; only the formant, silence and
+    /// wave generators stop mid-command, so the Klatt and speech-player paths run to the end.
+    pub fn stop_after(&mut self, samples: usize) {
+        self.limit = (self.voice.klatt == 0).then_some(samples.max(1));
+    }
+
+    /// Whether the clause stopped at its limit. The state stays where `WcmdqStop` leaves it:
+    /// the rest of the queue and the echo tail are dropped.
+    pub fn take_stopped(&mut self) -> bool {
+        self.limit = None;
+        let stopped = std::mem::take(&mut self.stopped);
+        if stopped {
+            self.since_reset = 0;
+            self.silence_left = None;
+            self.ended_full = false;
+        }
+        stopped
+    }
+
+    fn reached_limit(&mut self) {
+        self.stopped |= self.limit.is_some_and(|l| self.out.len() >= l);
+    }
+
     fn emit(&mut self, z: i32) {
         let z = z as i16;
         self.out.push(z);
+        self.reached_limit();
         self.since_reset += 1;
         self.echo_buf[self.echo_head] = z;
         self.echo_head = (self.echo_head + 1) % N_ECHO_BUF;
@@ -696,7 +765,7 @@ impl Wavegen {
 
     fn wavegen(&mut self, phondata: &[u8]) {
         loop {
-            if self.end_wave == 0 && self.samplecount == self.nsamples {
+            if self.stopped || (self.end_wave == 0 && self.samplecount == self.nsamples) {
                 return;
             }
             if self.samplecount & 0x3f == 0 {
@@ -767,6 +836,9 @@ impl Wavegen {
         for _ in 0..length.max(0) {
             let value = self.echo() >> 8;
             self.emit(value);
+            if self.stopped {
+                return;
+            }
         }
     }
 
@@ -791,9 +863,13 @@ impl Wavegen {
             value += self.echo() >> 8;
             let value = value.clamp(-32768, 32767);
             self.out.push(value as i16);
+            self.reached_limit();
             self.since_reset += 1;
             self.echo_buf[self.echo_head] = ((value * 3) / 4) as i16;
             self.echo_head = (self.echo_head + 1) % N_ECHO_BUF;
+            if self.stopped {
+                return;
+            }
         }
     }
 
@@ -835,6 +911,9 @@ impl Wavegen {
             self.wdata.pitch = 102400;
         }
         for (qi, cmd) in queue.iter().enumerate() {
+            if self.stopped {
+                return;
+            }
             let before = self.out.len();
             self.run_cmd(qi, cmd, queue, frames, phondata, on_marker);
             let filled = self.since_reset > 0 && self.since_reset.is_multiple_of(KLATT_BUFFER_SAMPLES);
@@ -1109,5 +1188,24 @@ fn add_bass(htab: &mut [i32; MAX_HARMONIC], height1: i32, pitch: i32) {
         if x == 0 {
             break;
         }
+    }
+}
+
+#[cfg(test)]
+mod resume_tests {
+    use super::*;
+
+    #[test]
+    fn resume_takes_the_rate_pitch_volume_and_range_of_the_call() {
+        let mut g = Wavegen::new(WVoice::default(), EMBEDDED_DEFAULT, 1);
+        let mut next = EMBEDDED_DEFAULT;
+        next[EMBED_S] = 300;
+        next[EMBED_S2] = 300;
+        next[EMBED_P] = 70;
+        next[EMBED_A] = 150;
+        next[EMBED_R] = 20;
+        g.resume(WVoice::default(), next, false, false);
+        let got = [EMBED_S, EMBED_S2, EMBED_P, EMBED_A, EMBED_R].map(|i| g.embedded_value[i]);
+        assert_eq!(got, [300, 300, 70, 150, 20]);
     }
 }

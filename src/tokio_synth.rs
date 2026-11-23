@@ -9,6 +9,12 @@
 //!   the first audio arrives after the first clause rather than after the last
 //!   (see [`EspeakNg::synth_streaming_with_events`]).
 //!
+//! Calls may run at the same time on one engine, so each starts from a fresh state, as on a
+//! newly built engine, and leaves the engine's own carried state alone
+//! ([`EspeakNg::with_isolated_state`]). C's carry-over between calls belongs to sequential
+//! use: call [`EspeakNg::synth`] in turn, or use [`AsyncSynth`](crate::async_synth::AsyncSynth),
+//! whose single worker renders its queue in order.
+//!
 //! For a callback-driven queue with cancellation and no async runtime, use
 //! [`AsyncSynth`](crate::async_synth::AsyncSynth) instead.
 //!
@@ -51,7 +57,7 @@ pub async fn synth(engine: Arc<EspeakNg>, text: impl Into<String>) -> Result<(Pc
     let text = text.into();
     // `spawn_blocking` can only fail if the runtime is shutting down; surface
     // that as an empty result rather than panicking in the caller's task.
-    match tokio::task::spawn_blocking(move || engine.synth(&text)).await {
+    match tokio::task::spawn_blocking(move || engine.with_isolated_state(|| engine.synth(&text))).await {
         Ok(result) => result,
         Err(_) => Ok((Vec::new(), 0)),
     }
@@ -90,16 +96,18 @@ pub fn synth_stream(
 
     tokio::task::spawn_blocking(move || {
         let rate = engine.sample_rate();
-        let _ = engine.synth_streaming_with_events(&text, |samples, is_final, events| {
-            let chunk = AudioChunk {
-                samples: samples.to_vec(),
-                sample_rate: rate,
-                is_final,
-                events: events.to_vec(),
-            };
-            // `blocking_send` is the backpressure: it waits for room, and errs
-            // only when the receiver is gone — which means "stop".
-            tx.blocking_send(chunk).is_err()
+        let _ = engine.with_isolated_state(|| {
+            engine.synth_streaming_with_events(&text, |samples, is_final, events| {
+                let chunk = AudioChunk {
+                    samples: samples.to_vec(),
+                    sample_rate: rate,
+                    is_final,
+                    events: events.to_vec(),
+                };
+                // `blocking_send` is the backpressure: it waits for room, and errs
+                // only when the receiver is gone — which means "stop".
+                tx.blocking_send(chunk).is_err()
+            })
         });
     });
 
@@ -130,6 +138,27 @@ mod tests {
             let (pcm, rate) = synth(Arc::clone(&e), "hello world").await.unwrap();
             assert_eq!(rate, e.sample_rate());
             assert_eq!(pcm, e.synth("hello world").unwrap().0, "async result must match sync");
+        });
+    }
+
+    /// Concurrent calls on one engine never see each other's carried state: every one renders
+    /// as on a fresh engine.
+    #[test]
+    fn concurrent_calls_render_alike() {
+        if !have_data() {
+            return;
+        }
+        let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(4).build().unwrap();
+        rt.block_on(async {
+            let e = engine();
+            let fresh = e.synth("hello there, how are you?").unwrap().0;
+            e.globals().restore(&crate::synthesize::cgen::SynthGlobals::default());
+            let tasks: Vec<_> = (0..32)
+                .map(|_| tokio::spawn(synth(Arc::clone(&e), "hello there, how are you?")))
+                .collect();
+            for task in tasks {
+                assert_eq!(task.await.unwrap().unwrap().0, fresh);
+            }
         });
     }
 

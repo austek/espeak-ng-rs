@@ -48,6 +48,7 @@ fn start(path: Option<PathBuf>, mode: c_int, buflength: c_int) -> c_int {
     let Some(dir) = ops::resolve_data_dir(path) else {
         return ENS_NOT_INITIALIZED;
     };
+    crate::settings::process_globals().reinitialize();
     let mut state = State::new(Settings::new(dir));
     state.output_mode = mode;
     state.buflength_ms = buflength;
@@ -188,7 +189,10 @@ fn synthesize(req: Request, uid_out: *mut c_uint, user_data: *mut c_void) -> c_i
     let wants_lines = print || callbacks.phoneme.is_some();
     let mut known: Vec<i32> = Vec::new();
     let mut from = 0;
+    let globals = crate::settings::process_globals();
+    let pre_call = globals.snapshot();
     loop {
+        globals.restore(&pre_call);
         let rendered = match ops::render(&job, &known, wants_lines.then_some(trace_mode)) {
             Ok(r) => r,
             Err(e) => return error_status(&e),
@@ -206,6 +210,12 @@ fn synthesize(req: Request, uid_out: *mut c_uint, user_data: *mut c_void) -> c_i
         let mut before = |k: usize| answer_uri_calls(&rendered, &mut known, k, callbacks.uri);
         match deliver(target.as_ref(), &rendered.clauses, &trace, from, &mut before) {
             Flow::Done => return ENS_OK,
+            Flow::Stopped { clause, samples } => {
+                let total: usize = rendered.clauses.get(clause).map_or(0, |b| b.iter().map(|x| x.samples.len()).sum());
+                globals.restore(&pre_call);
+                ops::settle_after_stop(&job, &known, &rendered.text, clause, (samples < total).then_some(samples));
+                return ENS_OK;
+            }
             Flow::Restart(k) => from = k,
         }
     }
@@ -372,6 +382,7 @@ pub extern "C" fn espeak_ng_SpeakCharacter(character: WChar) -> c_int {
 pub extern "C" fn espeak_Cancel() -> c_int {
     guard(EE_INTERNAL_ERROR, || {
         CANCEL.store(true, Ordering::SeqCst);
+        crate::settings::process_globals().mark_volume_set();
         EE_OK
     })
 }
@@ -380,6 +391,7 @@ pub extern "C" fn espeak_Cancel() -> c_int {
 pub extern "C" fn espeak_ng_Cancel() -> c_int {
     guard(ENS_NOT_INITIALIZED, || {
         CANCEL.store(true, Ordering::SeqCst);
+        crate::settings::process_globals().mark_volume_set();
         ENS_OK
     })
 }
@@ -410,7 +422,12 @@ fn set_parameter(parameter: c_int, value: c_int, relative: c_int) -> c_int {
         return 22;
     };
     match with_state(|s| s.settings.set_param(ix, value, relative != 0)) {
-        Some(true) => ENS_OK,
+        Some(true) => {
+            if ix == crate::settings::PARAM_VOLUME {
+                crate::settings::process_globals().mark_volume_set();
+            }
+            ENS_OK
+        }
         Some(false) => 22,
         None => ENS_NOT_INITIALIZED,
     }
@@ -482,7 +499,10 @@ pub extern "C" fn espeak_ng_SetPhonemeEvents(enable: c_int, ipa: c_int) -> c_int
 
 fn voice_status(ok: Option<bool>) -> c_int {
     match ok {
-        Some(true) => ENS_OK,
+        Some(true) => {
+            crate::settings::process_globals().mark_voice_changed();
+            ENS_OK
+        }
         Some(false) => ENS_VOICE_NOT_FOUND,
         None => ENS_NOT_INITIALIZED,
     }

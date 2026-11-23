@@ -5,6 +5,12 @@
 
 use espeak_ng::EspeakNg;
 
+/// The engine carries C's `phoneme_list` and wave-generator state from call to call, so each
+/// render that is compared with another one starts from the same, empty, state.
+fn reset(e: &EspeakNg) {
+    e.globals().restore(&espeak_ng::synthesize::cgen::SynthGlobals::default());
+}
+
 /// Build a minimal mono 16-bit PCM WAV at 22050 Hz.
 fn make_wav(samples: &[i16]) -> Vec<u8> {
     let rate = 22_050u32;
@@ -83,7 +89,9 @@ fn punctuation_soundicon_is_spliced_in() {
 fn no_soundicon_registered_is_unchanged() {
     let Some(eng) = engine() else { return };
     // Fast path must be byte-identical to the plain pipeline.
+    reset(&eng);
     let (a, _) = eng.synth("testing one two three").unwrap();
+    reset(&eng);
     let (b, _) = eng.synth("testing one two three").unwrap();
     assert_eq!(a, b);
     assert!(!a.is_empty());
@@ -146,14 +154,19 @@ fn mark_after_an_icon_counts_the_icon_audio() {
     let Some(mut eng) = engine() else { return };
     eng.set_markup(true);
     let tail = " eight <mark name=\"m\"/> nine";
+    // The tail run starts from the state the run before the icon left behind.
+    reset(&eng);
+    eng.synth_with_events("one two three four five six seven ").expect("head");
     let (tail_pcm, _, tail_events) = eng.synth_with_events(tail).expect("tail");
     let in_tail = mark_event(&tail_events).sample;
     let text = format!("one two three four five six seven #{tail}");
+    reset(&eng);
     let (no_icon_pcm, _, no_icon_events) = eng.synth_with_events(&text).expect("no icon");
     assert!(!no_icon_pcm.is_empty());
 
     let icon = write_long_icon("espeak_rs_it_long_mark.wav");
     eng.add_soundicon('#', &icon).expect("register icon");
+    reset(&eng);
     let (pcm, _, events) = eng.synth_with_events(&text).expect("icon synth");
     let _ = std::fs::remove_file(&icon);
 
@@ -162,5 +175,6 @@ fn mark_after_an_icon_counts_the_icon_audio() {
     assert!(mark.sample > 70_560, "the 3.2 s icon comes before the mark: {}", mark.sample);
     assert_eq!(mark.audio_position_ms, (mark.sample * 1000 / 22_050) as u32);
     assert_eq!(mark.text_position, mark_event(&no_icon_events).text_position);
+    reset(&eng);
     assert_eq!(pcm, eng.synth(&text).expect("synth").0);
 }

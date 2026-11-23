@@ -182,6 +182,16 @@ fn engine_for(job: &Job, known: &[i32], log: &UriLog) -> espeak_ng::Result<Espea
     Ok(engine)
 }
 
+/// C reads clause after clause and stops at the buffer the callback stopped on, so the carried
+/// state is that of clause `clause` after `samples` of it (all of it when `None`), not of the
+/// whole text; render that much again from the state before the call.
+pub fn settle_after_stop(job: &Job, known: &[i32], text: &str, clause: usize, samples: Option<usize>) {
+    let log = UriLog::default();
+    if let Ok(engine) = engine_for(job, known, &log) {
+        let _ = engine.settle_after_stop(text, clause, samples);
+    }
+}
+
 fn skipped(job: &Job) -> String {
     match job.position_type {
         POS_CHARACTER_VALUE if job.position > 0 => job.text.chars().skip(job.position as usize).collect(),

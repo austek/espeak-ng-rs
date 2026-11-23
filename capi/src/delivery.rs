@@ -157,8 +157,11 @@ fn emit_clause(trace: &Trace, index: usize) {
 
 /// How a delivery ended.
 pub enum Flow {
-    /// Every clause went out (or the callback or `espeak_Cancel` stopped it early).
+    /// Every clause went out.
     Done,
+    /// The callback or `espeak_Cancel` stopped it inside clause `clause`, after `samples` of
+    /// that clause's audio had been handed over.
+    Stopped { clause: usize, samples: usize },
     /// `before` asked to start over at this clause with a fresh rendering.
     Restart(usize),
 }
@@ -179,9 +182,14 @@ pub fn deliver(
         }
         lines_before(trace, k, clauses.len()).for_each(|index| emit_clause(trace, index));
         let Some(t) = target else { continue };
+        let mut sent = 0;
         for block in blocks {
-            if CANCEL.load(Ordering::SeqCst) || deliver_block(t, block) {
-                return Flow::Done;
+            if CANCEL.load(Ordering::SeqCst) {
+                return Flow::Stopped { clause: k, samples: sent };
+            }
+            sent += block.samples.len();
+            if deliver_block(t, block) {
+                return Flow::Stopped { clause: k, samples: sent };
             }
         }
     }

@@ -174,6 +174,7 @@ pub struct KlattWdata<'a> {
 }
 
 /// `klatt_global_t` and the statics of `klatt.c`.
+#[derive(Clone)]
 pub struct Klatt {
     glsource: i32,
     f0_flutter: i32,

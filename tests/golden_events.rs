@@ -11,6 +11,7 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
+use espeak_ng::synthesize::cgen::SynthGlobals;
 use espeak_ng::{EspeakNg, EventKind};
 
 fn line(kind: &EventKind) -> (u8, String) {
@@ -53,6 +54,8 @@ fn dump() {
     let rows = std::fs::read_to_string(file).expect("rows");
     let mut out = String::new();
     for (i, text) in rows.lines().enumerate() {
+        // The C baseline ran each row in its own process, so no state carries between rows.
+        engine.globals().restore(&SynthGlobals::default());
         let _ = writeln!(out, "=== {i}");
         out.push_str(&transcript(&engine, text).unwrap_or_else(|| "ERR\n".into()));
     }

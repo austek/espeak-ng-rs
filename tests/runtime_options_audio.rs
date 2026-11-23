@@ -16,7 +16,14 @@ fn engine() -> Option<EspeakNg> {
     Some(e)
 }
 
+/// The engine carries C's `phoneme_list` and wave-generator state from call to call; these
+/// tests compare lengths C measured on a fresh process, so every render starts empty.
+fn reset(e: &EspeakNg) {
+    e.globals().restore(&espeak_ng::synthesize::cgen::SynthGlobals::default());
+}
+
 fn samples(e: &EspeakNg, text: &str) -> usize {
+    reset(e);
     e.synth(text).expect("synth").0.len()
 }
 
@@ -59,10 +66,11 @@ fn say_as_interpret_applies_in_audio() {
     // for the plain "3".
     let Some(mut e) = engine() else { return };
     e.set_markup(true);
+    reset(&e);
     let ordinal = e.synth(r#"<say-as interpret-as="ordinal">3</say-as>"#).unwrap().0;
     e.set_markup(false);
     assert_eq!(ordinal.len(), 13793, "audio ordinal must read '3' followed by the Y break");
-    assert_eq!(e.synth("3").unwrap().0.len(), 13485);
+    assert_eq!(samples(&e, "3"), 13485);
 }
 
 #[test]

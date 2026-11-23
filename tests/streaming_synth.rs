@@ -15,12 +15,19 @@ fn engine() -> EspeakNg {
 
 const MULTI: &str = "One. Two. Three. Four.";
 
+/// The engine carries C's `phoneme_list` and wave-generator state from call to call, so each
+/// render that is compared with another one starts from the same, empty, state.
+fn reset(e: &EspeakNg) {
+    e.globals().restore(&espeak_ng::synthesize::cgen::SynthGlobals::default());
+}
+
 #[test]
 fn streamed_audio_matches_buffered_synth() {
     let e = engine();
     let mut streamed = Vec::new();
     let mut chunks = 0;
     let mut finals = 0;
+    reset(&e);
     let rate = e
         .synth_streaming(MULTI, |samples, is_final| {
             chunks += 1;
@@ -36,6 +43,7 @@ fn streamed_audio_matches_buffered_synth() {
     assert_eq!(finals, 1, "exactly one chunk is flagged final");
     assert!(chunks > 1, "a four-clause utterance should arrive in several chunks");
 
+    reset(&e);
     let (buffered, _) = e.synth(MULTI).expect("synth");
     assert_eq!(streamed, buffered, "streaming must not change the audio");
 }
@@ -47,6 +55,7 @@ fn single_clause_streams_as_one_chunk() {
     let e = engine();
     let mut streamed = Vec::new();
     let mut chunks = 0;
+    reset(&e);
     e.synth_streaming("hello world", |samples, is_final| {
         chunks += 1;
         assert!(is_final, "a single clause should produce only a final chunk");
@@ -55,6 +64,7 @@ fn single_clause_streams_as_one_chunk() {
     })
     .expect("stream");
     assert_eq!(chunks, 1);
+    reset(&e);
     assert_eq!(streamed, e.synth("hello world").expect("synth").0);
 }
 
@@ -100,6 +110,7 @@ fn streaming_events_match_the_buffered_path() {
     let e = engine();
     let mut streamed = Vec::new();
     let mut final_events = Vec::new();
+    reset(&e);
     e.synth_streaming_with_events(MULTI, |samples, is_final, events| {
         streamed.extend_from_slice(samples);
         if is_final {
@@ -111,6 +122,7 @@ fn streaming_events_match_the_buffered_path() {
     })
     .expect("stream");
 
+    reset(&e);
     let (buffered, _, events) = e.synth_with_events(MULTI).expect("synth_with_events");
     assert_eq!(streamed, buffered);
     assert_eq!(final_events.len(), events.len(), "same number of events");
@@ -135,6 +147,7 @@ fn markup_falls_back_to_a_single_chunk() {
     let text = "<speak>One. Two.</speak>";
     let mut chunks = 0;
     let mut streamed = Vec::new();
+    reset(&e);
     e.synth_streaming(text, |samples, is_final| {
         chunks += 1;
         assert!(is_final);
@@ -143,6 +156,7 @@ fn markup_falls_back_to_a_single_chunk() {
     })
     .expect("stream");
     assert_eq!(chunks, 1);
+    reset(&e);
     assert_eq!(streamed, e.synth(text).expect("synth").0);
 }
 
@@ -155,8 +169,29 @@ fn parallel_batch_matches_sequential() {
     assert_eq!(parallel.len(), texts.len(), "results are returned per input");
     for (i, t) in texts.iter().enumerate() {
         let (pcm, rate) = parallel[i].as_ref().expect("synth_many item");
+        reset(&e);
         let (expected, expected_rate) = e.synth(t).expect("sequential synth");
         assert_eq!(*rate, expected_rate);
         assert_eq!(*pcm, expected, "parallel result differs for {t:?}");
     }
+}
+
+/// Every item of a batch renders as on a fresh engine, however the pool schedules them, and the
+/// batch leaves the engine's own carried state alone.
+#[cfg(feature = "parallel")]
+#[test]
+fn parallel_batch_is_deterministic_and_leaves_the_engine_state_alone() {
+    let e = engine();
+    let texts: Vec<String> = (0..24).map(|i| format!("number {i}, and then some more words")).collect();
+    reset(&e);
+    let fresh: Vec<_> = texts.iter().map(|t| { reset(&e); e.synth(t).expect("synth").0 }).collect();
+    reset(&e);
+    let first = e.synth("hello").expect("synth").0;
+    reset(&e);
+    for _ in 0..10 {
+        let batch = e.synth_many(&texts);
+        let got: Vec<_> = batch.into_iter().map(|r| r.expect("item").0).collect();
+        assert_eq!(got, fresh, "a batch must render each item from a fresh state");
+    }
+    assert_eq!(e.synth("hello").expect("synth").0, first, "the engine's carried state is untouched");
 }

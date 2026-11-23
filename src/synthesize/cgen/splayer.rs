@@ -43,6 +43,7 @@ impl Default for Frame {
 }
 
 /// glibc's default `rand()` (TYPE_3 additive feedback, seed 1).
+#[derive(Clone)]
 pub struct LibcRand {
     ring: [u32; 34],
     pos: usize,
@@ -90,7 +91,7 @@ fn fade(old: f64, new: f64, ratio: f64) -> f64 {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Noise {
     last: f64,
 }
@@ -102,7 +103,7 @@ impl Noise {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Cycle {
     last: f64,
 }
@@ -114,7 +115,7 @@ impl Cycle {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Voice {
     pitch: Cycle,
     vibrato: Cycle,
@@ -136,7 +137,7 @@ impl Voice {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Resonator {
     anti: bool,
     set_once: bool,
@@ -180,6 +181,7 @@ impl Resonator {
     }
 }
 
+#[derive(Clone)]
 struct Cascade {
     r: [Resonator; 6],
     n0: Resonator,
@@ -207,6 +209,7 @@ impl Cascade {
     }
 }
 
+#[derive(Clone)]
 struct Parallel {
     r: [Resonator; 6],
 }
@@ -227,6 +230,7 @@ impl Parallel {
     }
 }
 
+#[derive(Clone)]
 struct Request {
     min_samples: u32,
     fade_samples: u32,
@@ -235,6 +239,7 @@ struct Request {
 }
 
 /// `FrameManagerImpl`: fades from the frame in force to each queued one.
+#[derive(Clone)]
 struct Frames {
     queue: VecDeque<Request>,
     old: Request,
@@ -304,6 +309,7 @@ impl Frames {
 }
 
 /// `speechPlayer_handle_t`: the frame queue and wave generator.
+#[derive(Clone)]
 pub struct SpeechPlayer {
     frames: Frames,
     voice: Voice,

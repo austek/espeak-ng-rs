@@ -1,11 +1,20 @@
 //! Plain-data session settings and the pure mapping from them to an engine.
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
+use espeak_ng::synthesize::cgen::SynthGlobals;
 use espeak_ng::voices::VoiceEntry;
 use espeak_ng::{EspeakNg, Parameter};
 
 use crate::types::{N_SPEECH_PARAM, PARAM_DEFAULTS};
+
+/// C's `phoneme_list` and wave generator are process-wide statics that survive
+/// `espeak_Initialize` and `espeak_Terminate`, so every engine built for a call shares them.
+pub fn process_globals() -> SynthGlobals {
+    static GLOBALS: OnceLock<SynthGlobals> = OnceLock::new();
+    GLOBALS.get_or_init(SynthGlobals::default).clone()
+}
 
 pub const PARAM_RATE: usize = 1;
 pub const PARAM_VOLUME: usize = 2;
@@ -69,6 +78,7 @@ impl Settings {
 
     pub fn build_engine(&self) -> espeak_ng::Result<EspeakNg> {
         let mut engine = EspeakNg::with_data_dir(&self.voice, &self.data_dir)?;
+        engine.set_globals(process_globals());
         let p = &self.params;
         engine.set_parameter(Parameter::Rate, p[PARAM_RATE]);
         engine.set_parameter(Parameter::Volume, p[PARAM_VOLUME]);

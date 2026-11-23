@@ -38,6 +38,11 @@
 
 use std::path::{Path, PathBuf};
 
+thread_local! {
+    /// The fresh state `EspeakNg::with_isolated_state` gives this thread's calls.
+    static ISOLATED: std::cell::RefCell<Option<crate::synthesize::cgen::SynthGlobals>> = const { std::cell::RefCell::new(None) };
+}
+
 use crate::error::{Error, Result};
 use crate::phoneme::PhonemeData;
 use crate::synthesize::{PcmBuffer, Synthesizer, VoiceParams};
@@ -335,6 +340,8 @@ pub struct EspeakNg {
     punct:      Option<Vec<char>>,
     /// Suppress the end-of-utterance trailing silence (`-z`).
     no_final_pause: bool,
+    /// What C keeps in statics across `espeak_Synth` calls (`phoneme_list` slots, wave generator).
+    globals: crate::synthesize::cgen::SynthGlobals,
     /// Seed for the unvoiced-noise generator (`espeak_ng_SetRandSeed`, `-D`).
     rand_seed: u32,
     /// Path to the espeak-ng data directory.
@@ -411,6 +418,7 @@ impl EspeakNg {
             capitals:   0,
             punct:      None,
             no_final_pause: false,
+            globals: crate::synthesize::cgen::SynthGlobals::default(),
             rand_seed: 0,
             data_dir:   data_dir.to_path_buf(),
             soundicons: crate::soundicon::SoundIconTable::new(22_050),
@@ -506,6 +514,7 @@ impl EspeakNg {
     /// Equivalent to `espeak_ng_SetVoiceByName(name)`.
     pub fn set_voice(&mut self, lang: &str) {
         self.voice_spec = VoiceSpec::by_name(lang);
+        self.globals.mark_voice_changed();
     }
 
     /// Select a voice by detailed criteria.
@@ -513,6 +522,7 @@ impl EspeakNg {
     /// Equivalent to `espeak_ng_SetVoiceByProperties(voice_selector)`.
     pub fn set_voice_by_spec(&mut self, spec: VoiceSpec) {
         self.voice_spec = spec;
+        self.globals.mark_voice_changed();
     }
 
     /// Select the best-matching installed voice for a property query (language /
@@ -527,6 +537,7 @@ impl EspeakNg {
         match crate::voices::find_voice(&voices, query) {
             Some(v) => {
                 self.voice_spec = VoiceSpec::by_name(&v.language);
+                self.globals.mark_voice_changed();
                 true
             }
             None => false,
@@ -605,6 +616,37 @@ impl EspeakNg {
     /// Suppress (or restore) the end-of-utterance trailing silence (`-z`).
     pub fn set_no_final_pause(&mut self, value: bool) {
         self.no_final_pause = value;
+    }
+
+    /// The state this engine carries from call to call. Hand the same handle to
+    /// [`set_globals`](Self::set_globals) of a rebuilt engine to keep it, as C does with its
+    /// process-wide statics.
+    pub fn globals(&self) -> crate::synthesize::cgen::SynthGlobals {
+        self.globals.clone()
+    }
+
+    /// Continue from the state another engine left.
+    pub fn set_globals(&mut self, globals: crate::synthesize::cgen::SynthGlobals) {
+        self.globals = globals;
+    }
+
+    /// Run `f` with every synthesis call on this thread starting from a fresh state, as on a
+    /// newly built engine, and leave the engine's own carried state alone.
+    ///
+    /// Calls on one engine otherwise share the state C keeps in statics, so calls running
+    /// at the same time (threads, tasks) would read each other's leftovers and render
+    /// differently from run to run. [`synth_many`](Self::synth_many) and the
+    /// [`tokio_synth`](crate::tokio_synth) entry points use this; sequential
+    /// [`synth`](Self::synth) calls keep C's carry-over.
+    pub fn with_isolated_state<R>(&self, f: impl FnOnce() -> R) -> R {
+        struct Restore(Option<crate::synthesize::cgen::SynthGlobals>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                ISOLATED.with(|slot| *slot.borrow_mut() = self.0.take());
+            }
+        }
+        let _restore = Restore(ISOLATED.with(|slot| slot.replace(Some(crate::synthesize::cgen::SynthGlobals::default()))));
+        f()
     }
 
     /// Return the sample rate of the synthesizer in Hz.
@@ -813,8 +855,8 @@ impl EspeakNg {
     where
         F: FnMut(&[i16], bool, &[SynthEvent]) -> bool,
     {
+        let mut events = self.pending_rate_event(rate);
         let (mut chunks, raw) = self.synth_markup_chunks(text)?;
-        let mut events = vec![sample_rate_event(rate)];
         events.extend(raw.iter().map(|(e, name)| marker_event(e, name.as_deref(), 1.0, rate)));
         events.push(terminated_event());
         let last = chunks.pop().unwrap_or_default();
@@ -877,14 +919,26 @@ impl EspeakNg {
     /// The `SampleRate`, `Word`, `Sentence` and `MsgTerminated` events of markup, with the
     /// word, sentence and mark events as C's `Generate` reports them.
     fn synth_markup_with_events(&self, text: &str, rate: u32) -> Result<(PcmBuffer, u32, Vec<SynthEvent>)> {
+        let mut events = self.pending_rate_event(rate);
         let (pcm, raw) = self.synth_markup_raw(text)?;
         let raw_len = pcm.len();
         let samples = self.apply_post_fx(pcm);
         let scale = if raw_len == 0 { 1.0 } else { samples.len() as f64 / raw_len as f64 };
-        let mut events = vec![sample_rate_event(rate)];
         events.extend(raw.iter().map(|(e, name)| marker_event(e, name.as_deref(), scale, rate)));
         events.push(terminated_event());
         Ok((samples, rate, events))
+    }
+
+    /// The `SampleRate` event of a voice selected since the last call, which the render about
+    /// to start consumes; empty otherwise.
+    fn pending_rate_event(&self, rate: u32) -> Vec<SynthEvent> {
+        if self.call_globals().voice_changed() { vec![sample_rate_event(rate)] } else { Vec::new() }
+    }
+
+    /// The state this thread's calls carry: the engine's own, or the fresh set of
+    /// [`with_isolated_state`](Self::with_isolated_state).
+    fn call_globals(&self) -> crate::synthesize::cgen::SynthGlobals {
+        ISOLATED.with(|slot| slot.borrow().clone()).unwrap_or_else(|| self.globals.clone())
     }
 
     /// The audio and the generator's events, a mark's name resolved from the clause reader.
@@ -895,7 +949,7 @@ impl EspeakNg {
 
     /// As `synth_markup_raw`, the audio kept as one chunk per clause.
     fn synth_markup_chunks(&self, text: &str) -> Result<(Vec<PcmBuffer>, Vec<NamedEvent>)> {
-        let parts = self.render_markup(text, None)?;
+        let parts = self.render_markup(text, None, None)?;
         Ok((parts.chunks, parts.named))
     }
 
@@ -908,14 +962,40 @@ impl EspeakNg {
     /// As [`synth`](Self::synth).
     pub fn synth_markup_clauses(&self, text: &str, trace: Option<PhonemeTrace>) -> Result<MarkupSynthesis> {
         let rate = self.sample_rate();
-        let parts = self.render_markup(text, trace)?;
-        let mut events = vec![sample_rate_event(rate)];
+        let mut events = self.pending_rate_event(rate);
+        let parts = self.render_markup(text, trace, None)?;
         events.extend(parts.named.iter().map(|(e, name)| marker_event(e, name.as_deref(), 1.0, rate)));
         events.push(terminated_event());
         Ok(MarkupSynthesis { chunks: parts.chunks, events, phoneme_lines: parts.lines, uri_clauses: parts.uri_clauses })
     }
 
-    fn render_markup(&self, text: &str, trace: Option<PhonemeTrace>) -> Result<MarkupParts> {
+    /// Leave the carried state where C leaves it when the synth callback stops a call: render
+    /// `text` again as far as clause `clause` and `samples` of it (the whole clause when
+    /// `None`), discarding the audio. Call it with the state from before the stopped render.
+    ///
+    /// # Errors
+    /// As [`synth`](Self::synth).
+    pub fn settle_after_stop(&self, text: &str, clause: usize, samples: Option<usize>) -> Result<()> {
+        if self.markup && self.soundicons.is_empty() {
+            self.render_markup(text, None, Some((clause, samples)))?;
+            return Ok(());
+        }
+        if self.markup || !self.soundicons.is_empty() {
+            return Ok(());
+        }
+        let translator = self.make_translator()?;
+        let mut phdata = self.load_phdata()?;
+        crate::translate::select_phoneme_table(&mut phdata, &self.data_dir, self.voice_spec.effective_lang())
+            .map_err(|_| Error::VoiceNotFound(self.voice_spec.effective_lang().to_string()))?;
+        let clauses = translator.translate_plain_clauses(text)?;
+        let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume))
+            .with_globals(&self.call_globals())
+            .with_stop(clause, samples);
+        synth.synthesize_clauses_streaming_with_events(&clauses, &phdata, &mut |_, _| false)?;
+        Ok(())
+    }
+
+    fn render_markup(&self, text: &str, trace: Option<PhonemeTrace>, stop: Option<(usize, Option<usize>)>) -> Result<MarkupParts> {
         let mut translator = self.make_translator()?;
         if let Some(t) = trace.as_ref().filter(|t| t.ipa) {
             translator.options.ipa_separator = t.separator;
@@ -935,7 +1015,10 @@ impl EspeakNg {
         let uri_hook = self.uri_callback.as_deref().map(|f| f as &crate::translate::readclause::ssml_tag::UriCallback);
         let doc = translator.translate_ssml_with_hooks(text, settings, &load, uri_hook)?;
         let icons: Vec<Vec<i16>> = (0..table.borrow().len()).map(|ix| table.borrow().samples(ix).to_vec()).collect();
-        let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
+        let mut synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume)).with_globals(&self.call_globals());
+        if let Some((clause, samples)) = stop {
+            synth = synth.with_stop(clause, samples);
+        }
         let voices: std::collections::HashMap<String, VoiceParams> = doc
             .clauses
             .iter()
@@ -975,7 +1058,7 @@ impl EspeakNg {
         let codes   = translator.translate_to_codes(text)?;
         // Inline embedded commands (`\x01…P/S/A`) adjust the utterance levels.
         let voice   = self.make_voice_params_levels(self.rate, self.pitch, self.volume);
-        let synth   = Synthesizer::new(voice);
+        let synth   = Synthesizer::new(voice).with_globals(&self.call_globals());
         synth.synthesize_codes(&codes, &phdata)
     }
 
@@ -1005,11 +1088,11 @@ impl EspeakNg {
             return self.synth_markup_with_events(text, rate);
         }
         if !self.soundicons.is_empty() {
+            let mut events = self.pending_rate_event(rate);
             let (raw, marks) = self.synth_spliced(text, rate)?;
             let raw_len = raw.len();
             let samples = self.apply_post_fx(raw);
             let scale = if raw_len == 0 { 1.0 } else { samples.len() as f64 / raw_len as f64 };
-            let mut events = vec![sample_rate_event(rate)];
             events.extend(marks.into_iter().map(|mut e| {
                 e.sample = (e.sample as f64 * scale) as u64;
                 e.audio_position_ms = (e.sample * 1000 / u64::from(rate.max(1))) as u32;
@@ -1019,6 +1102,7 @@ impl EspeakNg {
             return Ok((samples, rate, events));
         }
 
+        let mut events = self.pending_rate_event(rate);
         let (samples, raw) = self.synth_plain_raw(text)?;
         // The tempo/pitch post-pass changes the buffer length, so the sample
         // offsets recorded during synthesis no longer address the audio the
@@ -1029,7 +1113,6 @@ impl EspeakNg {
         let raw_len = samples.len();
         let samples = self.apply_post_fx(samples);
         let scale = if raw_len == 0 { 1.0 } else { samples.len() as f64 / raw_len as f64 };
-        let mut events = vec![sample_rate_event(rate)];
         events.extend(raw.iter().map(|e| marker_event(e, None, scale, rate)));
         events.push(terminated_event());
         Ok((samples, rate, events))
@@ -1049,9 +1132,10 @@ impl EspeakNg {
 
     /// Synthesize several utterances in parallel across the rayon thread pool.
     ///
-    /// Each utterance is rendered independently, so the results are exactly what
-    /// calling [`synth`](Self::synth) on each in turn would produce — this only
-    /// changes how long it takes.  Results are returned in input order, with a
+    /// Each utterance is rendered independently, from a fresh state as on a newly built
+    /// engine, so the results do not depend on how the pool schedules them and are exactly
+    /// what [`synth`](Self::synth) returns for each on such an engine; the engine's own
+    /// carried state is left alone.  Results are returned in input order, with a
     /// per-item `Result` so one bad input doesn't sink the batch.
     ///
     /// Requires the `parallel` feature.
@@ -1071,7 +1155,7 @@ impl EspeakNg {
         S: AsRef<str> + Sync,
     {
         use rayon::prelude::*;
-        texts.par_iter().map(|t| self.synth(t.as_ref())).collect()
+        texts.par_iter().map(|t| self.with_isolated_state(|| self.synth(t.as_ref()))).collect()
     }
 
     /// Synthesize `text` incrementally *and* deliver its events.
@@ -1111,7 +1195,8 @@ impl EspeakNg {
         )
         .map_err(|_| Error::VoiceNotFound(self.voice_spec.effective_lang().to_string()))?;
         let clauses = translator.translate_plain_clauses(text)?;
-        let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
+        let mut events = self.pending_rate_event(rate);
+        let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume)).with_globals(&self.call_globals());
 
         let mut stopped = false;
         let (tail, raw) = {
@@ -1126,7 +1211,6 @@ impl EspeakNg {
             return Ok(rate);
         }
 
-        let mut events = vec![sample_rate_event(rate)];
         events.extend(raw.iter().map(|e| marker_event(e, None, 1.0, rate)));
         events.push(terminated_event());
         callback(&tail, true, &events);
@@ -1181,7 +1265,7 @@ impl EspeakNg {
         .map_err(|_| Error::VoiceNotFound(self.voice_spec.effective_lang().to_string()))?;
 
         let codes = translator.translate_to_codes(text)?;
-        let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
+        let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume)).with_globals(&self.call_globals());
         synth.synthesize_codes_streaming(&codes, &phdata, &mut callback)?;
         Ok(rate)
     }
@@ -1262,7 +1346,7 @@ impl EspeakNg {
 
         let clauses = translator.translate_plain_clauses(text)?;
         let voice = self.make_voice_params_levels(self.rate, self.pitch, self.volume);
-        let synth = Synthesizer::new(voice);
+        let synth = Synthesizer::new(voice).with_globals(&self.call_globals());
         synth.synthesize_clauses_with_events(&clauses, &phdata, &std::collections::HashMap::new(), &[])
     }
 

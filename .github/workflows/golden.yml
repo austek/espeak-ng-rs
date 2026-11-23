@@ -38,6 +38,7 @@ jobs:
           --test cli_messages
           --test cli_voice_select
           --test cli_punct
+          --test phoneme_list_carryover
           --test dictionary_bounds
           --test english_letter_group_y
           --test italian_rule_stress

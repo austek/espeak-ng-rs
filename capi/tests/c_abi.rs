@@ -181,6 +181,9 @@ fn ssml_trace_scenarios() -> Vec<Scenario> {
         .collect()
 }
 
+const LONG_ONCE: &str = "Hello world. How are you?";
+const LONG_THRICE: &str = "Hello world. How are you? Hello world. How are you? Hello world. How are you?";
+
 fn scenarios() -> Vec<Scenario> {
     let mut list = vec![
         Scenario { fixture: "expected/batch.txt", args: vec!["batch".into(), cases_path()] },
@@ -189,6 +192,13 @@ fn scenarios() -> Vec<Scenario> {
         Scenario { fixture: "expected/ngapi.txt", args: args(&["ngapi"]) },
         Scenario { fixture: "expected/events_retrieval.txt", args: args(&["events", "1", "en", "0x1000", "Hi."]) },
         Scenario { fixture: "expected/events_sync_de.txt", args: args(&["events", "2", "de", "0x1000", "Guten Tag."]) },
+        Scenario { fixture: "expected/multi_hu.txt", args: args(&["multi", "hu", "0", "ggy", "ggy", "jó napot kívánok", "ggy"]) },
+        Scenario { fixture: "expected/multi_en.txt", args: args(&["multi", "en", "0", "hello", "hello"]) },
+        Scenario { fixture: "expected/multi_echo.txt", args: args(&["multi", "en+announcer", "0", "hello", "hello"]) },
+        Scenario { fixture: "expected/multi_pitch.txt", args: args(&["multi", "en", "0", "hello", "+P=85", "hello", "hello"]) },
+        Scenario { fixture: "expected/multi_voice_again.txt", args: args(&["multi", "en", "0", "hello", "@en", "hello", "hello"]) },
+        Scenario { fixture: "expected/multi_stop.txt", args: args(&["multi", "en", "0", "!3000", LONG_THRICE, "hello"]) },
+        Scenario { fixture: "expected/multi_cancel.txt", args: args(&["multi", "en", "0", "!1", LONG_ONCE, "#", LONG_ONCE]) },
     ];
     for (i, (lang, text)) in WAV_CASES.iter().enumerate() {
         let fixture: &'static str = Box::leak(format!("expected/wav_{i}.txt").into_boxed_str());
@@ -229,6 +239,33 @@ fn assert_scenario(fixture_name: &str) {
     let s = scenarios().into_iter().find(|s| s.fixture == fixture_name).expect("scenario");
     let got = run_probe_with(probe_binary(), &s.args.iter().map(String::as_str).collect::<Vec<_>>());
     assert_eq!(got, fixture(s.fixture), "{fixture_name}");
+}
+
+#[test]
+fn closing_pause_slots_carry_across_synth_calls_in_hungarian() {
+    assert_scenario("expected/multi_hu.txt");
+}
+
+#[test]
+fn closing_pause_slots_carry_across_synth_calls_in_english() {
+    assert_scenario("expected/multi_en.txt");
+}
+
+#[test]
+fn wave_generator_state_carries_across_synth_calls() {
+    for fixture in ["expected/multi_echo.txt", "expected/multi_pitch.txt", "expected/multi_voice_again.txt"] {
+        assert_scenario(fixture);
+    }
+}
+
+#[test]
+fn a_stopped_call_leaves_the_state_of_its_stop_point() {
+    assert_scenario("expected/multi_stop.txt");
+}
+
+#[test]
+fn a_cancelled_call_leaves_the_state_of_its_stop_point() {
+    assert_scenario("expected/multi_cancel.txt");
 }
 
 macro_rules! event_kind_tests {

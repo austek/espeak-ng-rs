@@ -385,12 +385,30 @@ type PcmSink<'a> = Option<&'a mut dyn FnMut(&[i16], bool) -> bool>;
 pub struct Synthesizer {
     /// Voice / acoustic parameters in use.
     pub voice: VoiceParams,
+    globals: cgen::SynthGlobals,
+    stop: Option<(usize, Option<usize>)>,
 }
 
 impl Synthesizer {
     /// Create a new synthesizer with the given voice parameters.
     pub fn new(voice: VoiceParams) -> Self {
-        Synthesizer { voice }
+        Synthesizer { voice, globals: cgen::SynthGlobals::default(), stop: None }
+    }
+
+    /// Render only as far as a callback that stopped inside clause `clause` after `samples`
+    /// of it (the whole clause when `None`), leaving the carried state where C leaves it.
+    #[must_use]
+    pub fn with_stop(mut self, clause: usize, samples: Option<usize>) -> Self {
+        self.stop = Some((clause, samples));
+        self
+    }
+
+    /// Continue from the state C keeps in statics between calls (`phoneme_list` slots, wave
+    /// generator), shared with every synthesizer given the same handle.
+    #[must_use]
+    pub fn with_globals(mut self, globals: &cgen::SynthGlobals) -> Self {
+        self.globals = globals.clone();
+        self
     }
 
     /// Synthesize an IPA phoneme string to 16-bit PCM samples at 22 050 Hz.
@@ -485,7 +503,7 @@ impl Synthesizer {
             return self.synthesize_codes(&codes, phdata).map(|pcm| (pcm, Vec::new()));
         };
         let mut out = Vec::new();
-        let events = cgen::render_clauses(clauses, phdata, &dir, &self.voice, voices, icons, &mut |pcm| out.extend_from_slice(pcm));
+        let events = cgen::render_clauses(clauses, phdata, &dir, &self.voice, cgen::ClauseExtras { voices, icons, globals: &self.globals, stop: self.stop }, &mut |pcm| out.extend_from_slice(pcm));
         Ok((out, events))
     }
 
@@ -514,7 +532,7 @@ impl Synthesizer {
                 held.extend_from_slice(pcm);
             }
         };
-        let events = cgen::render_clauses(clauses, phdata, &dir, &self.voice, &std::collections::HashMap::new(), &[], &mut emit);
+        let events = cgen::render_clauses(clauses, phdata, &dir, &self.voice, cgen::ClauseExtras { voices: &std::collections::HashMap::new(), icons: &[], globals: &self.globals, stop: self.stop }, &mut emit);
         Ok((held, events))
     }
 
@@ -531,7 +549,7 @@ impl Synthesizer {
             return self.synthesize_clauses_with_events(clauses, phdata, voices, icons).map(|(pcm, ev)| (vec![pcm], ev));
         };
         let mut chunks = Vec::new();
-        let events = cgen::render_clauses(clauses, phdata, &dir, &self.voice, voices, icons, &mut |pcm| chunks.push(pcm.to_vec()));
+        let events = cgen::render_clauses(clauses, phdata, &dir, &self.voice, cgen::ClauseExtras { voices, icons, globals: &self.globals, stop: self.stop }, &mut |pcm| chunks.push(pcm.to_vec()));
         Ok((chunks, events))
     }
 
@@ -1138,7 +1156,7 @@ impl Synthesizer {
             }
             held.extend_from_slice(pcm);
         };
-        let (words, sentences) = cgen::render(codes, phdata, dir, &self.voice, &mut emit);
+        let (words, sentences) = cgen::render(codes, phdata, dir, &self.voice, &self.globals, &mut emit);
         *word_marks = if words.is_empty() { vec![0] } else { words };
         if let Some(first) = word_marks.first_mut() {
             *first = 0;

@@ -13,6 +13,8 @@ static uint64_t fnv = 1469598103934665603ULL;
 static long total_samples = 0;
 static int dump_events = 0;
 static int call_no = 0;
+static int rate_events = 0;
+static long stop_after = -1;
 
 static void feed(const short *wav, int n) {
 	const unsigned char *p = (const unsigned char *)wav;
@@ -51,9 +53,11 @@ static int on_synth(short *wav, int n, espeak_EVENT *events) {
 			print_event(e);
 	}
 	call_no++;
+	for (espeak_EVENT *e = events; e && e->type != espeakEVENT_LIST_TERMINATED; e++)
+		rate_events += e->type == espeakEVENT_SAMPLERATE;
 	if (wav)
 		feed(wav, n);
-	return 0;
+	return stop_after >= 0 && total_samples >= stop_after;
 }
 
 static int uri_status = 0;
@@ -243,6 +247,40 @@ static char *unescape(const char *s) {
 	return out;
 }
 
+static int scenario_multi(int argc, char **argv) {
+	/* multi <voice> <flags> <arg>...: one espeak_Synth call per text argument in one
+	 * process, printing the samples, FNV and SAMPLERATE events of each call, since C
+	 * keeps phoneme_list and the wave generator between calls.  "@name" switches the
+	 * voice, "!N" makes the next call's callback stop after N samples, "+P=N" and "+R=N"
+	 * set the pitch and rate parameters, "#" is espeak_Cancel. */
+	init(AUDIO_OUTPUT_SYNCHRONOUS, 0);
+	espeak_SetVoiceByName(argv[0]);
+	unsigned flags = (unsigned)strtoul(argv[1], NULL, 0) | espeakCHARS_UTF8;
+	for (int i = 2; i < argc; i++) {
+		const char *a = argv[i];
+		if (a[0] == '@') {
+			printf("setvoice=%d\n", (int)espeak_SetVoiceByName(a + 1));
+		} else if (a[0] == '!') {
+			stop_after = atol(a + 1);
+		} else if (a[0] == '+') {
+			espeak_SetParameter(a[1] == 'P' ? espeakPITCH : espeakRATE, atoi(a + 3), 0);
+		} else if (a[0] == '#') {
+			printf("cancel=%d\n", (int)espeak_Cancel());
+		} else {
+			fnv = 1469598103934665603ULL;
+			total_samples = 0;
+			rate_events = 0;
+			espeak_Synth(a, strlen(a) + 1, 0, POS_CHARACTER, 0, flags, NULL, NULL);
+			espeak_Synchronize();
+			printf("call=%d samples=%ld fnv=%016llx rate_events=%d\n", i - 2, total_samples,
+			       (unsigned long long)fnv, rate_events);
+			stop_after = -1;
+		}
+	}
+	espeak_Terminate();
+	return 0;
+}
+
 static int scenario_evflat(int argc, char **argv) {
 	/* evflat <options> <voice> <flags> <text>: one line per event, synchronous
 	 * mode, then the sample total.  Options bit 0x10000 installs a URI callback
@@ -385,6 +423,7 @@ int main(int argc, char **argv) {
 	if (!strcmp(s, "events")) return scenario_events(argc - 2, argv + 2);
 	if (!strcmp(s, "trace")) return scenario_trace(argc - 2, argv + 2);
 	if (!strcmp(s, "evflat")) return scenario_evflat(argc - 2, argv + 2);
+	if (!strcmp(s, "multi")) return scenario_multi(argc - 2, argv + 2);
 	if (!strcmp(s, "voices")) return scenario_voices(argc - 2, argv + 2);
 	if (!strcmp(s, "params")) return scenario_params(argc - 2, argv + 2);
 	if (!strcmp(s, "errors")) return scenario_errors(argc - 2, argv + 2);

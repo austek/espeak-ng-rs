@@ -244,12 +244,85 @@ pub struct Renderer<'a> {
     max_clause_pause: i32,
     switched: std::collections::HashMap<String, PhonemeData>,
     emitted: usize,
-    leftovers: Vec<Leftover>,
+    globals: SynthGlobals,
+    embedded: [i32; N_EMBEDDED_VALUES],
+    stop_in: Option<usize>,
     pub events: Vec<RawEvent>,
 }
 
 /// The `amp` and pitches of one slot of C's static `phoneme_list`.
 type Leftover = (i32, i32, i32);
+
+/// What C keeps in file-scope statics between `espeak_Synth` calls: the slots of
+/// `phoneme_list` and the wave generator. A clone shares the state; `default` starts empty.
+#[derive(Clone, Default)]
+pub struct SynthGlobals(std::sync::Arc<std::sync::Mutex<Carried>>);
+
+#[derive(Clone)]
+struct Carried {
+    slots: Vec<Leftover>,
+    wavegen: Option<Wavegen>,
+    /// A voice was selected since the last call: `DoVoiceChange` queued it, and the wave
+    /// generator installs it, and reports the sample rate, when the next call starts.
+    voice_changed: bool,
+    /// `SetParameter(espeakVOLUME)` ran (`espeak_Cancel` runs it for every parameter), which
+    /// recomputes the generator's amplitude and drops the echo's share of it.
+    volume_set: bool,
+}
+
+impl Default for Carried {
+    fn default() -> Self {
+        Carried { slots: Vec::new(), wavegen: None, voice_changed: true, volume_set: false }
+    }
+}
+
+impl std::fmt::Debug for SynthGlobals {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SynthGlobals")
+    }
+}
+
+impl SynthGlobals {
+    /// A copy that no longer shares state with `self`.
+    pub fn snapshot(&self) -> Self {
+        Self(std::sync::Arc::new(std::sync::Mutex::new(self.lock().clone())))
+    }
+
+    /// Sets the shared state back to what `snapshot` copied, for a call that renders again.
+    pub fn restore(&self, snapshot: &Self) {
+        *self.lock() = snapshot.lock().clone();
+    }
+
+    /// A voice was selected (`espeak_SetVoiceByName` and its relatives); the next call
+    /// installs it. Also true before the first call.
+    pub fn mark_voice_changed(&self) {
+        self.lock().voice_changed = true;
+    }
+
+    /// `espeak_Initialize` after a `Terminate`: `WavegenInit` resets part of the wave generator
+    /// and the first call selects the default voice again; `phoneme_list` keeps its slots.
+    pub fn reinitialize(&self) {
+        let mut carried = self.lock();
+        if let Some(wavegen) = carried.wavegen.as_mut() {
+            wavegen.reinit();
+        }
+        carried.voice_changed = true;
+    }
+
+    /// `espeak_SetParameter(espeakVOLUME, ...)` or `espeak_Cancel` ran since the last call.
+    pub fn mark_volume_set(&self) {
+        self.lock().volume_set = true;
+    }
+
+    /// Whether the next call starts with a voice change, without consuming it.
+    pub fn voice_changed(&self) -> bool {
+        self.lock().voice_changed
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Carried> {
+        self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
 
 impl<'a> Renderer<'a> {
     pub fn new(phdata: &'a PhonemeData, data_dir: &Path, params: &VoiceParams) -> Self {
@@ -285,9 +358,38 @@ impl<'a> Renderer<'a> {
             max_clause_pause: 0,
             switched: std::collections::HashMap::new(),
             emitted: 0,
-            leftovers: Vec::new(),
+            globals: SynthGlobals::default(),
+            embedded: ev,
+            stop_in: None,
             events: Vec::new(),
         }
+    }
+
+    /// Continues from the state the previous call left in `globals`.
+    pub fn with_globals(mut self, globals: &SynthGlobals) -> Self {
+        self.globals = globals.clone();
+        let (stored, voice_changed, volume_set) = {
+            let mut carried = self.globals.lock();
+            let flags = (std::mem::take(&mut carried.voice_changed), std::mem::take(&mut carried.volume_set));
+            (carried.wavegen.take(), flags.0, flags.1)
+        };
+        if let Some(mut wavegen) = stored {
+            wavegen.resume(self.voice.clone(), self.embedded, voice_changed, volume_set);
+            self.wavegen = wavegen;
+        }
+        self
+    }
+
+    /// The caller's callback stops after `samples` of the next clause: the generator freezes
+    /// there and nothing after the clause runs, as `SpeakNextClause(2)` leaves C.
+    pub fn stop_in_next_clause(&mut self, samples: usize) {
+        self.stop_in = Some(samples);
+    }
+
+    /// Hands the generator back for the next call.
+    fn store_globals(self) -> Vec<RawEvent> {
+        self.globals.lock().wavegen = Some(self.wavegen);
+        self.events
     }
 
     /// `MakePhonemeList` never writes `amp` or the pitches of the two closing pauses, so they
@@ -358,6 +460,7 @@ impl<'a> Renderer<'a> {
     pub fn clause_then_voice(&mut self, clause: &ClauseCodes, start_sentence: bool, next: &VoiceParams) -> Vec<i16> {
         let loaded = load_voice(&self.data_dir, next, &self.tunes);
         self.wavegen.set_global_roughness(loaded.1.roughness);
+        self.wavegen.reset_breath();
         self.pending_wvoice = Some(loaded.1.clone());
         let pcm = self.clause(clause, start_sentence);
         self.install_voice(next, loaded);
@@ -405,7 +508,7 @@ impl<'a> Renderer<'a> {
             let end = c.list.len().saturating_sub(2);
             c.list[end].source = Some(crate::translate::SourceIx { ix: u32::from(k.end_ix), len: 0 });
         }
-        Self::inherit_closing_pauses(&self.leftovers, &mut c.list);
+        Self::inherit_closing_pauses(&self.globals.lock().slots, &mut c.list);
         pitches::calc_pitches(&mut c.list, &self.tr, &self.tunes, clause_type, phdata);
         let speeds = speeds_along(&c.list, &mut self.wpm_s, &self.voice);
         lengths::calc_lengths(&mut c.list, &self.tr, &|i| speeds[i.min(speeds.len() - 1)]);
@@ -416,7 +519,7 @@ impl<'a> Renderer<'a> {
             .with_counters(clause.counters)
             .with_phoneme_events(self.phoneme_events);
         g.generate(&mut c.list);
-        Self::remember_slots(&mut self.leftovers, &c.list);
+        Self::remember_slots(&mut self.globals.lock().slots, &c.list);
         self.speed = g.speed;
         self.wpm_s2 = g.embedded_s2_value();
         self.wave_flag = g.wave_flag();
@@ -431,7 +534,15 @@ impl<'a> Renderer<'a> {
             with_icons = [phdata.phondata.as_slice(), self.icon_bytes.as_slice()].concat();
             &with_icons
         };
+        if let Some(samples) = self.stop_in.take() {
+            self.wavegen.stop_after(samples);
+        }
         self.wavegen.run(&g.queue, &g.frames, wave_data, &mut on_marker);
+        if self.wavegen.take_stopped() {
+            let pcm = std::mem::take(&mut self.wavegen.out);
+            self.emitted += pcm.len();
+            return pcm;
+        }
         if let Some(next) = self.pending_wvoice.take() {
             self.wavegen.change_voice(next);
             let marker = Marker { value: wavegen::SAMPLERATE, ..Marker::new(MarkerKind::SampleRate) };
@@ -508,6 +619,17 @@ fn switched_tables(codes: &[PhonemeCode], data_dir: &Path, own: &str) -> std::co
     out
 }
 
+/// What `render_clauses` needs besides the clauses: the voices a clause can switch to, the
+/// sound icons, and the state carried between calls.
+pub struct ClauseExtras<'a> {
+    pub voices: &'a std::collections::HashMap<String, VoiceParams>,
+    pub icons: &'a [Vec<i16>],
+    pub globals: &'a SynthGlobals,
+    /// The caller's callback stopped inside clause `.0` after `.1` samples (all of the clause
+    /// when `None`): later clauses are never read, as `SpeakNextClause(2)` leaves C.
+    pub stop: Option<(usize, Option<usize>)>,
+}
+
 /// Synthesize clauses as the SSML reader ended them (C `SpeakNextClause`): each keeps its
 /// terminator and end-of-text flag, and the next clause starts a sentence only when this one
 /// ended one.
@@ -516,16 +638,20 @@ pub fn render_clauses(
     phdata: &PhonemeData,
     data_dir: &Path,
     params: &VoiceParams,
-    voices: &std::collections::HashMap<String, VoiceParams>,
-    icons: &[Vec<i16>],
+    extras: ClauseExtras<'_>,
     sink: &mut dyn FnMut(&[i16]),
 ) -> Vec<RawEvent> {
-    let mut r = Renderer::new(phdata, data_dir, params);
+    let ClauseExtras { voices, icons, globals, stop } = extras;
+    let mut r = Renderer::new(phdata, data_dir, params).with_globals(globals);
     r.set_icons(icons);
     let all: Vec<PhonemeCode> = clauses.iter().flat_map(|c| c.codes.iter().cloned()).collect();
     r.switched = switched_tables(&all, data_dir, &params.lang);
     let mut start_sentence = true;
-    for c in clauses {
+    for (ix, c) in clauses.iter().enumerate() {
+        let stopping = stop.filter(|(at, _)| *at == ix);
+        if let Some((_, Some(samples))) = stopping {
+            r.stop_in_next_clause(samples);
+        }
         let opens_sentence = c.counters.map_or(start_sentence, |k| k.new_sentence);
         let pcm = match c.voice_after.as_ref().and_then(|id| voices.get(id)) {
             Some(next) => r.clause_then_voice(c, opens_sentence, next),
@@ -533,8 +659,11 @@ pub fn render_clauses(
         };
         start_sentence = c.terminator.is_sentence();
         sink(&pcm);
+        if stopping.is_some() {
+            break;
+        }
     }
-    r.events
+    r.store_globals()
 }
 
 /// Synthesize a whole code stream; `sink` receives each clause as it is done.
@@ -543,10 +672,11 @@ pub fn render(
     phdata: &PhonemeData,
     data_dir: &Path,
     params: &VoiceParams,
+    globals: &SynthGlobals,
     sink: &mut dyn FnMut(&[i16]),
 ) -> (Vec<usize>, Vec<usize>) {
     let clauses = phlist::split_clauses(codes);
-    let mut r = Renderer::new(phdata, data_dir, params);
+    let mut r = Renderer::new(phdata, data_dir, params).with_globals(globals);
     r.switched = switched_tables(codes, data_dir, &params.lang);
     let mut start_sentence = true;
     for c in &clauses {
@@ -554,7 +684,9 @@ pub fn render(
         start_sentence = c.terminator.is_sentence();
         sink(&pcm);
     }
-    (r.word_marks(), r.sentence_marks())
+    let marks = (r.word_marks(), r.sentence_marks());
+    r.store_globals();
+    marks
 }
 
 #[cfg(test)]
