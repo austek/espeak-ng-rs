@@ -10038,6 +10038,9 @@ pub(crate) fn build_translate_entries(
     for (token_ix, token) in tokens.iter().enumerate() {
         if token_ix > 0 {
             replaced.push(replace_trace::take());
+            if matches!(tokens[token_ix - 1], Token::ClauseBoundary(_)) {
+                crate::dictionary::rules::trace_clause_end();
+            }
         }
         if skip_words > 0 && token_ix >= swallowed_run_end {
             if let Some(end) = symbol_run_end(tokens, token_ix) {

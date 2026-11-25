@@ -84,6 +84,7 @@ jobs:
           --test soundicon
           --test cli_stdout_wav
           --test cli_phonemes_with_wav
+          --test cli_residuals
           --test synth_event_fields
           --test ssml_events
           --test ssml_mark_events

@@ -214,6 +214,12 @@ fn run() -> std::io::Result<()> {
         .split_minutes
         .filter(|&m| spoken && m > 0)
         .map(|m| (m, cli.wave_out.clone().unwrap_or_else(|| PathBuf::from("stdout"))));
+    if let Some((_, path)) = split.as_ref().filter(|_| !texts.is_empty()) {
+        let first = split_part_path(path, 1);
+        if std::fs::File::create(&first).is_err() {
+            return report_unwritable(&cli, &texts, &first, &|t| announcement(&cli, t));
+        }
+    }
     if text_outputs && (!spoken || split.is_some()) {
         texts.iter().try_for_each(|t| text_output(&cli, t, !spoken))?;
         if !spoken {
@@ -278,7 +284,7 @@ fn run() -> std::io::Result<()> {
         let mut chunks: Vec<Vec<i16>> = Vec::new();
         let mut events = Vec::new();
         let rate = engine
-            .synth_streaming_with_events(&text, |chunk, _final, ev| {
+            .synth_streaming_texts_with_events(&texts, |chunk, _final, ev| {
                 chunks.push(chunk.to_vec());
                 events.extend_from_slice(ev);
                 false
@@ -316,9 +322,7 @@ fn report_unwritable(
     announce: &dyn Fn(&str) -> std::io::Result<Announcement>,
 ) -> std::io::Result<()> {
     for text in texts {
-        let Announcement { trace, lines } = announce(text)?;
-        let first = lines.first().map_or_else(|| trace.clone(), |l| format!("{trace}{l}\n"));
-        emit(cli, &first)?;
+        emit(cli, announce(text)?.first().map_or("", String::as_str))?;
         eprintln!("Can't write to: '{}'", path.display());
     }
     Ok(())
@@ -416,29 +420,32 @@ fn speaks_to_wav(cli: &Cli, mbrola_pho: bool) -> bool {
 /// One `espeak_Synth` call's phoneme output. `-q` silences `--pho`, and so does
 /// speaking to a WAV, where C prints the script only for an MBROLA voice.
 fn text_output(cli: &Cli, text: &str, pho_script: bool) -> std::io::Result<()> {
-    if cli.trace_rules {
-        trace_output(cli, text, cli.x_mnem || cli.ipa)?;
-    }
-    if cli.x_mnem || cli.ipa {
-        phoneme_output(cli, text)?;
-    }
+    emit(cli, &announcement(cli, text)?.concat())?;
     if cli.pho && !cli.quiet && pho_script {
         pho_output(cli, text)?;
     }
     Ok(())
 }
 
-/// What C prints for one synthesis input while it writes the WAV: the `-X`
-/// trace, then one phoneme line per clause.
-struct Announcement {
-    trace: String,
-    lines: Vec<String>,
-}
+/// What C prints for one synthesis input, one entry per clause: the clause's
+/// `-X` trace, then its phoneme line.
+type Announcement = Vec<String>;
 
 fn announcement(cli: &Cli, text: &str) -> std::io::Result<Announcement> {
-    let trace = if cli.trace_rules { trace_text(cli, text, true)? } else { String::new() };
-    let lines = if cli.trace_rules || cli.x_mnem || cli.ipa { phoneme_lines(cli, text)? } else { Vec::new() };
-    Ok(Announcement { trace, lines })
+    if !(cli.trace_rules || cli.x_mnem || cli.ipa) {
+        return Ok(Vec::new());
+    }
+    let lines = phoneme_lines(cli, text)?;
+    let mut traces = if cli.trace_rules { trace_clauses(cli, text)?.into_iter() } else { Vec::new().into_iter() };
+    let last = lines.len() - 1;
+    Ok(lines
+        .into_iter()
+        .enumerate()
+        .map(|(ix, line)| {
+            let trace = if ix == last { traces.by_ref().collect() } else { traces.next().unwrap_or_default() };
+            format!("{trace}{line}\n")
+        })
+        .collect())
 }
 
 /// `fopen(--phonout, "w")` at start-up, so an empty result still leaves a file.
@@ -743,11 +750,9 @@ fn decode_phonemes(codes: &[u8], phdata: &PhonemeData) -> String {
 /// Each word gets a `Translate '<word>'` header, then one line per matching
 /// rule: `<score>\t<rule> [<phonemes>]`, with a blank line between letter
 /// positions.  The rule is rendered back to source form by `DecodeRule`.
-fn trace_output(cli: &Cli, text: &str, phonemes_follow: bool) -> std::io::Result<()> {
-    emit(cli, &trace_text(cli, text, phonemes_follow)?)
-}
-
-fn trace_text(cli: &Cli, text: &str, phonemes_follow: bool) -> std::io::Result<String> {
+///
+/// One entry per clause, as C prints each clause's trace just before its phonemes.
+fn trace_clauses(cli: &Cli, text: &str) -> std::io::Result<Vec<String>> {
     use espeak_ng::dictionary::rules::{trace_begin, trace_take, TraceEvent};
 
     let ioerr = |e: espeak_ng::Error| std::io::Error::other(format!("{e}"));
@@ -765,6 +770,14 @@ fn trace_text(cli: &Cli, text: &str, phonemes_follow: bool) -> std::io::Result<S
     trace_begin();
     let _ = translator.text_to_ipa(text);
     let events = trace_take();
+    Ok(events
+        .split(|ev| matches!(ev, TraceEvent::ClauseEnd))
+        .map(|clause| trace_clause(clause, &phdata))
+        .collect())
+}
+
+fn trace_clause(events: &[espeak_ng::dictionary::rules::TraceEvent], phdata: &PhonemeData) -> String {
+    use espeak_ng::dictionary::rules::TraceEvent;
 
     let mut out = String::new();
     let mut last_pos: Option<usize> = None;
@@ -780,10 +793,10 @@ fn trace_text(cli: &Cli, text: &str, phonemes_follow: bool) -> std::io::Result<S
             TraceEvent::Found(w, ph, flags) => {
                 // A dictionary hit short-circuits the rules, so C prints this
                 // *instead* of a `Translate` header and any rule lines.
-                let flags = espeak_ng::dictionary::rules::decode_dict_flags(flags);
+                let flags = espeak_ng::dictionary::rules::decode_dict_flags(*flags);
                 out.push_str(&format!(
                     "Found: '{w}' [{}]  {flags}\n",
-                    decode_phonemes(&ph, &phdata)
+                    decode_phonemes(ph, phdata)
                 ));
                 last_pos = None;
             }
@@ -794,22 +807,17 @@ fn trace_text(cli: &Cli, text: &str, phonemes_follow: bool) -> std::io::Result<S
                 }
                 last_pos = Some(r.word_pos);
                 rules_ran = true;
-                let mnemonics = decode_phonemes(&r.phonemes, &phdata);
+                let mnemonics = decode_phonemes(&r.phonemes, phdata);
                 out.push_str(&format!("{:3}\t{} [{}]\n", r.points, r.rule, mnemonics));
             }
+            TraceEvent::ClauseEnd => {}
         }
     }
 
     if rules_ran {
         out.push('\n');
     }
-    if !phonemes_follow {
-        let codes = translator.translate_to_codes(text).map_err(ioerr)?;
-        out.push_str(&format_x(&codes, &phdata, cli.sep, cli.tie, &data_dir, translator.options.lang.as_str()));
-        out.push('\n');
-    }
-
-    Ok(out)
+    out
 }
 
 /// Write phoneme output to `--phonout` (created empty at start-up) or stdout.
@@ -891,11 +899,6 @@ fn apply_voice_apostrophe(cli: &Cli, translator: &mut Translator) {
     if let Some(bits) = cli.voice_apostrophe {
         translator.options.number_grammar.apostrophe = bits as u8;
     }
-}
-
-fn phoneme_output(cli: &Cli, text: &str) -> std::io::Result<()> {
-    let lines = phoneme_lines(cli, text)?;
-    emit(cli, &lines.iter().map(|l| format!("{l}\n")).collect::<String>())
 }
 
 /// The phoneme text of one synthesis input, one entry per clause line.
@@ -1059,12 +1062,6 @@ fn write_split_wavs(
     events: &[espeak_ng::engine::SynthEvent],
     minutes: u32,
 ) -> std::io::Result<()> {
-    let name = path.to_string_lossy().into_owned();
-    let (stem, ext) = match name.rfind('.') {
-        Some(ix) if name.len() - ix <= 4 => (&name[..ix], &name[ix..]),
-        _ => (name.as_str(), ""),
-    };
-
     let pcm: Vec<i16> = chunks.concat();
     let limit = minutes as usize * 60 * rate as usize;
     let cuts = split_cuts(chunks, &sentence_samples(events), split_buffer_samples(rate), limit);
@@ -1072,9 +1069,19 @@ fn write_split_wavs(
         let mut buf = Vec::new();
         write_wav_16_mono(&mut buf, &pcm[w[0]..w[1]], rate)
             .map_err(|e| std::io::Error::other(format!("{e}")))?;
-        std::fs::write(format!("{stem}_{:02}{ext}", n + 1), &buf)?;
+        std::fs::write(split_part_path(path, n + 1), &buf)?;
     }
     Ok(())
+}
+
+/// The file of part `number`: `out.wav` → `out_01.wav`, `out` → `out_01`.
+fn split_part_path(path: &Path, number: usize) -> PathBuf {
+    let name = path.to_string_lossy().into_owned();
+    let (stem, ext) = match name.rfind('.') {
+        Some(ix) if name.len() - ix <= 4 => (&name[..ix], &name[ix..]),
+        _ => (name.as_str(), ""),
+    };
+    PathBuf::from(format!("{stem}_{number:02}{ext}"))
 }
 
 /// C's 60 ms output buffer in samples (`outbuf_size / 2` for `buflength` 0).
@@ -1306,9 +1313,7 @@ fn stream_wav(
 ) -> std::io::Result<()> {
     let mut due: VecDeque<String> = VecDeque::new();
     for text in texts {
-        let Announcement { trace, lines } = announce(text)?;
-        let mut trace = Some(trace);
-        due.extend(lines.into_iter().map(|l| format!("{}{l}\n", trace.take().unwrap_or_default())));
+        due.extend(announce(text)?);
     }
     let mut failure: Option<std::io::Error> = None;
     engine

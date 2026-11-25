@@ -871,10 +871,10 @@ impl EspeakNg {
 
     /// Markup inputs spoken as one stream of clauses: each input is parsed on its
     /// own, the synthesizer state runs on from one into the next.
-    fn stream_markup_texts<S, F>(&self, texts: &[S], mut callback: F) -> Result<()>
+    fn stream_markup_texts<S, F>(&self, texts: &[S], rate: u32, mut callback: F) -> Result<()>
     where
         S: AsRef<str>,
-        F: FnMut(&[i16], bool) -> bool,
+        F: FnMut(&[i16], bool, &[SynthEvent]) -> bool,
     {
         let translator = self.make_translator()?;
         let mut phdata = self.load_phdata()?;
@@ -903,10 +903,13 @@ impl EspeakNg {
         }
         let icons: Vec<Vec<i16>> = (0..table.borrow().len()).map(|ix| table.borrow().samples(ix).to_vec()).collect();
         let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
-        let (mut chunks, _) = synth.synthesize_clauses_chunked(&clauses, &phdata, &voices, &icons)?;
+        let (mut chunks, raw) = synth.synthesize_clauses_chunked(&clauses, &phdata, &voices, &icons)?;
+        let mut events = self.pending_rate_event(rate);
+        events.extend(raw.iter().map(|e| marker_event(e, None, 1.0, rate)));
+        events.push(terminated_event());
         let last = chunks.pop().unwrap_or_default();
-        if !chunks.iter().any(|chunk| callback(chunk, false)) {
-            callback(&last, true);
+        if !chunks.iter().any(|chunk| callback(chunk, false, &[])) {
+            callback(&last, true, &events);
         }
         Ok(())
     }
@@ -1283,25 +1286,25 @@ impl EspeakNg {
         S: AsRef<str>,
         F: FnMut(&[i16], bool) -> bool,
     {
+        self.synth_streaming_texts_with_events(texts, |chunk, last, _| callback(chunk, last))
+    }
+
+    /// [`synth_streaming_texts`](Self::synth_streaming_texts) that also delivers
+    /// the events, with the final chunk. Event sample offsets count from the
+    /// start of the first input.
+    pub fn synth_streaming_texts_with_events<S, F>(&self, texts: &[S], mut callback: F) -> Result<u32>
+    where
+        S: AsRef<str>,
+        F: FnMut(&[i16], bool, &[SynthEvent]) -> bool,
+    {
         let rate = self.sample_rate();
         let post_fx = (self.post_tempo - 1.0).abs() > 1e-3 || (self.post_pitch - 1.0).abs() > 1e-3;
         if self.markup && self.soundicons.is_empty() && !post_fx {
-            self.stream_markup_texts(texts, callback)?;
+            self.stream_markup_texts(texts, rate, callback)?;
             return Ok(rate);
         }
         if !self.soundicons.is_empty() || self.markup || post_fx {
-            let mut stopped = false;
-            for (ix, text) in texts.iter().enumerate() {
-                let last_text = ix + 1 == texts.len();
-                self.synth_streaming(text.as_ref(), |chunk, fin| {
-                    stopped = callback(chunk, fin && last_text);
-                    stopped
-                })?;
-                if stopped {
-                    break;
-                }
-            }
-            return Ok(rate);
+            return self.stream_texts_one_by_one(texts, rate, callback);
         }
 
         let translator = self.make_translator()?;
@@ -1319,15 +1322,46 @@ impl EspeakNg {
         }
         let synth = Synthesizer::new(self.make_voice_params_levels(self.rate, self.pitch, self.volume));
         let mut stopped = false;
-        let (tail, _) = {
+        let (tail, raw) = {
             let mut sink = |chunk: &[i16], _final: bool| -> bool {
-                stopped |= callback(chunk, false);
+                stopped |= callback(chunk, false, &[]);
                 stopped
             };
             synth.synthesize_clauses_streaming_with_events(&clauses, &phdata, &mut sink)?
         };
         if !stopped {
-            callback(&tail, true);
+            let mut events = self.pending_rate_event(rate);
+            events.extend(raw.iter().map(|e| marker_event(e, None, 1.0, rate)));
+            events.push(terminated_event());
+            callback(&tail, true, &events);
+        }
+        Ok(rate)
+    }
+
+    /// Each input spoken from scratch as one chunk (or one per clause), for the
+    /// cases that cannot share one stream; an empty list is one empty final chunk.
+    fn stream_texts_one_by_one<S, F>(&self, texts: &[S], rate: u32, mut callback: F) -> Result<u32>
+    where
+        S: AsRef<str>,
+        F: FnMut(&[i16], bool, &[SynthEvent]) -> bool,
+    {
+        if texts.is_empty() {
+            callback(&[], true, &[]);
+            return Ok(rate);
+        }
+        let mut stopped = false;
+        let mut played: u64 = 0;
+        for (ix, text) in texts.iter().enumerate() {
+            let last_text = ix + 1 == texts.len();
+            self.synth_streaming_with_events(text.as_ref(), |chunk, fin, events| {
+                let shifted: Vec<SynthEvent> = events.iter().map(|e| shift_event(e, played, rate)).collect();
+                played += chunk.len() as u64;
+                stopped = callback(chunk, fin && last_text, &shifted);
+                stopped
+            })?;
+            if stopped {
+                break;
+            }
         }
         Ok(rate)
     }
@@ -1648,6 +1682,12 @@ fn event_at(kind: EventKind, text_position: u32, sample: usize, rate: u32) -> Sy
         audio_position_ms: (sample as u64 * 1000 / u64::from(rate.max(1))) as u32,
         sample: sample as u64,
     }
+}
+
+/// `event` moved `samples` later in the stream.
+fn shift_event(event: &SynthEvent, samples: u64, rate: u32) -> SynthEvent {
+    let sample = event.sample + samples;
+    SynthEvent { sample, audio_position_ms: (sample * 1000 / u64::from(rate.max(1))) as u32, ..event.clone() }
 }
 
 /// The form of the phoneme line of each clause (`espeak_SetPhonemeTrace`'s mode).

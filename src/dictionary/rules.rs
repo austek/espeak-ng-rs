@@ -1761,6 +1761,17 @@ pub enum TraceEvent {
     Found(String, Vec<u8>, [u32; 2]),
     /// A rule matched.
     Rule(RuleTrace),
+    /// The clause being translated ended; C prints its phonemes next.
+    ClauseEnd,
+}
+
+/// Record that another clause closed, if tracing is on.
+pub fn trace_clause_end() {
+    TRACE.with(|t| {
+        if let Some(v) = t.borrow_mut().as_mut() {
+            v.push(TraceEvent::ClauseEnd);
+        }
+    });
 }
 
 thread_local! {
