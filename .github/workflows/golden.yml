@@ -115,6 +115,7 @@ jobs:
           --test embedded_command_argument
           --test dot_clause_end
           --test time_colon_reading
+          --test time_number_gaps
           --test ssml_say_as_digit_groups
           --test ssml_say_as_key_names
           --test ssml_emphasis_multiword_entries

@@ -27,6 +27,7 @@ pub mod ipa_table;
 pub mod phoneme_ipa;
 pub mod compat;
 pub(crate) mod ucd_alpha;
+pub(crate) mod ucd_lower;
 pub mod readclause;
 pub mod ssml_driver;
 mod c_words;
@@ -1226,6 +1227,10 @@ pub enum Token {
     /// (a newline between them); `suppress_abbreviation_periods` keeps that boundary and drops
     /// this marker.
     DotEndsClause,
+    /// Precedes the two-digit hour with a leading zero of a time whose one-digit minute is
+    /// two characters wide in C's buffer (`true`: the zero goes) or wider than the tokens show
+    /// (`false`: the zero stays); `apply_time_reading` takes it away.
+    MinutePad(bool),
 }
 
 /// Parsed number token.
@@ -1371,21 +1376,55 @@ fn is_ordinal_suffix(suffix: &str, digits: &str, grammar: &NumberGrammar) -> boo
 /// (end of text, or before a comma) is dropped by C before the number is read,
 /// so the number stays a cardinal.
 fn dot_marks_ordinal_before(
-    mut rest: impl Iterator<Item = char> + Clone,
+    rest: impl Iterator<Item = char> + Clone,
     declined: &[String],
     clause_text: bool,
+    in_group: bool,
 ) -> bool {
     if clause_text && rest.clone().all(char::is_whitespace) {
         return true;
     }
-    match rest.next() {
-        Some(first) if first.is_whitespace() => {
-            let next = rest.clone().next();
-            let lower_start = next.is_some_and(|next| next.is_alphabetic() && !next.is_uppercase());
-            let word: String = rest.take_while(|c| c.is_alphabetic()).flat_map(char::to_lowercase).collect();
-            lower_start && !declined.contains(&word)
+    // C blanks the second dot of `5.. b`, so the ordinal dot sits before the blank; the last
+    // group of a space-grouped number is read as a cardinal then.
+    let second_dot = !in_group && matches!(rest.clone().take(2).collect::<Vec<_>>()[..], ['.', ' ' | '\t']);
+    let mut rest = rest.peekable();
+    if second_dot {
+        rest.next();
+    }
+    let blanks: Vec<char> = std::iter::from_fn(|| rest.next_if(|&c| readclause::ctype::is_blank(c))).collect();
+    // A newline after the dot ends the clause, so the number is not an ordinal.
+    if blanks.is_empty() || blanks.contains(&'\n') || (in_group && blanks.len() > 1) {
+        return false;
+    }
+    // The commands an SSML tag leaves are no clause end; a literal one in plain text is.
+    if clause_text {
+        skip_embedded_commands(&mut rest);
+    }
+    // C asks `iswlower`, which scripts without case (Arabic, Hebrew, Thai, Han) fail, and the
+    // word must not start with a capital: the titlecase letters count as both.
+    let lower_start = rest.peek().is_some_and(|&next| ucd_lower::is_plain_lower(next));
+    let word: String = rest.take_while(|c| c.is_alphabetic()).flat_map(char::to_lowercase).collect();
+    lower_start && !declined.contains(&word)
+}
+
+/// Whether blanks without a line break and a titlecase letter follow.
+fn blank_then_titlecase(rest: impl Iterator<Item = char>) -> bool {
+    let mut rest = rest.peekable();
+    let blanks: Vec<char> = std::iter::from_fn(|| rest.next_if(|&c| readclause::ctype::is_blank(c))).collect();
+    !blanks.is_empty() && !blanks.contains(&'\n') && rest.next().is_some_and(ucd_lower::is_titlecase)
+}
+
+/// Skip embedded commands (`CTRL_EMBEDDED`, an optional sign, digits, one letter) and the
+/// blanks between them.
+fn skip_embedded_commands<I: Iterator<Item = char>>(rest: &mut std::iter::Peekable<I>) {
+    loop {
+        while rest.next_if(|&c| readclause::ctype::is_blank(c)).is_some() {}
+        if rest.next_if_eq(&CTRL_EMBEDDED).is_none() {
+            return;
         }
-        _ => false,
+        rest.next_if(|c| matches!(c, '+' | '-'));
+        while rest.next_if(char::is_ascii_digit).is_some() {}
+        rest.next();
     }
 }
 
@@ -2487,10 +2526,17 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
 
             // NUM_ORDINAL_DOT: if enabled, a trailing dot after digits marks ordinal
             // (e.g. German "3." → "dritte"). Only when NOT followed by a digit.
-            if grammar.ordinals.dot_marks_ordinal && chars.peek() == Some(&'.') {
+            // C does not look for the dot of an ordinal after a number with a leading zero.
+            // The last group of a space-grouped number joins the groups before it, so it is
+            // not an ordinal of its own (`dot_marks_ordinal_before` is stricter there).
+            let group_of_thousands = grammar.space_group
+                && digits.len() == 3
+                && matches!(tokens.as_slice(), [.., Token::Number(NumberToken::Cardinal(_)), Token::Space]);
+            let leading_zero = digits.starts_with('0');
+            if grammar.ordinals.dot_marks_ordinal && !leading_zero && chars.peek() == Some(&'.') {
                 let mut lookahead = chars.clone();
                 lookahead.next(); // skip '.'
-                if dot_marks_ordinal_before(lookahead, &grammar.ordinals.alt_words, grammar.clause_text) {
+                if dot_marks_ordinal_before(lookahead.clone(), &grammar.ordinals.alt_words, grammar.clause_text, group_of_thousands) {
                     chars.next();
                     tokens.push(Token::Number(NumberToken::Ordinal(OrdinalNumber {
                         digits,
@@ -2498,8 +2544,20 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
                     })));
                     continue;
                 }
+                // A word that starts with a titlecase letter is no ordinal (C reads it as a capital),
+                // but it is lower case to the clause reader, so the dot stays in the clause.
+                if blank_then_titlecase(lookahead) {
+                    chars.next();
+                    tokens.push(Token::Number(NumberToken::Cardinal(digits)));
+                    continue;
+                }
             }
 
+            if !separated && digits.len() == 2 && digits.starts_with('0') {
+                if let Some(pad) = minute_pad_follows(chars.clone(), grammar.decimal_separator, grammar.clause_text) {
+                    tokens.push(Token::MinutePad(pad));
+                }
+            }
             tokens.push(Token::Number(if separated {
                 NumberToken::separated(digits, grammar)
             } else {
@@ -7210,7 +7268,7 @@ where
 {
     let mut after = after.peekable();
     let blanks: Vec<char> = std::iter::from_fn(|| after.next_if(|&c| readclause::ctype::is_blank(c))).collect();
-    after.next().filter(|c| c.is_lowercase()).map(|_| blanks.contains(&'\n'))
+    after.next().filter(|&c| ucd_lower::is_plain_lower(c)).map(|_| blanks.contains(&'\n'))
 }
 
 /// Three or more dots in a row read as one ellipsis (C `ReadClause`).
@@ -9020,7 +9078,7 @@ fn suppress_abbreviation_periods(tokens: &mut Vec<Token>) {
         let dot_ends = matches!(tokens.get(i + 1), Some(Token::DotEndsClause));
         if matches!(tokens[i], Token::ClauseBoundary('.')) && !announced && !dot_ends {
             let ends_sentence = match next_word.map(|j| &tokens[j]) {
-                Some(Token::Word(w)) => w.chars().next().is_some_and(|c| !c.is_lowercase()),
+                Some(Token::Word(w)) => w.chars().next().is_some_and(|c| !ucd_lower::is_plain_lower(c)),
                 _ => true,
             };
             if !ends_sentence {
@@ -9064,8 +9122,86 @@ fn word_after_colon(tokens: &[Token], at: usize, digits: &str, clause_text: bool
         // A dot that does not end the clause stays on the number, so no blank follows the digits.
         (Some(Token::Punctuation('.')), _) => format!("{digits}."),
         (Some(Token::Punctuation(' ')), _) => format!("{digits}."),
+        // A comma that does not end the clause stays on the number as well.
+        (Some(Token::Punctuation(',')), _) => format!("{digits},"),
         _ => digits.to_string(),
     }
+}
+
+/// Whether C drops the leading zero of a two-digit hour before the colon (numbers.c:1600):
+/// the word after the colon starts with a digit and is two characters wide, or the source
+/// text gave it the second blank `minute_pad_follows` looks for.  `source` is what the
+/// tokenizer decided from the text, which wins over the width of the token.
+fn hour_zero_omitted(word: &str, source: Option<bool>) -> bool {
+    let mut chars = word.chars();
+    let two_wide = chars.next().is_some_and(|c| c.is_ascii_digit()) && chars.next().is_some() && chars.next().is_none();
+    source.unwrap_or(two_wide)
+}
+
+/// Whether the one-digit minute at the front of `rest` (the text after the colon, which
+/// has no embedded commands) is two characters wide in C's clause buffer although the
+/// tokens do not show it.  C adds a second blank after a digit word before a letter
+/// (translate.c:1408), and `3.5` splits at the dot where the dot is not the decimal point.
+fn minute_is_padded(rest: &[char], decimal_separator: char) -> bool {
+    let alpha = |c: Option<&char>| c.is_some_and(|&c| readclause::ctype::is_alpha(u32::from(c)));
+    // C reads `_` and `'` as blanks, and only a letter after them makes the extra blank.
+    let blankish = |c: char| readclause::ctype::is_blank(c) || matches!(c, '_' | '\'');
+    match rest {
+        [sep @ ('.' | ','), digit, ..] if digit.is_ascii_digit() => *sep != decimal_separator,
+        [c, ..] if readclause::ctype::is_blank(*c) || *c == '_' => {
+            alpha(rest.iter().find(|&&c| !blankish(c)))
+        }
+        ['-', next, ..] => alpha(Some(next)),
+        _ => false,
+    }
+}
+
+/// What the text after a zero-led two-digit hour (`rest`, which starts at the colon) says about
+/// the hour's zero when the minute is one digit: `Some(true)` when the minute
+/// `minute_is_padded`, `Some(false)` when a dot or comma glued to it is followed by a space
+/// C does not count as blank (the word is then longer than two characters), `None` when the
+/// tokens decide.
+fn minute_pad_follows(rest: impl Iterator<Item = char>, decimal_separator: char, clause_text: bool) -> Option<bool> {
+    let rest: Vec<char> = rest.take(64).collect();
+    // The commands an SSML tag leaves are transparent; a literal one in plain text is not
+    // (C keeps the zero of `02:3 \x01100sb` and `02:3\x01100s b`).
+    let literal_command = !clause_text && rest.contains(&CTRL_EMBEDDED);
+    let rest = strip_embedded_commands(rest.into_iter());
+    let after_blank = rest.strip_prefix(&[' ']).unwrap_or(&rest);
+    let colons = after_blank.iter().take_while(|&&c| c == ':').count();
+    match after_blank.get(colons..) {
+        Some([minute, tail @ ..]) if colons > 0 && minute.is_ascii_digit() && !tail.first().is_some_and(char::is_ascii_digit) => {
+            let splits = |c: &char| c.is_alphanumeric() || readclause::ctype::is_blank(*c);
+            match tail {
+                _ if literal_command => Some(false),
+                ['.' | ',', glued, ..] if !splits(glued) => Some(false),
+                _ => minute_is_padded(tail, decimal_separator).then_some(true),
+            }
+        }
+        _ => None,
+    }
+}
+
+/// `chars` without the embedded commands (`CTRL_EMBEDDED`, an optional sign, digits and one
+/// letter), which C's clause reader does not pass on.
+/// A command behind a blank, other than the mark an SSML tag leaves, stays in the text as a
+/// bare `CTRL_EMBEDDED` that no rule reads through (C keeps the zero of `02:3 \x01100sb`).
+fn strip_embedded_commands(chars: impl Iterator<Item = char>) -> Vec<char> {
+    let mut out: Vec<char> = Vec::new();
+    let mut chars = chars.peekable();
+    while let Some(c) = chars.next() {
+        if c == CTRL_EMBEDDED {
+            chars.next_if(|c| matches!(c, '+' | '-'));
+            while chars.next_if(char::is_ascii_digit).is_some() {}
+            let letter = chars.next();
+            if letter != Some('M') && out.iter().any(|&c| readclause::ctype::is_blank(c)) {
+                out.push(CTRL_EMBEDDED);
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// Index just after a run of colons that starts at `from` or after one space.
@@ -9082,6 +9218,23 @@ fn colon_word(before: &str, after: &str) -> Vec<Token> {
 }
 
 fn apply_time_reading(tokens: &mut Vec<Token>, clause_text: bool) {
+    // The tokenizer puts a `MinutePad` in front of a number whose zero it has decided about;
+    // take the markers out so that they cannot stand between a colon and its minute.
+    let mut padded_hour: Vec<Option<bool>> = Vec::with_capacity(tokens.len());
+    let mut pending = None;
+    let mut clean = Vec::with_capacity(tokens.len());
+    for token in std::mem::take(tokens) {
+        match token {
+            Token::MinutePad(pad) => pending = Some(pad),
+            other => {
+                padded_hour.push(pending.take());
+                clean.push(other);
+            }
+        }
+    }
+    *tokens = clean;
+    // Index in `tokens` of the number token that `out` holds last.
+    let mut last_number: Option<usize> = None;
     // A cardinal token whose surface is exactly two digits (a minute/second).
     let two_digit = |t: Option<&Token>| -> Option<String> {
         match t {
@@ -9108,7 +9261,7 @@ fn apply_time_reading(tokens: &mut Vec<Token>, clause_text: bool) {
             if let Some(minute) = colons.and_then(|e| two_digit(tokens.get(e))) {
                 let minute_at = colons.unwrap_or(i + 1);
                 let after_minute = word_after_colon(tokens, minute_at, &minute, clause_text);
-                let h_norm = if h.len() <= 2 && after_minute == minute { normalized_hour(&h) } else { h.clone() };
+                let h_norm = if h.len() <= 2 && hour_zero_omitted(&after_minute, padded_hour[i]) { normalized_hour(&h) } else { h.clone() };
                 out.push(Token::Number(NumberToken::Cardinal(h_norm)));
                 out.push(Token::Space);
                 out.extend(colon_word(&h, &after_minute));
@@ -9117,12 +9270,14 @@ fn apply_time_reading(tokens: &mut Vec<Token>, clause_text: bool) {
                     .unwrap_or(false);
                 let minute_spoken = if seconds_follow { normalized_hour(&minute) } else { minute.clone() };
                 out.push(Token::Number(NumberToken::Cardinal(minute_spoken)));
+                last_number = Some(minute_at);
                 let mut j = minute_at + 1;
                 if let Some(e) = colon_run_end(tokens, j) {
                     if let Some(sec) = two_digit(tokens.get(e)) {
                         out.push(Token::Space);
                         out.extend(colon_word(&minute, &word_after_colon(tokens, e, &sec, clause_text)));
                         out.push(Token::Number(NumberToken::Cardinal(sec)));
+                        last_number = Some(e);
                         j = e + 1;
                     }
                 }
@@ -9141,6 +9296,15 @@ fn apply_time_reading(tokens: &mut Vec<Token>, clause_text: bool) {
                 Some(Token::Number(n)) => Some(word_after_colon(tokens, end, &n.surface(), clause_text)),
                 _ => None,
             };
+            let padded = last_number.and_then(|n| padded_hour[n]).filter(|_| after.is_some());
+            let drops_zero = after.as_deref().is_some_and(|word| hour_zero_omitted(word, padded));
+            if let (true, Some(Token::Number(NumberToken::Cardinal(h)))) =
+                (drops_zero, out.iter_mut().rev().find(|t| !matches!(t, Token::Space)))
+            {
+                if h.len() == 2 && h.starts_with('0') {
+                    *h = normalized_hour(h);
+                }
+            }
             out.push(Token::Space);
             match before.zip(after) {
                 Some((before, after)) => out.extend(colon_word(&before, &after)),
@@ -9154,6 +9318,9 @@ fn apply_time_reading(tokens: &mut Vec<Token>, clause_text: bool) {
             }
             i = end;
             continue;
+        }
+        if matches!(tokens[i], Token::Number(_)) {
+            last_number = Some(i);
         }
         out.push(tokens[i].clone());
         i += 1;
@@ -11813,6 +11980,7 @@ impl Translator {
         if number_grammar.c_numbers != 0 {
             apply_time_reading(&mut tokens, number_grammar.clause_text);
         }
+        tokens.retain(|t| !matches!(t, Token::MinutePad(_)));
         apply_dash_reading(&mut tokens, lang);
         apply_decades(&mut tokens, lang);
         apply_dimensions(&mut tokens, lang);
@@ -12506,7 +12674,7 @@ impl Translator {
                 }
                 // A hyphen-joined pair is spoken as one word: no boundary, no
                 // space in the output.
-                Token::WordJoin | Token::DotEndsClause => {}
+                Token::WordJoin | Token::DotEndsClause | Token::MinutePad(_) => {}
                 Token::Space => {
                     let before_entry = previous_entry(&prev_spoken_at, &entries, token_ix);
                     let before = before_entry.map(|e| &e.kind);
@@ -13009,7 +13177,12 @@ fn token_sources(
             if surface.is_empty() {
                 return (None, Vec::new());
             }
-            let found = locate_surface(text, &surface, cursor);
+            let found = locate_surface(text, &surface, cursor).map(|(start, end)| {
+                let hour = matches!(token, Token::Number(NumberToken::Cardinal(d)) if !d.starts_with('0'));
+                // A time's leading zero is dropped from the token but not from the word C reports.
+                let zeros = if hour { text[cursor..start].bytes().rev().take_while(|&b| b == b'0').count() } else { 0 };
+                (start - zeros, end)
+            });
             if let Some((_, end)) = found {
                 cursor = end;
                 // The tokenizer reads a run of clause marks as its first one.
@@ -13153,7 +13326,7 @@ fn token_surface(token: &Token, grammar: &NumberGrammar) -> String {
         Token::InlinePhonemes(p) => format!("[[{p}]]"),
         Token::Operator(c) | Token::Punctuation(c) | Token::ClauseBoundary(c) => c.to_string(),
         Token::DigitColon { .. } => ":".to_string(),
-        Token::Space | Token::WordJoin | Token::Embedded(_) | Token::DotEndsClause => String::new(),
+        Token::Space | Token::WordJoin | Token::Embedded(_) | Token::DotEndsClause | Token::MinutePad(_) => String::new(),
     }
 }
 

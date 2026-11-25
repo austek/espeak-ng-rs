@@ -21,7 +21,7 @@ pub fn upper(c: u32) -> bool {
 }
 
 pub fn lower(c: u32) -> bool {
-    of(c).is_some_and(char::is_lowercase)
+    of(c).is_some_and(crate::translate::ucd_lower::is_plain_lower)
 }
 
 pub fn digit(c: u32) -> bool {
