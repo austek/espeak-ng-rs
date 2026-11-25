@@ -158,7 +158,15 @@ pub fn split_clauses(codes: &[PhonemeCode]) -> Vec<ClauseCodes> {
             cur.push(c.clone());
         }
     }
-    if cur.iter().any(|c| c.code != 0 || c.marker.is_some()) {
+    // A clause with no word but a character C turns into a blank has no phoneme list in C, and
+    // so no pause.
+    let blank_mark = |c: &PhonemeCode| matches!(&c.marker, Some(CodeMarker::Punctuation(p)) if crate::translate::is_blank_in_clause(*p));
+    let speaks = |c: &PhonemeCode| match &c.marker {
+        Some(CodeMarker::Punctuation(_)) => !blank_mark(c),
+        Some(_) => true,
+        None => c.code != 0 && !(c.code == PHON_END_WORD && cur.iter().any(blank_mark)),
+    };
+    if cur.iter().any(speaks) {
         out.push(ClauseCodes::plain(cur, None));
     }
     if out.is_empty() {

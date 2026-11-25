@@ -9398,6 +9398,17 @@ fn is_fullwidth_clause_mark(c: char) -> bool {
     (0xFF00..=0xFFEF).contains(&(c as u32)) && is_clause_punctuation(c)
 }
 
+/// The Unicode `Ellipsis` property C's `clause_type_from_codepoint` keys on.
+fn has_ellipsis_property(c: char) -> bool {
+    matches!(c as u32, 0x0EAF | 0x1801 | 0x2026 | 0x22EE..=0x22F1 | 0xFE19)
+}
+
+/// Whether C turns the character into a blank (`breaks` in translate.c), so that a clause with
+/// no word but this character has no phoneme list and no pause.
+pub(crate) fn is_blank_in_clause(c: char) -> bool {
+    c == '_'
+}
+
 /// Whether the character is clause punctuation at all — it breaks the clause
 /// instead of being spoken, so it never reaches the dictionary for a name.
 fn is_clause_punctuation(c: char) -> bool {
@@ -9727,7 +9738,21 @@ fn follow_emphasis(tokens: &[Token], emphasized: &[bool], from: usize) -> u32 {
 /// not a letter, digit, blank or bracket, and not one of the marks that become a blank or
 /// end the clause.
 fn is_symbol_run_char(c: char) -> bool {
-    c.is_ascii_punctuation() && !matches!(c, '.' | '-' | '\'' | '_' | ',' | '!' | '?' | ';') && !is_bracket(c)
+    if c.is_ascii() {
+        return c.is_ascii_punctuation() && !matches!(c, '.' | '-' | '\'' | '_' | ',' | '!' | '?' | ';') && !is_bracket(c);
+    }
+    is_non_ascii_symbol(c) && !is_bracket(c)
+}
+
+/// The non-ASCII symbols (Unicode categories Sm, Sc, Sk and So outside the emoji) that C leaves
+/// in a word when they follow another symbol: `¬¬¬¬` is one word.
+fn is_non_ascii_symbol(c: char) -> bool {
+    let code = c as u32;
+    let symbol_block = matches!(
+        code,
+        0xA2..=0xA9 | 0xAC | 0xAE..=0xB1 | 0x20A0..=0x20CF | 0x2100..=0x214F | 0x2190..=0x23FF | 0x25A0..=0x25FF
+    );
+    symbol_block && !c.is_alphanumeric() && !ucd_alpha::is_alpha(c) && !ucd_alpha::is_emoji(c) && !is_clause_punctuation(c)
 }
 
 fn symbol_char(token: &Token) -> Option<char> {
@@ -9917,9 +9942,11 @@ pub(crate) fn build_translate_entries(
     let word_like: Vec<bool> = tokens
         .iter()
         .map(|t| match t {
+            Token::Operator('_') | Token::Punctuation('_') => punct_covers(options, '_'),
             Token::Operator(_) => true,
             Token::Punctuation(c) => {
                 is_spoken_symbol(*c)
+                    || (is_clause_punctuation(*c) && *c != '.')
                     || punct_covers(options, *c)
                     || dict_names_symbol(dict, *c, options.dict_condition)
                     || (!is_clause_punctuation(*c)
@@ -10613,7 +10640,7 @@ pub(crate) fn build_translate_entries(
                 // C reads an ellipsis through its clause terminator, not as a one-character
                 // word, so `…` is never counted.
                 let (max3, raw) = char_list_entry(dict, *c, options.dict_condition, options.reversed_textmode)
-                    .filter(|_| *c != '\u{2026}')
+                    .filter(|_| !has_ellipsis_property(*c))
                     .map_or((false, Vec::new()), |(f, raw)| (f & crate::dictionary::FLAG_MAX3 != 0, raw));
                 let phonemes = repeat.admit(*c, max3, &raw, phonemes);
                 entries.push(TranslateEntry {
@@ -10736,9 +10763,10 @@ pub(crate) fn build_translate_entries(
             }
             _ => {
                 let silent_name = matches!(token, Token::Punctuation(c)
-                    if !is_clause_punctuation(*c)
+                    if (!is_clause_punctuation(*c)
                         && primary_bcp47_subtag(&options.lang) != "en"
-                        && has_underscore_name(dict, *c, options.dict_condition));
+                        && has_underscore_name(dict, *c, options.dict_condition))
+                        || (is_clause_punctuation(*c) && *c != '.'));
                 entries.push(TranslateEntry {
                     phonemes:   Vec::new(),
                     dict_flags: 0,
@@ -10747,6 +10775,15 @@ pub(crate) fn build_translate_entries(
                         word_group: None, spelled: false,
                     found_in_list: false,
                 });
+            }
+        }
+        // C turns `_` into a blank (`breaks` in translate.c) after `--punct` had its chance to
+        // announce it, so a list entry for it is never read.
+        if matches!(token, Token::Operator('_') | Token::Punctuation('_')) && !punct_covers(options, '_') {
+            if let Some(entry) = entries.last_mut() {
+                entry.phonemes.clear();
+                entry.word_lower = None;
+                entry.kind = TranslateEntryKind::Other;
             }
         }
         // Any other word that speaks ends the `$max3` run, as C clears
@@ -12369,7 +12406,10 @@ impl Translator {
                             .count();
                         pre_pause = (pre_pause as usize).saturating_sub(pending) as _;
                         let at = if pre_pause > 0 { at + lift_embedded_before_pause(&mut codes, at) } else { at };
-                        let existing_pauses = trailing_pause_count(&codes[..at]);
+                        let own_tail = previous_entry(&prev_spoken_at, &entries, token_ix)
+                            .filter(|p| p.kind == TranslateEntryKind::Word)
+                            .map_or(0, |p| own_trailing_pauses(&p.phonemes));
+                        let existing_pauses = trailing_pause_count(&codes[..at]).saturating_sub(own_tail);
                         let mut n = 0;
                         while pre_pause > 0 {
                             let code = if pre_pause > 1 {
@@ -12886,6 +12926,12 @@ fn trailing_pause_count(codes: &[PhonemeCode]) -> usize {
         .count()
 }
 
+/// The pauses a pronunciation itself ends with (`_:'Ekskl@m,eIS@n_:`): they belong to its own
+/// word, not to the word that follows it.
+fn own_trailing_pauses(phonemes: &[u8]) -> usize {
+    phonemes.iter().rev().skip_while(|&&b| b == 0).take_while(|&&b| is_pre_pause_code(b)).count()
+}
+
 /// The index of the first code of `codes` that is not one of the first `pre_pause` pauses.
 fn skip_pre_pauses(codes: &[PhonemeCode], pre_pause: usize) -> usize {
     let mut left = pre_pause;
@@ -12963,6 +13009,12 @@ fn token_sources(
             let found = locate_surface(text, &surface, cursor);
             if let Some((_, end)) = found {
                 cursor = end;
+                // The tokenizer reads a run of clause marks as its first one.
+                if let (true, Token::Punctuation(c) | Token::Operator(c)) = (plain, token) {
+                    if is_clause_punctuation(*c) {
+                        cursor += text[end..].chars().take_while(|&n| is_clause_punctuation(n)).map(char::len_utf8).sum::<usize>();
+                    }
+                }
             }
             let waiting = command.take().filter(|&at| found.is_some_and(|(start, _)| at < start));
             let start = waiting.or(found.map(|(start, _)| start)).unwrap_or(cursor);

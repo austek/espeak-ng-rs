@@ -174,7 +174,8 @@ fn ends_word(code: &PhonemeCode) -> bool {
     code.code == PHON_END_WORD || (code.is_boundary && code.code == 0)
 }
 
-/// Whether the next sounding code after a word end starts a word of its own.
+/// Whether the next sounding code after a word end starts a word of its own.  A pause that
+/// opens the word (a clause mark read as a word begins with one) is not what it starts at.
 fn word_follows(rest: &[PhonemeCode]) -> bool {
     rest.iter()
         .find(|c| c.source.is_some() || !(ends_word(c) || c.marker.is_some()))
