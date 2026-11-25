@@ -21,3 +21,17 @@ path = "fuzz_targets/translate_text.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "read_clauses"
+path = "fuzz_targets/read_clauses.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ssml_document"
+path = "fuzz_targets/ssml_document.rs"
+test = false
+doc = false
+bench = false

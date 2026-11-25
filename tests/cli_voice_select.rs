@@ -72,8 +72,11 @@ fn compile_checks_the_voice_first() {
 
 #[test]
 fn data_directory_without_phontab_is_reported() {
-    let want = "Error processing file '/tmp/phontab': No such file or directory.\n";
-    assert_eq!(run_in("/tmp", &["-q", "-x", "hello"]), (Some(1), String::new(), want.into()));
+    let empty = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("voice_select_no_phontab");
+    std::fs::create_dir_all(&empty).expect("empty data dir");
+    let want = format!("Error processing file '{}': No such file or directory.\n", empty.join("phontab").display());
+    let got = run_in(empty.to_str().expect("utf8"), &["-q", "-x", "hello"]);
+    assert_eq!(got, (Some(1), String::new(), want));
 }
 
 #[test]

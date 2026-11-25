@@ -1,0 +1,110 @@
+name: fuzz
+
+on:
+  schedule:
+    # Daily, so the corpus cache is rewritten well inside GitHub's 7-day eviction window.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Fuzzing time per target in seconds (1-1500)"
+        default: "300"
+  pull_request:
+    paths:
+      - "fuzz/**"
+      - "src/**"
+      - "Cargo.toml"
+      - ".github/workflows/fuzz.yml"
+
+permissions:
+  contents: read
+
+# Only pull request runs are superseded; a dispatch never cancels a scheduled run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [translate_text, read_clauses, ssml_document]
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      ESPEAK_DATA_PATH: ${{ github.workspace }}
+      FUZZ_SECONDS_INPUT: ${{ inputs.seconds }}
+      EVENT_NAME: ${{ github.event_name }}
+      TARGET: ${{ matrix.target }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Pull requests only prove the targets build and run; schedule and dispatch do the fuzzing.
+      - name: Resolve fuzzing time
+        run: |
+          case "$EVENT_NAME" in
+            pull_request) seconds=20 ;;
+            *) seconds="${FUZZ_SECONDS_INPUT:-300}" ;;
+          esac
+          case "$seconds" in
+            '' | *[!0-9]*) echo "seconds must be a number: $seconds" >&2; exit 1 ;;
+          esac
+          if [ "$seconds" -lt 1 ] || [ "$seconds" -gt 1500 ]; then
+            echo "seconds must be 1-1500: $seconds" >&2
+            exit 1
+          fi
+          echo "FUZZ_SECONDS=$seconds" >> "$GITHUB_ENV"
+
+      # A dated nightly keeps the build cache valid between runs; bump it deliberately.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: nightly-2026-11-20
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: fuzz
+          shared-key: fuzz-${{ matrix.target }}
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
+
+      - name: Restore corpus
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+
+      - name: Fuzz
+        working-directory: fuzz
+        run: |
+          mkdir -p "corpus/$TARGET"
+          cargo fuzz run "$TARGET" "corpus/$TARGET" "seeds/$TARGET" \
+            -- -max_total_time="$FUZZ_SECONDS" -timeout=30 -rss_limit_mb=2048
+
+      - name: Minimize corpus
+        if: success() && github.event_name != 'pull_request'
+        working-directory: fuzz
+        run: cargo fuzz cmin "$TARGET"
+
+      - name: Save corpus
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+
+      - name: Upload crashes
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-crashes-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}
+          if-no-files-found: ignore

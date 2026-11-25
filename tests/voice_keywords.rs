@@ -3,7 +3,6 @@
 // gives 45394 bytes for `en`, 47250 with `stressAdd 0 0 -10 -10 0 0 10 40`
 // and 59040 with `speed 80`.
 
-use std::path::PathBuf;
 use std::process::Command;
 
 const DATA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/espeak-ng-data");
@@ -11,6 +10,7 @@ const DATA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/espeak-ng-data");
 fn wav(args: &[&str], tag: &str) -> Vec<u8> {
     let out = std::env::temp_dir().join(format!("vk_{}_{tag}.wav", std::process::id()));
     let st = Command::new(env!("CARGO_BIN_EXE_espeak_cli"))
+        .current_dir(std::env::temp_dir())
         .args(args)
         .arg("-w")
         .arg(&out)
@@ -24,17 +24,25 @@ fn wav(args: &[&str], tag: &str) -> Vec<u8> {
     bytes
 }
 
-fn voice_file(tag: &str, body: &str) -> PathBuf {
-    let p = std::env::temp_dir().join(format!("vk_{}_{tag}.voice", std::process::id()));
-    std::fs::write(&p, format!("language en\n{body}\n")).expect("write voice");
-    p
+/// Writes a voice file into the temp directory and returns its bare name. The CLI keeps 39
+/// characters of the `-v` value (C's `voicename[40]`) and a temp directory path can be longer,
+/// so `wav` runs from the temp directory and the file is named relative to it.
+fn voice_file(tag: &str, body: &str) -> String {
+    let name = format!("vk_{}_{tag}.voice", std::process::id());
+    assert!(name.len() <= 39, "{name}");
+    std::fs::write(std::env::temp_dir().join(&name), format!("language en\n{body}\n")).expect("write voice");
+    name
+}
+
+fn remove_voice_file(name: &str) {
+    let _ = std::fs::remove_file(std::env::temp_dir().join(name));
 }
 
 fn ratio_to_default(body: &str, tag: &str) -> f64 {
     let base = wav(&["-v", "en"], &format!("{tag}b")).len() as f64;
-    let p = voice_file(tag, body);
-    let n = wav(&["--load", "-v", p.to_str().unwrap()], tag).len() as f64;
-    let _ = std::fs::remove_file(&p);
+    let name = voice_file(tag, body);
+    let n = wav(&["--load", "-v", &name], tag).len() as f64;
+    remove_voice_file(&name);
     n / base
 }
 
@@ -49,9 +57,9 @@ fn stress_add_in_a_voice_file_lengthens_stressed_syllables() {
 
 #[test]
 fn speed_keyword_scales_the_rate() {
-    let p = voice_file("sp", "speed 80");
-    let spoken = wav(&["--load", "-v", p.to_str().unwrap()], "sp").len();
-    let _ = std::fs::remove_file(&p);
+    let name = voice_file("sp", "speed 80");
+    let spoken = wav(&["--load", "-v", &name], "sp").len();
+    remove_voice_file(&name);
     // C: `speed 80` and `-s 140` both give 59040 bytes (175 * 80 / 100 = 140).
     assert_eq!(spoken, wav(&["-v", "en", "-s", "140"], "s140").len());
 }

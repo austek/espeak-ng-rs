@@ -154,23 +154,32 @@ fn load_reads_a_voice_definition_from_a_file() {
         eprintln!("[SKIP] no de data");
         return;
     }
+    // The CLI keeps 39 characters of the `-v` value, as C's `voicename[40]` does, and a
+    // temp directory path can be longer; so the file is named relative to the child's cwd.
     let file = tmp("voice");
     std::fs::write(&file, "name test\nlanguage de\npitch 60 100\n").unwrap();
-    let x = |args: &[&str]| {
-        let out = Command::new(bin()).args(args).output().expect("run");
-        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    let name = file.file_name().unwrap().to_str().unwrap();
+    assert!(name.len() <= 39, "{name}");
+    let data = env!("CARGO_MANIFEST_DIR");
+    let in_tmp = |args: &[&str]| {
+        Command::new(bin())
+            .current_dir(file.parent().unwrap())
+            .env("ESPEAK_DATA_PATH", data)
+            .args(args)
+            .output()
+            .expect("run")
     };
-    let loaded = x(&["-q", "-x", "--load", "-v", file.to_str().unwrap(), "hallo welt"]);
+    let x = |args: &[&str]| String::from_utf8_lossy(&in_tmp(args).stdout).trim().to_string();
+    let loaded = x(&["-q", "-x", "--load", "-v", name, "hallo welt"]);
     assert_eq!(loaded, x(&["-q", "-x", "-v", "de", "hallo welt"]));
 
     // The file's `pitch` is applied, so the audio is not the stock voice's.
     let a = tmp("load-a.wav");
     let b = tmp("load-b.wav");
-    for (args, out) in [
-        (vec!["--load", "-v", file.to_str().unwrap()], &a),
-        (vec!["-v", "de"], &b),
-    ] {
+    for (args, out) in [(vec!["--load", "-v", name], &a), (vec!["-v", "de"], &b)] {
         let status = Command::new(bin())
+            .current_dir(file.parent().unwrap())
+            .env("ESPEAK_DATA_PATH", data)
             .args(&args)
             .arg("-w")
             .arg(out)

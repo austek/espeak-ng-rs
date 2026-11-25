@@ -1,0 +1,7 @@
+* text=auto eol=lf
+/espeak-ng-data/** -text
+/data-crates/**/data/** -text
+*.wav binary
+*.pyc binary
+*.png binary
+*.ico binary

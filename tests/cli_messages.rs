@@ -1,7 +1,7 @@
 // Messages, exit statuses and side effects of the command line match C: --version, --help, error texts, -q, --phonout, stdin lines.
 
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 const BIN: &str = env!("CARGO_BIN_EXE_espeak_cli");
@@ -42,18 +42,22 @@ fn scratch(name: &str) -> PathBuf {
     dir
 }
 
+fn version_line() -> String {
+    let data = Path::new(DATA_PARENT).join("espeak-ng-data");
+    format!("eSpeak NG text-to-speech: 1.53.0  Data at: {}", data.display())
+}
+
 #[test]
 fn version_is_the_c_line() {
     let r = run(&["--version"]);
-    let want = format!("eSpeak NG text-to-speech: 1.53.0  Data at: {DATA_PARENT}/espeak-ng-data\n");
+    let want = format!("{}\n", version_line());
     assert_eq!((r.code, r.out, r.err), (Some(0), want, String::new()));
 }
 
 #[test]
 fn help_is_the_c_text_after_a_blank_line_and_the_version_line() {
     let r = run(&["--help"]);
-    let version = format!("eSpeak NG text-to-speech: 1.53.0  Data at: {DATA_PARENT}/espeak-ng-data");
-    let want = format!("\n{version}\n{}", include_str!("cli_help/body.txt"));
+    let want = format!("\n{}\n{}", version_line(), include_str!("cli_help/body.txt"));
     assert_eq!((r.code, r.out, r.err), (Some(0), want.clone(), String::new()));
     assert_eq!(run(&["-h"]).out, want);
 }
@@ -120,10 +124,11 @@ fn speech_without_an_output_option_fails_like_a_missing_audio_device() {
 #[test]
 fn compile_phonemes_missing_source_prints_the_c_messages() {
     let r = run(&["--compile-phonemes=/nonexistent"]);
-    assert_eq!(r.out, "Compiling phoneme data: /nonexistent/phonemes\n");
+    let source = Path::new("/nonexistent").join("phonemes");
+    assert_eq!(r.out, format!("Compiling phoneme data: {}\n", source.display()));
     assert_eq!(
-        (r.code, r.err.as_str()),
-        (Some(1), "Error processing file '/nonexistent/phonemes': No such file or directory.\n")
+        (r.code, r.err),
+        (Some(1), format!("Error processing file '{}': No such file or directory.\n", source.display()))
     );
 }
 

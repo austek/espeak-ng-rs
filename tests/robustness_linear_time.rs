@@ -39,7 +39,7 @@ fn run_fill(name: &str, unit: &str, bytes: usize, lang: &str) -> (Duration, Vec<
     (elapsed, out.stdout)
 }
 
-/// The fastest of three runs at `small` against one run at `large`, one after the other.
+/// The fastest of three runs at `small` against up to three runs at `large`, one after the other.
 fn assert_linear_between(name: &str, unit: &str, lang: &str, small: usize, large: usize) -> Vec<u8> {
     // A debug build is about ten times slower, so it gets an eighth of the input; the ratio
     // still separates linear from quadratic growth.
@@ -49,12 +49,19 @@ fn assert_linear_between(name: &str, unit: &str, lang: &str, small: usize, large
         .map(|_| run_fill(&format!("{name}_small"), unit, small, lang).0)
         .min()
         .expect("three runs");
-    let (slow, out) = run_fill(&format!("{name}_large"), unit, large, lang);
-    assert!(
-        slow < fastest.max(FLOOR) * GROWTH,
-        "{name}: {small} bytes took {fastest:?}, {large} bytes took {slow:?}"
-    );
-    out
+    // Noise only slows a run, so the guard stops at the first large run within the bound and
+    // fails only when the fastest of three is still over it.
+    let bound = fastest.max(FLOOR) * GROWTH;
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        let (elapsed, out) = run_fill(&format!("{name}_large"), unit, large, lang);
+        if elapsed < bound {
+            eprintln!("{name}: growth {:.1}x of {GROWTH}x allowed", elapsed.as_secs_f64() / fastest.max(FLOOR).as_secs_f64());
+            return out;
+        }
+        seen.push(elapsed);
+    }
+    panic!("{name}: {small} bytes took {fastest:?}, {large} bytes took {seen:?} (bound {bound:?})")
 }
 
 fn assert_linear(name: &str, unit: &str, lang: &str) -> Vec<u8> {

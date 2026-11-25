@@ -2,7 +2,7 @@
 // text is, the file header is patched at the end, and a pipe gets upstream's
 // placeholder sizes.
 
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 const SENTENCES: &str = "The quick brown fox jumps over the lazy dog, then 42 cats sat quietly. \
 Where did everyone go? Nobody knows! ";
@@ -50,7 +50,8 @@ fn piped_stdout_gets_upstream_placeholder_sizes() {
     assert!(out.stdout.len() > 44);
 }
 
-#[cfg(unix)]
+// macOS does not enforce RLIMIT_AS, so the limit proves nothing there.
+#[cfg(target_os = "linux")]
 #[test]
 fn long_text_wav_fits_in_a_small_address_space() {
     let text = input("memory", 100_000);
@@ -59,7 +60,7 @@ fn long_text_wav_fits_in_a_small_address_space() {
         .arg(env!("CARGO_BIN_EXE_espeak_cli"))
         .arg(&text)
         .env("ESPEAK_DATA_PATH", data())
-        .stdout(Stdio::null())
+        .stdout(std::process::Stdio::null())
         .status()
         .expect("run cli");
     assert!(status.success(), "{status:?}");

@@ -74,5 +74,6 @@ fn version_reports_the_resolved_data_directory() {
         return;
     }
     let (_, out, _) = run(Some(parent()), &["--version"]);
-    assert!(out.trim_end().ends_with(&format!("Data at: {}/espeak-ng-data", parent())), "{out}");
+    let data = std::path::Path::new(parent()).join("espeak-ng-data");
+    assert!(out.trim_end().ends_with(&format!("Data at: {}", data.display())), "{out}");
 }
