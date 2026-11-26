@@ -61,9 +61,13 @@ static int on_synth(short *wav, int n, espeak_EVENT *events) {
 }
 
 static int uri_status = 0;
+static int uri_alternate = 0;
+static int uri_calls = 0;
 
 static int on_uri(int type, const char *uri, const char *base) {
 	printf("uri type=%d uri=%s base=%s\n", type, uri, base ? base : "(null)");
+	if (uri_alternate)
+		return uri_calls++ % 2;
 	return uri_status;
 }
 
@@ -146,6 +150,7 @@ static int scenario_events(int argc, char **argv) {
 	int mode = atoi(argv[0]);
 	int options = argc > 4 ? atoi(argv[4]) : 0;
 	uri_status = (options & 0x200) ? 1 : 0;
+	uri_alternate = (options & 0x400) ? 1 : 0;
 	init(mode, (options & 0x100) ? 0 : options & 0xff);
 	if (options & 0x100)
 		espeak_ng_SetPhonemeEvents(options & 1, (options >> 1) & 1);

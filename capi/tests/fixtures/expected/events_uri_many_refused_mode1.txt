@@ -1,0 +1,1300 @@
+uri type=1 uri=clip-00-0123456789-0123456789-0123.wav base=(null)
+cb 0 samples=1324 wav=data
+  ev type=8 uid=1 pos=0 len=0 apos=0 ud=UD
+  ev type=2 uid=1 pos=8 len=0 apos=0 num=1 ud=UD
+  ev type=1 uid=1 pos=8 len=4 apos=0 num=1 ud=UD
+cb 1 samples=1324 wav=data
+cb 2 samples=1324 wav=data
+cb 3 samples=1324 wav=data
+cb 4 samples=1324 wav=data
+  ev type=1 uid=1 pos=13 len=1 apos=293 num=2 ud=UD
+cb 5 samples=1324 wav=data
+cb 6 samples=1324 wav=data
+cb 7 samples=1324 wav=data
+cb 8 samples=1324 wav=data
+cb 9 samples=1324 wav=data
+cb 10 samples=1324 wav=data
+cb 11 samples=210 wav=data
+  ev type=5 uid=1 pos=66 len=0 apos=670 ud=UD
+cb 12 samples=1324 wav=data
+  ev type=1 uid=1 pos=69 len=4 apos=670 num=3 ud=UD
+cb 13 samples=1324 wav=data
+cb 14 samples=1324 wav=data
+cb 15 samples=1324 wav=data
+cb 16 samples=1324 wav=data
+cb 17 samples=1324 wav=data
+cb 18 samples=1324 wav=data
+cb 19 samples=1324 wav=data
+cb 20 samples=1324 wav=data
+cb 21 samples=1324 wav=data
+cb 22 samples=816 wav=data
+  ev type=5 uid=1 pos=74 len=0 apos=1307 ud=UD
+uri type=1 uri=clip-01-0123456789-0123456789-0123.wav base=(null)
+cb 23 samples=1324 wav=data
+  ev type=2 uid=1 pos=75 len=0 apos=1307 num=2 ud=UD
+  ev type=1 uid=1 pos=75 len=4 apos=1307 num=4 ud=UD
+cb 24 samples=1324 wav=data
+cb 25 samples=1324 wav=data
+cb 26 samples=1324 wav=data
+cb 27 samples=1324 wav=data
+  ev type=1 uid=1 pos=80 len=1 apos=1583 num=5 ud=UD
+cb 28 samples=1324 wav=data
+cb 29 samples=1324 wav=data
+cb 30 samples=1324 wav=data
+cb 31 samples=1324 wav=data
+cb 32 samples=248 wav=data
+  ev type=5 uid=1 pos=133 len=0 apos=1859 ud=UD
+cb 33 samples=1324 wav=data
+  ev type=1 uid=1 pos=136 len=4 apos=1859 num=6 ud=UD
+cb 34 samples=1324 wav=data
+cb 35 samples=1324 wav=data
+cb 36 samples=1324 wav=data
+cb 37 samples=1324 wav=data
+cb 38 samples=1324 wav=data
+cb 39 samples=1324 wav=data
+cb 40 samples=1324 wav=data
+cb 41 samples=1324 wav=data
+cb 42 samples=1324 wav=data
+cb 43 samples=798 wav=data
+  ev type=5 uid=1 pos=141 len=0 apos=2495 ud=UD
+uri type=1 uri=clip-02-0123456789-0123456789-0123.wav base=(null)
+cb 44 samples=1324 wav=data
+  ev type=2 uid=1 pos=142 len=0 apos=2495 num=3 ud=UD
+  ev type=1 uid=1 pos=142 len=4 apos=2495 num=7 ud=UD
+cb 45 samples=1324 wav=data
+cb 46 samples=1324 wav=data
+cb 47 samples=1324 wav=data
+cb 48 samples=1324 wav=data
+  ev type=1 uid=1 pos=147 len=1 apos=2774 num=8 ud=UD
+cb 49 samples=1324 wav=data
+cb 50 samples=1324 wav=data
+cb 51 samples=1324 wav=data
+cb 52 samples=1324 wav=data
+cb 53 samples=164 wav=data
+  ev type=5 uid=1 pos=200 len=0 apos=3043 ud=UD
+cb 54 samples=1324 wav=data
+  ev type=1 uid=1 pos=203 len=4 apos=3043 num=9 ud=UD
+cb 55 samples=1324 wav=data
+cb 56 samples=1324 wav=data
+cb 57 samples=1324 wav=data
+cb 58 samples=1324 wav=data
+cb 59 samples=1324 wav=data
+cb 60 samples=1324 wav=data
+cb 61 samples=1324 wav=data
+cb 62 samples=1324 wav=data
+cb 63 samples=1324 wav=data
+cb 64 samples=813 wav=data
+  ev type=5 uid=1 pos=208 len=0 apos=3680 ud=UD
+uri type=1 uri=clip-03-0123456789-0123456789-0123.wav base=(null)
+cb 65 samples=1324 wav=data
+  ev type=2 uid=1 pos=209 len=0 apos=3680 num=4 ud=UD
+  ev type=1 uid=1 pos=209 len=4 apos=3680 num=10 ud=UD
+cb 66 samples=1324 wav=data
+cb 67 samples=1324 wav=data
+cb 68 samples=1324 wav=data
+cb 69 samples=1324 wav=data
+  ev type=1 uid=1 pos=214 len=1 apos=3968 num=11 ud=UD
+cb 70 samples=1324 wav=data
+cb 71 samples=1324 wav=data
+cb 72 samples=1324 wav=data
+cb 73 samples=1324 wav=data
+cb 74 samples=362 wav=data
+  ev type=5 uid=1 pos=267 len=0 apos=4237 ud=UD
+cb 75 samples=1324 wav=data
+  ev type=1 uid=1 pos=270 len=4 apos=4237 num=12 ud=UD
+cb 76 samples=1324 wav=data
+cb 77 samples=1324 wav=data
+cb 78 samples=1324 wav=data
+cb 79 samples=1324 wav=data
+cb 80 samples=1324 wav=data
+cb 81 samples=1324 wav=data
+cb 82 samples=1324 wav=data
+cb 83 samples=1324 wav=data
+cb 84 samples=1324 wav=data
+cb 85 samples=800 wav=data
+  ev type=5 uid=1 pos=275 len=0 apos=4874 ud=UD
+uri type=1 uri=clip-04-0123456789-0123456789-0123.wav base=(null)
+cb 86 samples=1324 wav=data
+  ev type=2 uid=1 pos=276 len=0 apos=4874 num=5 ud=UD
+  ev type=1 uid=1 pos=276 len=4 apos=4874 num=13 ud=UD
+cb 87 samples=1324 wav=data
+cb 88 samples=1324 wav=data
+cb 89 samples=1324 wav=data
+cb 90 samples=1324 wav=data
+  ev type=1 uid=1 pos=281 len=1 apos=5162 num=14 ud=UD
+cb 91 samples=1324 wav=data
+cb 92 samples=1324 wav=data
+cb 93 samples=1324 wav=data
+cb 94 samples=1324 wav=data
+cb 95 samples=997 wav=data
+  ev type=5 uid=1 pos=334 len=0 apos=5460 ud=UD
+cb 96 samples=1324 wav=data
+  ev type=1 uid=1 pos=337 len=4 apos=5460 num=15 ud=UD
+cb 97 samples=1324 wav=data
+cb 98 samples=1324 wav=data
+cb 99 samples=1324 wav=data
+cb 100 samples=1324 wav=data
+cb 101 samples=1324 wav=data
+cb 102 samples=1324 wav=data
+cb 103 samples=1324 wav=data
+cb 104 samples=1324 wav=data
+cb 105 samples=1324 wav=data
+cb 106 samples=805 wav=data
+  ev type=5 uid=1 pos=342 len=0 apos=6097 ud=UD
+uri type=1 uri=clip-05-0123456789-0123456789-0123.wav base=(null)
+cb 107 samples=1324 wav=data
+  ev type=2 uid=1 pos=343 len=0 apos=6097 num=6 ud=UD
+  ev type=1 uid=1 pos=343 len=4 apos=6097 num=16 ud=UD
+cb 108 samples=1324 wav=data
+cb 109 samples=1324 wav=data
+cb 110 samples=1324 wav=data
+cb 111 samples=1324 wav=data
+  ev type=1 uid=1 pos=348 len=1 apos=6385 num=17 ud=UD
+cb 112 samples=1324 wav=data
+cb 113 samples=1324 wav=data
+cb 114 samples=1324 wav=data
+cb 115 samples=1324 wav=data
+cb 116 samples=1324 wav=data
+cb 117 samples=989 wav=data
+  ev type=5 uid=1 pos=401 len=0 apos=6742 ud=UD
+cb 118 samples=1324 wav=data
+  ev type=1 uid=1 pos=404 len=4 apos=6742 num=18 ud=UD
+cb 119 samples=1324 wav=data
+cb 120 samples=1324 wav=data
+cb 121 samples=1324 wav=data
+cb 122 samples=1324 wav=data
+cb 123 samples=1324 wav=data
+cb 124 samples=1324 wav=data
+cb 125 samples=1324 wav=data
+cb 126 samples=1324 wav=data
+cb 127 samples=1324 wav=data
+cb 128 samples=806 wav=data
+  ev type=5 uid=1 pos=409 len=0 apos=7379 ud=UD
+uri type=1 uri=clip-06-0123456789-0123456789-0123.wav base=(null)
+cb 129 samples=1324 wav=data
+  ev type=2 uid=1 pos=410 len=0 apos=7379 num=7 ud=UD
+  ev type=1 uid=1 pos=410 len=4 apos=7379 num=19 ud=UD
+cb 130 samples=1324 wav=data
+cb 131 samples=1324 wav=data
+cb 132 samples=1324 wav=data
+cb 133 samples=1324 wav=data
+  ev type=1 uid=1 pos=415 len=1 apos=7667 num=20 ud=UD
+cb 134 samples=1324 wav=data
+cb 135 samples=1324 wav=data
+cb 136 samples=1324 wav=data
+cb 137 samples=1324 wav=data
+cb 138 samples=1324 wav=data
+cb 139 samples=1287 wav=data
+  ev type=5 uid=1 pos=468 len=0 apos=8038 ud=UD
+cb 140 samples=1324 wav=data
+  ev type=1 uid=1 pos=471 len=4 apos=8038 num=21 ud=UD
+cb 141 samples=1324 wav=data
+cb 142 samples=1324 wav=data
+cb 143 samples=1324 wav=data
+cb 144 samples=1324 wav=data
+cb 145 samples=1324 wav=data
+cb 146 samples=1324 wav=data
+cb 147 samples=1324 wav=data
+cb 148 samples=1324 wav=data
+cb 149 samples=1324 wav=data
+cb 150 samples=800 wav=data
+  ev type=5 uid=1 pos=476 len=0 apos=8674 ud=UD
+uri type=1 uri=clip-07-0123456789-0123456789-0123.wav base=(null)
+cb 151 samples=1324 wav=data
+  ev type=2 uid=1 pos=477 len=0 apos=8674 num=8 ud=UD
+  ev type=1 uid=1 pos=477 len=4 apos=8674 num=22 ud=UD
+cb 152 samples=1324 wav=data
+cb 153 samples=1324 wav=data
+cb 154 samples=1324 wav=data
+cb 155 samples=1324 wav=data
+  ev type=1 uid=1 pos=482 len=1 apos=8963 num=23 ud=UD
+cb 156 samples=1324 wav=data
+cb 157 samples=1324 wav=data
+cb 158 samples=1324 wav=data
+cb 159 samples=1324 wav=data
+cb 160 samples=1324 wav=data
+cb 161 samples=1324 wav=data
+cb 162 samples=752 wav=data
+  ev type=5 uid=1 pos=535 len=0 apos=9369 ud=UD
+cb 163 samples=1324 wav=data
+  ev type=1 uid=1 pos=538 len=4 apos=9369 num=24 ud=UD
+cb 164 samples=1324 wav=data
+cb 165 samples=1324 wav=data
+cb 166 samples=1324 wav=data
+cb 167 samples=1324 wav=data
+cb 168 samples=1324 wav=data
+cb 169 samples=1324 wav=data
+cb 170 samples=1324 wav=data
+cb 171 samples=1324 wav=data
+cb 172 samples=1324 wav=data
+cb 173 samples=812 wav=data
+  ev type=5 uid=1 pos=543 len=0 apos=10006 ud=UD
+uri type=1 uri=clip-08-0123456789-0123456789-0123.wav base=(null)
+cb 174 samples=1324 wav=data
+  ev type=2 uid=1 pos=544 len=0 apos=10006 num=9 ud=UD
+  ev type=1 uid=1 pos=544 len=4 apos=10006 num=25 ud=UD
+cb 175 samples=1324 wav=data
+cb 176 samples=1324 wav=data
+cb 177 samples=1324 wav=data
+cb 178 samples=1324 wav=data
+  ev type=1 uid=1 pos=549 len=1 apos=10270 num=26 ud=UD
+cb 179 samples=1324 wav=data
+cb 180 samples=1324 wav=data
+cb 181 samples=1319 wav=data
+  ev type=5 uid=1 pos=602 len=0 apos=10486 ud=UD
+cb 182 samples=1324 wav=data
+  ev type=1 uid=1 pos=605 len=4 apos=10486 num=27 ud=UD
+cb 183 samples=1324 wav=data
+cb 184 samples=1324 wav=data
+cb 185 samples=1324 wav=data
+cb 186 samples=1324 wav=data
+cb 187 samples=1324 wav=data
+cb 188 samples=1324 wav=data
+cb 189 samples=1324 wav=data
+cb 190 samples=1324 wav=data
+cb 191 samples=1324 wav=data
+cb 192 samples=807 wav=data
+  ev type=5 uid=1 pos=610 len=0 apos=11124 ud=UD
+uri type=1 uri=clip-09-0123456789-0123456789-0123.wav base=(null)
+cb 193 samples=1324 wav=data
+  ev type=2 uid=1 pos=611 len=0 apos=11124 num=10 ud=UD
+  ev type=1 uid=1 pos=611 len=4 apos=11124 num=28 ud=UD
+cb 194 samples=1324 wav=data
+cb 195 samples=1324 wav=data
+cb 196 samples=1324 wav=data
+cb 197 samples=1324 wav=data
+  ev type=1 uid=1 pos=616 len=1 apos=11399 num=29 ud=UD
+cb 198 samples=1324 wav=data
+cb 199 samples=1324 wav=data
+cb 200 samples=1324 wav=data
+cb 201 samples=1324 wav=data
+cb 202 samples=949 wav=data
+  ev type=5 uid=1 pos=669 len=0 apos=11707 ud=UD
+cb 203 samples=1324 wav=data
+  ev type=1 uid=1 pos=672 len=4 apos=11707 num=30 ud=UD
+cb 204 samples=1324 wav=data
+cb 205 samples=1324 wav=data
+cb 206 samples=1324 wav=data
+cb 207 samples=1324 wav=data
+cb 208 samples=1324 wav=data
+cb 209 samples=1324 wav=data
+cb 210 samples=1324 wav=data
+cb 211 samples=1324 wav=data
+cb 212 samples=1324 wav=data
+cb 213 samples=813 wav=data
+  ev type=5 uid=1 pos=677 len=0 apos=12344 ud=UD
+uri type=1 uri=clip-10-0123456789-0123456789-0123.wav base=(null)
+cb 214 samples=1324 wav=data
+  ev type=2 uid=1 pos=678 len=0 apos=12344 num=11 ud=UD
+  ev type=1 uid=1 pos=678 len=4 apos=12344 num=31 ud=UD
+cb 215 samples=1324 wav=data
+cb 216 samples=1324 wav=data
+cb 217 samples=1324 wav=data
+cb 218 samples=1324 wav=data
+  ev type=1 uid=1 pos=683 len=2 apos=12623 num=32 ud=UD
+cb 219 samples=1324 wav=data
+cb 220 samples=1324 wav=data
+cb 221 samples=1324 wav=data
+cb 222 samples=1324 wav=data
+cb 223 samples=612 wav=data
+  ev type=5 uid=1 pos=737 len=0 apos=12912 ud=UD
+cb 224 samples=1324 wav=data
+  ev type=1 uid=1 pos=740 len=4 apos=12912 num=33 ud=UD
+cb 225 samples=1324 wav=data
+cb 226 samples=1324 wav=data
+cb 227 samples=1324 wav=data
+cb 228 samples=1324 wav=data
+cb 229 samples=1324 wav=data
+cb 230 samples=1324 wav=data
+cb 231 samples=1324 wav=data
+cb 232 samples=1324 wav=data
+cb 233 samples=1324 wav=data
+cb 234 samples=802 wav=data
+  ev type=5 uid=1 pos=745 len=0 apos=13549 ud=UD
+uri type=1 uri=clip-11-0123456789-0123456789-0123.wav base=(null)
+cb 235 samples=1324 wav=data
+  ev type=2 uid=1 pos=746 len=0 apos=13549 num=12 ud=UD
+  ev type=1 uid=1 pos=746 len=4 apos=13549 num=34 ud=UD
+cb 236 samples=1324 wav=data
+cb 237 samples=1324 wav=data
+cb 238 samples=1324 wav=data
+cb 239 samples=1324 wav=data
+  ev type=1 uid=1 pos=751 len=2 apos=13799 num=35 ud=UD
+cb 240 samples=1324 wav=data
+cb 241 samples=1324 wav=data
+cb 242 samples=1324 wav=data
+cb 243 samples=1324 wav=data
+cb 244 samples=1324 wav=data
+cb 245 samples=1324 wav=data
+cb 246 samples=185 wav=data
+  ev type=5 uid=1 pos=805 len=0 apos=14218 ud=UD
+cb 247 samples=1324 wav=data
+  ev type=1 uid=1 pos=808 len=4 apos=14218 num=36 ud=UD
+cb 248 samples=1324 wav=data
+cb 249 samples=1324 wav=data
+cb 250 samples=1324 wav=data
+cb 251 samples=1324 wav=data
+cb 252 samples=1324 wav=data
+cb 253 samples=1324 wav=data
+cb 254 samples=1324 wav=data
+cb 255 samples=1324 wav=data
+cb 256 samples=1324 wav=data
+cb 257 samples=812 wav=data
+  ev type=5 uid=1 pos=813 len=0 apos=14855 ud=UD
+uri type=1 uri=clip-12-0123456789-0123456789-0123.wav base=(null)
+cb 258 samples=1324 wav=data
+  ev type=2 uid=1 pos=814 len=0 apos=14855 num=13 ud=UD
+  ev type=1 uid=1 pos=814 len=4 apos=14855 num=37 ud=UD
+cb 259 samples=1324 wav=data
+cb 260 samples=1324 wav=data
+cb 261 samples=1324 wav=data
+cb 262 samples=1324 wav=data
+  ev type=1 uid=1 pos=819 len=2 apos=15134 num=38 ud=UD
+cb 263 samples=1324 wav=data
+cb 264 samples=1324 wav=data
+cb 265 samples=1324 wav=data
+cb 266 samples=1324 wav=data
+cb 267 samples=1324 wav=data
+cb 268 samples=1324 wav=data
+cb 269 samples=399 wav=data
+  ev type=5 uid=1 pos=873 len=0 apos=15534 ud=UD
+cb 270 samples=1324 wav=data
+  ev type=1 uid=1 pos=876 len=4 apos=15534 num=39 ud=UD
+cb 271 samples=1324 wav=data
+cb 272 samples=1324 wav=data
+cb 273 samples=1324 wav=data
+cb 274 samples=1324 wav=data
+cb 275 samples=1324 wav=data
+cb 276 samples=1324 wav=data
+cb 277 samples=1324 wav=data
+cb 278 samples=1324 wav=data
+cb 279 samples=1324 wav=data
+cb 280 samples=802 wav=data
+  ev type=5 uid=1 pos=881 len=0 apos=16171 ud=UD
+uri type=1 uri=clip-13-0123456789-0123456789-0123.wav base=(null)
+cb 281 samples=1324 wav=data
+  ev type=2 uid=1 pos=882 len=0 apos=16171 num=14 ud=UD
+  ev type=1 uid=1 pos=882 len=4 apos=16171 num=40 ud=UD
+cb 282 samples=1324 wav=data
+cb 283 samples=1324 wav=data
+cb 284 samples=1324 wav=data
+cb 285 samples=1324 wav=data
+  ev type=1 uid=1 pos=887 len=2 apos=16459 num=41 ud=UD
+cb 286 samples=1324 wav=data
+cb 287 samples=1324 wav=data
+cb 288 samples=1324 wav=data
+cb 289 samples=1324 wav=data
+cb 290 samples=1324 wav=data
+cb 291 samples=1324 wav=data
+cb 292 samples=1324 wav=data
+cb 293 samples=662 wav=data
+  ev type=5 uid=1 pos=941 len=0 apos=16921 ud=UD
+cb 294 samples=1324 wav=data
+  ev type=1 uid=1 pos=944 len=4 apos=16921 num=42 ud=UD
+cb 295 samples=1324 wav=data
+cb 296 samples=1324 wav=data
+cb 297 samples=1324 wav=data
+cb 298 samples=1324 wav=data
+cb 299 samples=1324 wav=data
+cb 300 samples=1324 wav=data
+cb 301 samples=1324 wav=data
+cb 302 samples=1324 wav=data
+cb 303 samples=1324 wav=data
+cb 304 samples=807 wav=data
+  ev type=5 uid=1 pos=949 len=0 apos=17559 ud=UD
+uri type=1 uri=clip-14-0123456789-0123456789-0123.wav base=(null)
+cb 305 samples=1324 wav=data
+  ev type=2 uid=1 pos=950 len=0 apos=17559 num=15 ud=UD
+  ev type=1 uid=1 pos=950 len=4 apos=17559 num=43 ud=UD
+cb 306 samples=1324 wav=data
+cb 307 samples=1324 wav=data
+cb 308 samples=1324 wav=data
+cb 309 samples=1324 wav=data
+  ev type=1 uid=1 pos=955 len=2 apos=17846 num=44 ud=UD
+cb 310 samples=1324 wav=data
+cb 311 samples=1324 wav=data
+cb 312 samples=1324 wav=data
+cb 313 samples=1324 wav=data
+cb 314 samples=1324 wav=data
+cb 315 samples=1324 wav=data
+cb 316 samples=1324 wav=data
+cb 317 samples=742 wav=data
+  ev type=5 uid=1 pos=1009 len=0 apos=18313 ud=UD
+cb 318 samples=1324 wav=data
+  ev type=1 uid=1 pos=1012 len=4 apos=18313 num=45 ud=UD
+cb 319 samples=1324 wav=data
+cb 320 samples=1324 wav=data
+cb 321 samples=1324 wav=data
+cb 322 samples=1324 wav=data
+cb 323 samples=1324 wav=data
+cb 324 samples=1324 wav=data
+cb 325 samples=1324 wav=data
+cb 326 samples=1324 wav=data
+cb 327 samples=1324 wav=data
+cb 328 samples=789 wav=data
+  ev type=5 uid=1 pos=1017 len=0 apos=18949 ud=UD
+uri type=1 uri=clip-15-0123456789-0123456789-0123.wav base=(null)
+cb 329 samples=1324 wav=data
+  ev type=2 uid=1 pos=1018 len=0 apos=18949 num=16 ud=UD
+  ev type=1 uid=1 pos=1018 len=4 apos=18949 num=46 ud=UD
+cb 330 samples=1324 wav=data
+cb 331 samples=1324 wav=data
+cb 332 samples=1324 wav=data
+cb 333 samples=1324 wav=data
+  ev type=1 uid=1 pos=1023 len=2 apos=19237 num=47 ud=UD
+cb 334 samples=1324 wav=data
+cb 335 samples=1324 wav=data
+cb 336 samples=1324 wav=data
+cb 337 samples=1324 wav=data
+cb 338 samples=1324 wav=data
+cb 339 samples=1324 wav=data
+cb 340 samples=1324 wav=data
+cb 341 samples=903 wav=data
+  ev type=5 uid=1 pos=1077 len=0 apos=19710 ud=UD
+cb 342 samples=1324 wav=data
+  ev type=1 uid=1 pos=1080 len=4 apos=19710 num=48 ud=UD
+cb 343 samples=1324 wav=data
+cb 344 samples=1324 wav=data
+cb 345 samples=1324 wav=data
+cb 346 samples=1324 wav=data
+cb 347 samples=1324 wav=data
+cb 348 samples=1324 wav=data
+cb 349 samples=1324 wav=data
+cb 350 samples=1324 wav=data
+cb 351 samples=1324 wav=data
+cb 352 samples=802 wav=data
+  ev type=5 uid=1 pos=1085 len=0 apos=20347 ud=UD
+uri type=1 uri=clip-16-0123456789-0123456789-0123.wav base=(null)
+cb 353 samples=1324 wav=data
+  ev type=2 uid=1 pos=1086 len=0 apos=20347 num=17 ud=UD
+  ev type=1 uid=1 pos=1086 len=4 apos=20347 num=49 ud=UD
+cb 354 samples=1324 wav=data
+cb 355 samples=1324 wav=data
+cb 356 samples=1324 wav=data
+cb 357 samples=1324 wav=data
+  ev type=1 uid=1 pos=1091 len=2 apos=20635 num=50 ud=UD
+cb 358 samples=1324 wav=data
+cb 359 samples=1324 wav=data
+cb 360 samples=1324 wav=data
+cb 361 samples=1324 wav=data
+cb 362 samples=1324 wav=data
+cb 363 samples=1324 wav=data
+cb 364 samples=1324 wav=data
+cb 365 samples=1324 wav=data
+cb 366 samples=535 wav=data
+  ev type=5 uid=1 pos=1145 len=0 apos=21152 ud=UD
+cb 367 samples=1324 wav=data
+  ev type=1 uid=1 pos=1148 len=4 apos=21152 num=51 ud=UD
+cb 368 samples=1324 wav=data
+cb 369 samples=1324 wav=data
+cb 370 samples=1324 wav=data
+cb 371 samples=1324 wav=data
+cb 372 samples=1324 wav=data
+cb 373 samples=1324 wav=data
+cb 374 samples=1324 wav=data
+cb 375 samples=1324 wav=data
+cb 376 samples=1324 wav=data
+cb 377 samples=804 wav=data
+  ev type=5 uid=1 pos=1153 len=0 apos=21789 ud=UD
+uri type=1 uri=clip-17-0123456789-0123456789-0123.wav base=(null)
+cb 378 samples=1324 wav=data
+  ev type=2 uid=1 pos=1154 len=0 apos=21789 num=18 ud=UD
+  ev type=1 uid=1 pos=1154 len=4 apos=21789 num=52 ud=UD
+cb 379 samples=1324 wav=data
+cb 380 samples=1324 wav=data
+cb 381 samples=1324 wav=data
+cb 382 samples=1324 wav=data
+  ev type=1 uid=1 pos=1159 len=2 apos=22077 num=53 ud=UD
+cb 383 samples=1324 wav=data
+cb 384 samples=1324 wav=data
+cb 385 samples=1324 wav=data
+cb 386 samples=1324 wav=data
+cb 387 samples=1324 wav=data
+cb 388 samples=1324 wav=data
+cb 389 samples=1324 wav=data
+cb 390 samples=1324 wav=data
+cb 391 samples=1324 wav=data
+cb 392 samples=843 wav=data
+  ev type=5 uid=1 pos=1213 len=0 apos=22668 ud=UD
+cb 393 samples=1324 wav=data
+  ev type=1 uid=1 pos=1216 len=4 apos=22668 num=54 ud=UD
+cb 394 samples=1324 wav=data
+cb 395 samples=1324 wav=data
+cb 396 samples=1324 wav=data
+cb 397 samples=1324 wav=data
+cb 398 samples=1324 wav=data
+cb 399 samples=1324 wav=data
+cb 400 samples=1324 wav=data
+cb 401 samples=1324 wav=data
+cb 402 samples=1324 wav=data
+cb 403 samples=800 wav=data
+  ev type=5 uid=1 pos=1221 len=0 apos=23305 ud=UD
+uri type=1 uri=clip-18-0123456789-0123456789-0123.wav base=(null)
+cb 404 samples=1324 wav=data
+  ev type=2 uid=1 pos=1222 len=0 apos=23305 num=19 ud=UD
+  ev type=1 uid=1 pos=1222 len=4 apos=23305 num=55 ud=UD
+cb 405 samples=1324 wav=data
+cb 406 samples=1324 wav=data
+cb 407 samples=1324 wav=data
+cb 408 samples=1324 wav=data
+  ev type=1 uid=1 pos=1227 len=2 apos=23563 num=56 ud=UD
+cb 409 samples=1324 wav=data
+cb 410 samples=1324 wav=data
+cb 411 samples=1324 wav=data
+cb 412 samples=1324 wav=data
+cb 413 samples=1324 wav=data
+cb 414 samples=325 wav=data
+  ev type=5 uid=1 pos=1281 len=0 apos=23920 ud=UD
+cb 415 samples=1324 wav=data
+  ev type=1 uid=1 pos=1284 len=4 apos=23920 num=57 ud=UD
+cb 416 samples=1324 wav=data
+cb 417 samples=1324 wav=data
+cb 418 samples=1324 wav=data
+cb 419 samples=1324 wav=data
+cb 420 samples=1324 wav=data
+cb 421 samples=1324 wav=data
+cb 422 samples=1324 wav=data
+cb 423 samples=1324 wav=data
+cb 424 samples=1324 wav=data
+cb 425 samples=805 wav=data
+  ev type=5 uid=1 pos=1289 len=0 apos=24557 ud=UD
+uri type=1 uri=clip-19-0123456789-0123456789-0123.wav base=(null)
+cb 426 samples=1324 wav=data
+  ev type=2 uid=1 pos=1290 len=0 apos=24557 num=20 ud=UD
+  ev type=1 uid=1 pos=1290 len=4 apos=24557 num=58 ud=UD
+cb 427 samples=1324 wav=data
+cb 428 samples=1324 wav=data
+cb 429 samples=1324 wav=data
+cb 430 samples=1324 wav=data
+  ev type=1 uid=1 pos=1295 len=2 apos=24833 num=59 ud=UD
+cb 431 samples=1324 wav=data
+cb 432 samples=1324 wav=data
+cb 433 samples=1324 wav=data
+cb 434 samples=1324 wav=data
+cb 435 samples=1324 wav=data
+cb 436 samples=1324 wav=data
+cb 437 samples=1324 wav=data
+cb 438 samples=87 wav=data
+  ev type=5 uid=1 pos=1349 len=0 apos=25281 ud=UD
+cb 439 samples=1324 wav=data
+  ev type=1 uid=1 pos=1352 len=4 apos=25281 num=60 ud=UD
+cb 440 samples=1324 wav=data
+cb 441 samples=1324 wav=data
+cb 442 samples=1324 wav=data
+cb 443 samples=1324 wav=data
+cb 444 samples=1324 wav=data
+cb 445 samples=1324 wav=data
+cb 446 samples=1324 wav=data
+cb 447 samples=1324 wav=data
+cb 448 samples=1324 wav=data
+cb 449 samples=789 wav=data
+  ev type=5 uid=1 pos=1357 len=0 apos=25918 ud=UD
+uri type=1 uri=clip-20-0123456789-0123456789-0123.wav base=(null)
+cb 450 samples=1324 wav=data
+  ev type=2 uid=1 pos=1358 len=0 apos=25918 num=21 ud=UD
+  ev type=1 uid=1 pos=1358 len=4 apos=25918 num=61 ud=UD
+cb 451 samples=1324 wav=data
+cb 452 samples=1324 wav=data
+cb 453 samples=1324 wav=data
+cb 454 samples=1324 wav=data
+  ev type=1 uid=1 pos=1363 len=2 apos=26196 num=62 ud=UD
+cb 455 samples=1324 wav=data
+cb 456 samples=1324 wav=data
+cb 457 samples=1324 wav=data
+cb 458 samples=1324 wav=data
+cb 459 samples=1324 wav=data
+cb 460 samples=1324 wav=data
+cb 461 samples=1324 wav=data
+cb 462 samples=298 wav=data
+  ev type=5 uid=1 pos=1417 len=0 apos=26652 ud=UD
+cb 463 samples=1324 wav=data
+  ev type=1 uid=1 pos=1420 len=4 apos=26652 num=63 ud=UD
+cb 464 samples=1324 wav=data
+cb 465 samples=1324 wav=data
+cb 466 samples=1324 wav=data
+cb 467 samples=1324 wav=data
+cb 468 samples=1324 wav=data
+cb 469 samples=1324 wav=data
+cb 470 samples=1324 wav=data
+cb 471 samples=1324 wav=data
+cb 472 samples=1324 wav=data
+cb 473 samples=808 wav=data
+  ev type=5 uid=1 pos=1425 len=0 apos=27289 ud=UD
+uri type=1 uri=clip-21-0123456789-0123456789-0123.wav base=(null)
+cb 474 samples=1324 wav=data
+  ev type=2 uid=1 pos=1426 len=0 apos=27289 num=22 ud=UD
+  ev type=1 uid=1 pos=1426 len=4 apos=27289 num=64 ud=UD
+cb 475 samples=1324 wav=data
+cb 476 samples=1324 wav=data
+cb 477 samples=1324 wav=data
+cb 478 samples=1324 wav=data
+  ev type=1 uid=1 pos=1431 len=2 apos=27568 num=65 ud=UD
+cb 479 samples=1324 wav=data
+cb 480 samples=1324 wav=data
+cb 481 samples=1324 wav=data
+cb 482 samples=1324 wav=data
+cb 483 samples=1324 wav=data
+cb 484 samples=1324 wav=data
+cb 485 samples=1324 wav=data
+  ev type=1 uid=1 pos=1432 len=2 apos=27972 num=66 ud=UD
+cb 486 samples=1324 wav=data
+cb 487 samples=1324 wav=data
+cb 488 samples=1324 wav=data
+cb 489 samples=1324 wav=data
+cb 490 samples=2 wav=data
+  ev type=5 uid=1 pos=1485 len=0 apos=28249 ud=UD
+cb 491 samples=1324 wav=data
+  ev type=1 uid=1 pos=1488 len=4 apos=28249 num=66 ud=UD
+cb 492 samples=1324 wav=data
+cb 493 samples=1324 wav=data
+cb 494 samples=1324 wav=data
+cb 495 samples=1324 wav=data
+cb 496 samples=1324 wav=data
+cb 497 samples=1324 wav=data
+cb 498 samples=1324 wav=data
+cb 499 samples=1324 wav=data
+cb 500 samples=1324 wav=data
+cb 501 samples=808 wav=data
+  ev type=5 uid=1 pos=1493 len=0 apos=28887 ud=UD
+uri type=1 uri=clip-22-0123456789-0123456789-0123.wav base=(null)
+cb 502 samples=1324 wav=data
+  ev type=2 uid=1 pos=1494 len=0 apos=28887 num=23 ud=UD
+  ev type=1 uid=1 pos=1494 len=4 apos=28887 num=67 ud=UD
+cb 503 samples=1324 wav=data
+cb 504 samples=1324 wav=data
+cb 505 samples=1324 wav=data
+cb 506 samples=1324 wav=data
+  ev type=1 uid=1 pos=1499 len=2 apos=29165 num=68 ud=UD
+cb 507 samples=1324 wav=data
+cb 508 samples=1324 wav=data
+cb 509 samples=1324 wav=data
+cb 510 samples=1324 wav=data
+cb 511 samples=1324 wav=data
+cb 512 samples=1324 wav=data
+cb 513 samples=1324 wav=data
+  ev type=1 uid=1 pos=1500 len=2 apos=29570 num=69 ud=UD
+cb 514 samples=1324 wav=data
+cb 515 samples=1324 wav=data
+cb 516 samples=1324 wav=data
+cb 517 samples=1133 wav=data
+  ev type=5 uid=1 pos=1553 len=0 apos=29839 ud=UD
+cb 518 samples=1324 wav=data
+  ev type=1 uid=1 pos=1556 len=4 apos=29839 num=69 ud=UD
+cb 519 samples=1324 wav=data
+cb 520 samples=1324 wav=data
+cb 521 samples=1324 wav=data
+cb 522 samples=1324 wav=data
+cb 523 samples=1324 wav=data
+cb 524 samples=1324 wav=data
+cb 525 samples=1324 wav=data
+cb 526 samples=1324 wav=data
+cb 527 samples=1324 wav=data
+cb 528 samples=801 wav=data
+  ev type=5 uid=1 pos=1561 len=0 apos=30475 ud=UD
+uri type=1 uri=clip-23-0123456789-0123456789-0123.wav base=(null)
+cb 529 samples=1324 wav=data
+  ev type=2 uid=1 pos=1562 len=0 apos=30475 num=24 ud=UD
+  ev type=1 uid=1 pos=1562 len=4 apos=30475 num=70 ud=UD
+cb 530 samples=1324 wav=data
+cb 531 samples=1324 wav=data
+cb 532 samples=1324 wav=data
+cb 533 samples=1324 wav=data
+  ev type=1 uid=1 pos=1567 len=2 apos=30755 num=71 ud=UD
+cb 534 samples=1324 wav=data
+cb 535 samples=1324 wav=data
+cb 536 samples=1324 wav=data
+cb 537 samples=1324 wav=data
+cb 538 samples=1324 wav=data
+cb 539 samples=1324 wav=data
+cb 540 samples=1324 wav=data
+  ev type=1 uid=1 pos=1568 len=2 apos=31159 num=72 ud=UD
+cb 541 samples=1324 wav=data
+cb 542 samples=1324 wav=data
+cb 543 samples=1324 wav=data
+cb 544 samples=1243 wav=data
+  ev type=5 uid=1 pos=1621 len=0 apos=31432 ud=UD
+cb 545 samples=1324 wav=data
+  ev type=1 uid=1 pos=1624 len=4 apos=31432 num=72 ud=UD
+cb 546 samples=1324 wav=data
+cb 547 samples=1324 wav=data
+cb 548 samples=1324 wav=data
+cb 549 samples=1324 wav=data
+cb 550 samples=1324 wav=data
+cb 551 samples=1324 wav=data
+cb 552 samples=1324 wav=data
+cb 553 samples=1324 wav=data
+cb 554 samples=1324 wav=data
+cb 555 samples=793 wav=data
+  ev type=5 uid=1 pos=1629 len=0 apos=32069 ud=UD
+uri type=1 uri=clip-24-0123456789-0123456789-0123.wav base=(null)
+cb 556 samples=1324 wav=data
+  ev type=2 uid=1 pos=1630 len=0 apos=32069 num=25 ud=UD
+  ev type=1 uid=1 pos=1630 len=4 apos=32069 num=73 ud=UD
+cb 557 samples=1324 wav=data
+cb 558 samples=1324 wav=data
+cb 559 samples=1324 wav=data
+cb 560 samples=1324 wav=data
+  ev type=1 uid=1 pos=1635 len=2 apos=32348 num=74 ud=UD
+cb 561 samples=1324 wav=data
+cb 562 samples=1324 wav=data
+cb 563 samples=1324 wav=data
+cb 564 samples=1324 wav=data
+cb 565 samples=1324 wav=data
+cb 566 samples=1324 wav=data
+cb 567 samples=1324 wav=data
+  ev type=1 uid=1 pos=1636 len=2 apos=32753 num=75 ud=UD
+cb 568 samples=1324 wav=data
+cb 569 samples=1324 wav=data
+cb 570 samples=1324 wav=data
+cb 571 samples=1324 wav=data
+cb 572 samples=451 wav=data
+  ev type=5 uid=1 pos=1689 len=0 apos=33050 ud=UD
+cb 573 samples=1324 wav=data
+  ev type=1 uid=1 pos=1692 len=4 apos=33050 num=75 ud=UD
+cb 574 samples=1324 wav=data
+cb 575 samples=1324 wav=data
+cb 576 samples=1324 wav=data
+cb 577 samples=1324 wav=data
+cb 578 samples=1324 wav=data
+cb 579 samples=1324 wav=data
+cb 580 samples=1324 wav=data
+cb 581 samples=1324 wav=data
+cb 582 samples=1324 wav=data
+cb 583 samples=810 wav=data
+  ev type=5 uid=1 pos=1697 len=0 apos=33687 ud=UD
+uri type=1 uri=clip-25-0123456789-0123456789-0123.wav base=(null)
+cb 584 samples=1324 wav=data
+  ev type=2 uid=1 pos=1698 len=0 apos=33687 num=26 ud=UD
+  ev type=1 uid=1 pos=1698 len=4 apos=33687 num=76 ud=UD
+cb 585 samples=1324 wav=data
+cb 586 samples=1324 wav=data
+cb 587 samples=1324 wav=data
+cb 588 samples=1324 wav=data
+  ev type=1 uid=1 pos=1703 len=2 apos=33966 num=77 ud=UD
+cb 589 samples=1324 wav=data
+cb 590 samples=1324 wav=data
+cb 591 samples=1324 wav=data
+cb 592 samples=1324 wav=data
+cb 593 samples=1324 wav=data
+cb 594 samples=1324 wav=data
+cb 595 samples=1324 wav=data
+  ev type=1 uid=1 pos=1704 len=2 apos=34370 num=78 ud=UD
+cb 596 samples=1324 wav=data
+cb 597 samples=1324 wav=data
+cb 598 samples=1324 wav=data
+cb 599 samples=1324 wav=data
+cb 600 samples=1324 wav=data
+cb 601 samples=441 wav=data
+  ev type=5 uid=1 pos=1757 len=0 apos=34728 ud=UD
+cb 602 samples=1324 wav=data
+  ev type=1 uid=1 pos=1760 len=4 apos=34728 num=78 ud=UD
+cb 603 samples=1324 wav=data
+cb 604 samples=1324 wav=data
+cb 605 samples=1324 wav=data
+cb 606 samples=1324 wav=data
+cb 607 samples=1324 wav=data
+cb 608 samples=1324 wav=data
+cb 609 samples=1324 wav=data
+cb 610 samples=1324 wav=data
+cb 611 samples=1324 wav=data
+cb 612 samples=803 wav=data
+  ev type=5 uid=1 pos=1765 len=0 apos=35365 ud=UD
+uri type=1 uri=clip-26-0123456789-0123456789-0123.wav base=(null)
+cb 613 samples=1324 wav=data
+  ev type=2 uid=1 pos=1766 len=0 apos=35365 num=27 ud=UD
+  ev type=1 uid=1 pos=1766 len=4 apos=35365 num=79 ud=UD
+cb 614 samples=1324 wav=data
+cb 615 samples=1324 wav=data
+cb 616 samples=1324 wav=data
+cb 617 samples=1324 wav=data
+  ev type=1 uid=1 pos=1771 len=2 apos=35644 num=80 ud=UD
+cb 618 samples=1324 wav=data
+cb 619 samples=1324 wav=data
+cb 620 samples=1324 wav=data
+cb 621 samples=1324 wav=data
+cb 622 samples=1324 wav=data
+cb 623 samples=1324 wav=data
+cb 624 samples=1324 wav=data
+  ev type=1 uid=1 pos=1772 len=2 apos=36048 num=81 ud=UD
+cb 625 samples=1324 wav=data
+cb 626 samples=1324 wav=data
+cb 627 samples=1324 wav=data
+cb 628 samples=1324 wav=data
+cb 629 samples=1324 wav=data
+cb 630 samples=514 wav=data
+  ev type=5 uid=1 pos=1825 len=0 apos=36409 ud=UD
+cb 631 samples=1324 wav=data
+  ev type=1 uid=1 pos=1828 len=4 apos=36409 num=81 ud=UD
+cb 632 samples=1324 wav=data
+cb 633 samples=1324 wav=data
+cb 634 samples=1324 wav=data
+cb 635 samples=1324 wav=data
+cb 636 samples=1324 wav=data
+cb 637 samples=1324 wav=data
+cb 638 samples=1324 wav=data
+cb 639 samples=1324 wav=data
+cb 640 samples=1324 wav=data
+cb 641 samples=798 wav=data
+  ev type=5 uid=1 pos=1833 len=0 apos=37046 ud=UD
+uri type=1 uri=clip-27-0123456789-0123456789-0123.wav base=(null)
+cb 642 samples=1324 wav=data
+  ev type=2 uid=1 pos=1834 len=0 apos=37046 num=28 ud=UD
+  ev type=1 uid=1 pos=1834 len=4 apos=37046 num=82 ud=UD
+cb 643 samples=1324 wav=data
+cb 644 samples=1324 wav=data
+cb 645 samples=1324 wav=data
+cb 646 samples=1324 wav=data
+  ev type=1 uid=1 pos=1839 len=2 apos=37324 num=83 ud=UD
+cb 647 samples=1324 wav=data
+cb 648 samples=1324 wav=data
+cb 649 samples=1324 wav=data
+cb 650 samples=1324 wav=data
+cb 651 samples=1324 wav=data
+cb 652 samples=1324 wav=data
+cb 653 samples=1324 wav=data
+  ev type=1 uid=1 pos=1840 len=2 apos=37729 num=84 ud=UD
+cb 654 samples=1324 wav=data
+cb 655 samples=1324 wav=data
+cb 656 samples=1324 wav=data
+cb 657 samples=1324 wav=data
+cb 658 samples=1324 wav=data
+cb 659 samples=1324 wav=data
+cb 660 samples=200 wav=data
+  ev type=5 uid=1 pos=1893 len=0 apos=38136 ud=UD
+cb 661 samples=1324 wav=data
+  ev type=1 uid=1 pos=1896 len=4 apos=38136 num=84 ud=UD
+cb 662 samples=1324 wav=data
+cb 663 samples=1324 wav=data
+cb 664 samples=1324 wav=data
+cb 665 samples=1324 wav=data
+cb 666 samples=1324 wav=data
+cb 667 samples=1324 wav=data
+cb 668 samples=1324 wav=data
+cb 669 samples=1324 wav=data
+cb 670 samples=1324 wav=data
+cb 671 samples=813 wav=data
+  ev type=5 uid=1 pos=1901 len=0 apos=38773 ud=UD
+uri type=1 uri=clip-28-0123456789-0123456789-0123.wav base=(null)
+cb 672 samples=1324 wav=data
+  ev type=2 uid=1 pos=1902 len=0 apos=38773 num=29 ud=UD
+  ev type=1 uid=1 pos=1902 len=4 apos=38773 num=85 ud=UD
+cb 673 samples=1324 wav=data
+cb 674 samples=1324 wav=data
+cb 675 samples=1324 wav=data
+cb 676 samples=1324 wav=data
+  ev type=1 uid=1 pos=1907 len=2 apos=39052 num=86 ud=UD
+cb 677 samples=1324 wav=data
+cb 678 samples=1324 wav=data
+cb 679 samples=1324 wav=data
+cb 680 samples=1324 wav=data
+cb 681 samples=1324 wav=data
+cb 682 samples=1324 wav=data
+cb 683 samples=1324 wav=data
+  ev type=1 uid=1 pos=1908 len=2 apos=39443 num=87 ud=UD
+cb 684 samples=1324 wav=data
+cb 685 samples=1324 wav=data
+cb 686 samples=1324 wav=data
+cb 687 samples=139 wav=data
+  ev type=5 uid=1 pos=1961 len=0 apos=39680 ud=UD
+cb 688 samples=1324 wav=data
+  ev type=1 uid=1 pos=1964 len=4 apos=39680 num=87 ud=UD
+cb 689 samples=1324 wav=data
+cb 690 samples=1324 wav=data
+cb 691 samples=1324 wav=data
+cb 692 samples=1324 wav=data
+cb 693 samples=1324 wav=data
+cb 694 samples=1324 wav=data
+cb 695 samples=1324 wav=data
+cb 696 samples=1324 wav=data
+cb 697 samples=1324 wav=data
+cb 698 samples=806 wav=data
+  ev type=5 uid=1 pos=1969 len=0 apos=40317 ud=UD
+uri type=1 uri=clip-29-0123456789-0123456789-0123.wav base=(null)
+cb 699 samples=1324 wav=data
+  ev type=2 uid=1 pos=1970 len=0 apos=40317 num=30 ud=UD
+  ev type=1 uid=1 pos=1970 len=4 apos=40317 num=88 ud=UD
+cb 700 samples=1324 wav=data
+cb 701 samples=1324 wav=data
+cb 702 samples=1324 wav=data
+cb 703 samples=1324 wav=data
+  ev type=1 uid=1 pos=1975 len=2 apos=40596 num=89 ud=UD
+cb 704 samples=1324 wav=data
+cb 705 samples=1324 wav=data
+cb 706 samples=1324 wav=data
+cb 707 samples=1324 wav=data
+cb 708 samples=1324 wav=data
+cb 709 samples=1324 wav=data
+cb 710 samples=1324 wav=data
+  ev type=1 uid=1 pos=1976 len=2 apos=41000 num=90 ud=UD
+cb 711 samples=1324 wav=data
+cb 712 samples=1324 wav=data
+cb 713 samples=1324 wav=data
+cb 714 samples=1324 wav=data
+cb 715 samples=892 wav=data
+  ev type=5 uid=1 pos=2029 len=0 apos=41318 ud=UD
+cb 716 samples=1324 wav=data
+  ev type=1 uid=1 pos=2032 len=4 apos=41318 num=90 ud=UD
+cb 717 samples=1324 wav=data
+cb 718 samples=1324 wav=data
+cb 719 samples=1324 wav=data
+cb 720 samples=1324 wav=data
+cb 721 samples=1324 wav=data
+cb 722 samples=1324 wav=data
+cb 723 samples=1324 wav=data
+cb 724 samples=1324 wav=data
+cb 725 samples=1324 wav=data
+cb 726 samples=808 wav=data
+  ev type=5 uid=1 pos=2037 len=0 apos=41955 ud=UD
+uri type=1 uri=clip-30-0123456789-0123456789-0123.wav base=(null)
+cb 727 samples=1324 wav=data
+  ev type=2 uid=1 pos=2038 len=0 apos=41955 num=31 ud=UD
+  ev type=1 uid=1 pos=2038 len=4 apos=41955 num=91 ud=UD
+cb 728 samples=1324 wav=data
+cb 729 samples=1324 wav=data
+cb 730 samples=1324 wav=data
+cb 731 samples=1324 wav=data
+  ev type=1 uid=1 pos=2043 len=2 apos=42243 num=92 ud=UD
+cb 732 samples=1324 wav=data
+cb 733 samples=1324 wav=data
+cb 734 samples=1324 wav=data
+cb 735 samples=1324 wav=data
+cb 736 samples=1324 wav=data
+cb 737 samples=1324 wav=data
+cb 738 samples=585 wav=data
+  ev type=5 uid=1 pos=2097 len=0 apos=42642 ud=UD
+cb 739 samples=1324 wav=data
+  ev type=1 uid=1 pos=2100 len=4 apos=42642 num=93 ud=UD
+cb 740 samples=1324 wav=data
+cb 741 samples=1324 wav=data
+cb 742 samples=1324 wav=data
+cb 743 samples=1324 wav=data
+cb 744 samples=1324 wav=data
+cb 745 samples=1324 wav=data
+cb 746 samples=1324 wav=data
+cb 747 samples=1324 wav=data
+cb 748 samples=1324 wav=data
+cb 749 samples=802 wav=data
+  ev type=5 uid=1 pos=2105 len=0 apos=43279 ud=UD
+uri type=1 uri=clip-31-0123456789-0123456789-0123.wav base=(null)
+cb 750 samples=1324 wav=data
+  ev type=2 uid=1 pos=2106 len=0 apos=43279 num=32 ud=UD
+  ev type=1 uid=1 pos=2106 len=4 apos=43279 num=94 ud=UD
+cb 751 samples=1324 wav=data
+cb 752 samples=1324 wav=data
+cb 753 samples=1324 wav=data
+cb 754 samples=1324 wav=data
+  ev type=1 uid=1 pos=2111 len=2 apos=43567 num=95 ud=UD
+cb 755 samples=1324 wav=data
+cb 756 samples=1324 wav=data
+cb 757 samples=1324 wav=data
+cb 758 samples=1324 wav=data
+cb 759 samples=1324 wav=data
+cb 760 samples=1324 wav=data
+  ev type=1 uid=1 pos=2112 len=2 apos=43910 num=96 ud=UD
+cb 761 samples=1324 wav=data
+cb 762 samples=1324 wav=data
+cb 763 samples=1324 wav=data
+cb 764 samples=1324 wav=data
+cb 765 samples=190 wav=data
+  ev type=5 uid=1 pos=2165 len=0 apos=44188 ud=UD
+cb 766 samples=1324 wav=data
+  ev type=1 uid=1 pos=2168 len=4 apos=44188 num=96 ud=UD
+cb 767 samples=1324 wav=data
+cb 768 samples=1324 wav=data
+cb 769 samples=1324 wav=data
+cb 770 samples=1324 wav=data
+cb 771 samples=1324 wav=data
+cb 772 samples=1324 wav=data
+cb 773 samples=1324 wav=data
+cb 774 samples=1324 wav=data
+cb 775 samples=1324 wav=data
+cb 776 samples=793 wav=data
+  ev type=5 uid=1 pos=2173 len=0 apos=44825 ud=UD
+uri type=1 uri=clip-32-0123456789-0123456789-0123.wav base=(null)
+cb 777 samples=1324 wav=data
+  ev type=2 uid=1 pos=2174 len=0 apos=44825 num=33 ud=UD
+  ev type=1 uid=1 pos=2174 len=4 apos=44825 num=97 ud=UD
+cb 778 samples=1324 wav=data
+cb 779 samples=1324 wav=data
+cb 780 samples=1324 wav=data
+cb 781 samples=1324 wav=data
+  ev type=1 uid=1 pos=2179 len=2 apos=45112 num=98 ud=UD
+cb 782 samples=1324 wav=data
+cb 783 samples=1324 wav=data
+cb 784 samples=1324 wav=data
+cb 785 samples=1324 wav=data
+cb 786 samples=1324 wav=data
+cb 787 samples=1324 wav=data
+  ev type=1 uid=1 pos=2180 len=2 apos=45456 num=99 ud=UD
+cb 788 samples=1324 wav=data
+cb 789 samples=1324 wav=data
+cb 790 samples=1324 wav=data
+cb 791 samples=1320 wav=data
+  ev type=5 uid=1 pos=2233 len=0 apos=45725 ud=UD
+cb 792 samples=1324 wav=data
+  ev type=1 uid=1 pos=2236 len=4 apos=45725 num=99 ud=UD
+cb 793 samples=1324 wav=data
+cb 794 samples=1324 wav=data
+cb 795 samples=1324 wav=data
+cb 796 samples=1324 wav=data
+cb 797 samples=1324 wav=data
+cb 798 samples=1324 wav=data
+cb 799 samples=1324 wav=data
+cb 800 samples=1324 wav=data
+cb 801 samples=1324 wav=data
+cb 802 samples=803 wav=data
+  ev type=5 uid=1 pos=2241 len=0 apos=46362 ud=UD
+uri type=1 uri=clip-33-0123456789-0123456789-0123.wav base=(null)
+cb 803 samples=1324 wav=data
+  ev type=2 uid=1 pos=2242 len=0 apos=46362 num=34 ud=UD
+  ev type=1 uid=1 pos=2242 len=4 apos=46362 num=100 ud=UD
+cb 804 samples=1324 wav=data
+cb 805 samples=1324 wav=data
+cb 806 samples=1324 wav=data
+cb 807 samples=1324 wav=data
+  ev type=1 uid=1 pos=2247 len=2 apos=46650 num=101 ud=UD
+cb 808 samples=1324 wav=data
+cb 809 samples=1324 wav=data
+cb 810 samples=1324 wav=data
+cb 811 samples=1324 wav=data
+cb 812 samples=1324 wav=data
+cb 813 samples=1324 wav=data
+  ev type=1 uid=1 pos=2248 len=2 apos=46993 num=102 ud=UD
+cb 814 samples=1324 wav=data
+cb 815 samples=1324 wav=data
+cb 816 samples=1324 wav=data
+cb 817 samples=1324 wav=data
+cb 818 samples=86 wav=data
+  ev type=5 uid=1 pos=2301 len=0 apos=47267 ud=UD
+cb 819 samples=1324 wav=data
+  ev type=1 uid=1 pos=2304 len=4 apos=47267 num=102 ud=UD
+cb 820 samples=1324 wav=data
+cb 821 samples=1324 wav=data
+cb 822 samples=1324 wav=data
+cb 823 samples=1324 wav=data
+cb 824 samples=1324 wav=data
+cb 825 samples=1324 wav=data
+cb 826 samples=1324 wav=data
+cb 827 samples=1324 wav=data
+cb 828 samples=1324 wav=data
+cb 829 samples=801 wav=data
+  ev type=5 uid=1 pos=2309 len=0 apos=47903 ud=UD
+uri type=1 uri=clip-34-0123456789-0123456789-0123.wav base=(null)
+cb 830 samples=1324 wav=data
+  ev type=2 uid=1 pos=2310 len=0 apos=47903 num=35 ud=UD
+  ev type=1 uid=1 pos=2310 len=4 apos=47903 num=103 ud=UD
+cb 831 samples=1324 wav=data
+cb 832 samples=1324 wav=data
+cb 833 samples=1324 wav=data
+cb 834 samples=1324 wav=data
+  ev type=1 uid=1 pos=2315 len=2 apos=48191 num=104 ud=UD
+cb 835 samples=1324 wav=data
+cb 836 samples=1324 wav=data
+cb 837 samples=1324 wav=data
+cb 838 samples=1324 wav=data
+cb 839 samples=1324 wav=data
+cb 840 samples=1324 wav=data
+  ev type=1 uid=1 pos=2316 len=2 apos=48535 num=105 ud=UD
+cb 841 samples=1324 wav=data
+cb 842 samples=1324 wav=data
+cb 843 samples=1324 wav=data
+cb 844 samples=1324 wav=data
+cb 845 samples=629 wav=data
+  ev type=5 uid=1 pos=2369 len=0 apos=48833 ud=UD
+cb 846 samples=1324 wav=data
+  ev type=1 uid=1 pos=2372 len=4 apos=48833 num=105 ud=UD
+cb 847 samples=1324 wav=data
+cb 848 samples=1324 wav=data
+cb 849 samples=1324 wav=data
+cb 850 samples=1324 wav=data
+cb 851 samples=1324 wav=data
+cb 852 samples=1324 wav=data
+cb 853 samples=1324 wav=data
+cb 854 samples=1324 wav=data
+cb 855 samples=1324 wav=data
+cb 856 samples=801 wav=data
+  ev type=5 uid=1 pos=2377 len=0 apos=49469 ud=UD
+uri type=1 uri=clip-35-0123456789-0123456789-0123.wav base=(null)
+cb 857 samples=1324 wav=data
+  ev type=2 uid=1 pos=2378 len=0 apos=49469 num=36 ud=UD
+  ev type=1 uid=1 pos=2378 len=4 apos=49469 num=106 ud=UD
+cb 858 samples=1324 wav=data
+cb 859 samples=1324 wav=data
+cb 860 samples=1324 wav=data
+cb 861 samples=1324 wav=data
+  ev type=1 uid=1 pos=2383 len=2 apos=49757 num=107 ud=UD
+cb 862 samples=1324 wav=data
+cb 863 samples=1324 wav=data
+cb 864 samples=1324 wav=data
+cb 865 samples=1324 wav=data
+cb 866 samples=1324 wav=data
+cb 867 samples=1324 wav=data
+  ev type=1 uid=1 pos=2384 len=2 apos=50101 num=108 ud=UD
+cb 868 samples=1324 wav=data
+cb 869 samples=1324 wav=data
+cb 870 samples=1324 wav=data
+cb 871 samples=1324 wav=data
+cb 872 samples=1324 wav=data
+cb 873 samples=625 wav=data
+  ev type=5 uid=1 pos=2437 len=0 apos=50458 ud=UD
+cb 874 samples=1324 wav=data
+  ev type=1 uid=1 pos=2440 len=4 apos=50458 num=108 ud=UD
+cb 875 samples=1324 wav=data
+cb 876 samples=1324 wav=data
+cb 877 samples=1324 wav=data
+cb 878 samples=1324 wav=data
+cb 879 samples=1324 wav=data
+cb 880 samples=1324 wav=data
+cb 881 samples=1324 wav=data
+cb 882 samples=1324 wav=data
+cb 883 samples=1324 wav=data
+cb 884 samples=812 wav=data
+  ev type=5 uid=1 pos=2445 len=0 apos=51096 ud=UD
+uri type=1 uri=clip-36-0123456789-0123456789-0123.wav base=(null)
+cb 885 samples=1324 wav=data
+  ev type=2 uid=1 pos=2446 len=0 apos=51096 num=37 ud=UD
+  ev type=1 uid=1 pos=2446 len=4 apos=51096 num=109 ud=UD
+cb 886 samples=1324 wav=data
+cb 887 samples=1324 wav=data
+cb 888 samples=1324 wav=data
+cb 889 samples=1324 wav=data
+  ev type=1 uid=1 pos=2451 len=2 apos=51384 num=110 ud=UD
+cb 890 samples=1324 wav=data
+cb 891 samples=1324 wav=data
+cb 892 samples=1324 wav=data
+cb 893 samples=1324 wav=data
+cb 894 samples=1324 wav=data
+cb 895 samples=1324 wav=data
+  ev type=1 uid=1 pos=2452 len=2 apos=51727 num=111 ud=UD
+cb 896 samples=1324 wav=data
+cb 897 samples=1324 wav=data
+cb 898 samples=1324 wav=data
+cb 899 samples=1324 wav=data
+cb 900 samples=1324 wav=data
+cb 901 samples=906 wav=data
+  ev type=5 uid=1 pos=2505 len=0 apos=52098 ud=UD
+cb 902 samples=1324 wav=data
+  ev type=1 uid=1 pos=2508 len=4 apos=52098 num=111 ud=UD
+cb 903 samples=1324 wav=data
+cb 904 samples=1324 wav=data
+cb 905 samples=1324 wav=data
+cb 906 samples=1324 wav=data
+cb 907 samples=1324 wav=data
+cb 908 samples=1324 wav=data
+cb 909 samples=1324 wav=data
+cb 910 samples=1324 wav=data
+cb 911 samples=1324 wav=data
+cb 912 samples=803 wav=data
+  ev type=5 uid=1 pos=2513 len=0 apos=52734 ud=UD
+uri type=1 uri=clip-37-0123456789-0123456789-0123.wav base=(null)
+cb 913 samples=1324 wav=data
+  ev type=2 uid=1 pos=2514 len=0 apos=52734 num=38 ud=UD
+  ev type=1 uid=1 pos=2514 len=4 apos=52734 num=112 ud=UD
+cb 914 samples=1324 wav=data
+cb 915 samples=1324 wav=data
+cb 916 samples=1324 wav=data
+cb 917 samples=1324 wav=data
+  ev type=1 uid=1 pos=2519 len=2 apos=53023 num=113 ud=UD
+cb 918 samples=1324 wav=data
+cb 919 samples=1324 wav=data
+cb 920 samples=1324 wav=data
+cb 921 samples=1324 wav=data
+cb 922 samples=1324 wav=data
+cb 923 samples=1324 wav=data
+  ev type=1 uid=1 pos=2520 len=2 apos=53366 num=114 ud=UD
+cb 924 samples=1324 wav=data
+cb 925 samples=1324 wav=data
+cb 926 samples=1324 wav=data
+cb 927 samples=1324 wav=data
+cb 928 samples=1324 wav=data
+cb 929 samples=1324 wav=data
+cb 930 samples=381 wav=data
+  ev type=5 uid=1 pos=2573 len=0 apos=53772 ud=UD
+cb 931 samples=1324 wav=data
+  ev type=1 uid=1 pos=2576 len=4 apos=53772 num=114 ud=UD
+cb 932 samples=1324 wav=data
+cb 933 samples=1324 wav=data
+cb 934 samples=1324 wav=data
+cb 935 samples=1324 wav=data
+cb 936 samples=1324 wav=data
+cb 937 samples=1324 wav=data
+cb 938 samples=1324 wav=data
+cb 939 samples=1324 wav=data
+cb 940 samples=1324 wav=data
+cb 941 samples=813 wav=data
+  ev type=5 uid=1 pos=2581 len=0 apos=54410 ud=UD
+uri type=1 uri=clip-38-0123456789-0123456789-0123.wav base=(null)
+cb 942 samples=1324 wav=data
+  ev type=2 uid=1 pos=2582 len=0 apos=54410 num=39 ud=UD
+  ev type=1 uid=1 pos=2582 len=4 apos=54410 num=115 ud=UD
+cb 943 samples=1324 wav=data
+cb 944 samples=1324 wav=data
+cb 945 samples=1324 wav=data
+cb 946 samples=1324 wav=data
+  ev type=1 uid=1 pos=2587 len=2 apos=54698 num=116 ud=UD
+cb 947 samples=1324 wav=data
+cb 948 samples=1324 wav=data
+cb 949 samples=1324 wav=data
+cb 950 samples=1324 wav=data
+cb 951 samples=1324 wav=data
+cb 952 samples=1324 wav=data
+  ev type=1 uid=1 pos=2588 len=2 apos=55029 num=117 ud=UD
+cb 953 samples=1324 wav=data
+cb 954 samples=1324 wav=data
+cb 955 samples=1324 wav=data
+cb 956 samples=104 wav=data
+  ev type=5 uid=1 pos=2641 len=0 apos=55255 ud=UD
+cb 957 samples=1324 wav=data
+  ev type=1 uid=1 pos=2644 len=4 apos=55255 num=117 ud=UD
+cb 958 samples=1324 wav=data
+cb 959 samples=1324 wav=data
+cb 960 samples=1324 wav=data
+cb 961 samples=1324 wav=data
+cb 962 samples=1324 wav=data
+cb 963 samples=1324 wav=data
+cb 964 samples=1324 wav=data
+cb 965 samples=1324 wav=data
+cb 966 samples=1324 wav=data
+cb 967 samples=790 wav=data
+  ev type=5 uid=1 pos=2649 len=0 apos=55891 ud=UD
+uri type=1 uri=clip-39-0123456789-0123456789-0123.wav base=(null)
+cb 968 samples=1324 wav=data
+  ev type=2 uid=1 pos=2650 len=0 apos=55891 num=40 ud=UD
+  ev type=1 uid=1 pos=2650 len=4 apos=55891 num=118 ud=UD
+cb 969 samples=1324 wav=data
+cb 970 samples=1324 wav=data
+cb 971 samples=1324 wav=data
+cb 972 samples=1324 wav=data
+  ev type=1 uid=1 pos=2655 len=2 apos=56179 num=119 ud=UD
+cb 973 samples=1324 wav=data
+cb 974 samples=1324 wav=data
+cb 975 samples=1324 wav=data
+cb 976 samples=1324 wav=data
+cb 977 samples=1324 wav=data
+cb 978 samples=1324 wav=data
+  ev type=1 uid=1 pos=2656 len=2 apos=56522 num=120 ud=UD
+cb 979 samples=1324 wav=data
+cb 980 samples=1324 wav=data
+cb 981 samples=1324 wav=data
+cb 982 samples=1324 wav=data
+cb 983 samples=1069 wav=data
+  ev type=5 uid=1 pos=2709 len=0 apos=56841 ud=UD
+cb 984 samples=1324 wav=data
+  ev type=1 uid=1 pos=2712 len=4 apos=56841 num=120 ud=UD
+cb 985 samples=1324 wav=data
+cb 986 samples=1324 wav=data
+cb 987 samples=1324 wav=data
+cb 988 samples=1324 wav=data
+cb 989 samples=1324 wav=data
+cb 990 samples=1324 wav=data
+cb 991 samples=1324 wav=data
+cb 992 samples=1324 wav=data
+cb 993 samples=1324 wav=data
+cb 994 samples=800 wav=data
+  ev type=5 uid=1 pos=2724 len=0 apos=57477 ud=UD
+cb 995 samples=154 wav=data
+  ev type=5 uid=1 pos=2725 len=0 apos=57484 ud=UD
+cb 996 samples=-1 wav=null
+cb 997 samples=-1 wav=null
+  ev type=6 uid=1 pos=0 len=0 apos=0 ud=UD
+synth=0 uid=1 samples=1267540 fnv=5ad595b5d800538e

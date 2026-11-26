@@ -391,6 +391,8 @@ jobs:
           --test max3_textmode_long_reading
           --test max3_raw_reading_cap
           --test clause_mark_runs
+          --test symbol_run_long_words
+          --test async_events
       - name: C ABI tests
         run: |
           sudo apt-get install -y pkg-config

@@ -193,10 +193,14 @@ fn synthesize(req: Request, uid_out: *mut c_uint, user_data: *mut c_void) -> c_i
     let pre_call = globals.snapshot();
     loop {
         globals.restore(&pre_call);
+        #[cfg(test)]
+        state::fault::visit();
         let rendered = match ops::render(&job, &known, wants_lines.then_some(trace_mode)) {
             Ok(r) => r,
             Err(e) => return error_status(&e),
         };
+        #[cfg(test)]
+        state::fault::visit();
         let lines = match &rendered.markup {
             Some(markup) => markup.lines.clone(),
             None if wants_lines => ops::phoneme_lines(&lookup, &rendered.text, trace_mode),

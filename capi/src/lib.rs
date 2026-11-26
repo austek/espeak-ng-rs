@@ -7,6 +7,8 @@ mod api;
 mod blocks;
 mod delivery;
 mod ops;
+#[cfg(test)]
+mod panic_tests;
 mod phonemes;
 mod ptr;
 mod settings;

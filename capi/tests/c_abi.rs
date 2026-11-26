@@ -64,12 +64,27 @@ const AUDIO_TEXT: &str = r#"Hi <audio src="a.wav">there</audio> you."#;
 const URI_TEXT: &str = r#"<speak>Hi <audio src="a.wav">there</audio>. Next sentence here is long enough. <audio src="b.wav"/> end.</speak>"#;
 const VOICE_TEXT: &str = r#"<speak>Hi <voice name="de">Hallo Welt.</voice> bye.</speak>"#;
 
+/// Forty clauses, each holding an `<audio>` tag with a 40-byte URI: the names outgrow the C
+/// reader's initial 1000-byte name buffer, and a refusing callback restarts the rendering
+/// once per tag.
+fn many_audio_text() -> &'static str {
+    let tags: String = (0..40)
+        .map(|i| format!(r#"Word {i} <audio src="clip-{i:02}-0123456789-0123456789-0123.wav"/> here. "#))
+        .collect();
+    Box::leak(format!("<speak>{tags}</speak>").into_boxed_str())
+}
+
 /// One scenario per event kind and delivery path, recorded from C.  The last
 /// `events` argument is the probe's option word: `espeak_Initialize` options,
-/// plus 0x100 to use `espeak_ng_SetPhonemeEvents` and 0x200 for a URI
-/// callback that refuses.
+/// plus 0x100 to use `espeak_ng_SetPhonemeEvents`, 0x200 for a URI callback
+/// that refuses and 0x400 for one that accepts and refuses by turns.
 fn event_scenarios() -> Vec<Scenario> {
-    let rows: [(&str, &str, &str, &str, &str, &str); 14] = [
+    let many = many_audio_text();
+    let rows: [(&str, &str, &str, &str, &str, &str); 18] = [
+        ("uri_many_refused_mode1", "1", "en", "0x1010", many, "512"),
+        ("uri_many_refused_mode2", "2", "en", "0x1010", many, "512"),
+        ("uri_many_accepted_mode1", "1", "en", "0x1010", many, "0"),
+        ("uri_many_alternating_mode1", "1", "en", "0x1010", many, "1024"),
         ("uri_timing_mode1", "1", "en", "0x1010", URI_TEXT, "0"),
         ("uri_timing_mode2", "2", "en", "0x1010", URI_TEXT, "0"),
         ("uri_timing_refused", "1", "en", "0x1010", URI_TEXT, "512"),
@@ -292,6 +307,10 @@ event_kind_tests! {
     uri_callback_runs_with_its_clause_in_retrieval_mode => "expected/events_uri_timing_mode1.txt",
     uri_callback_runs_with_its_clause_in_synchronous_mode => "expected/events_uri_timing_mode2.txt",
     uri_callback_runs_with_its_clause_when_it_refuses => "expected/events_uri_timing_refused.txt",
+    uri_callback_refusing_many_tags_in_retrieval_mode => "expected/events_uri_many_refused_mode1.txt",
+    uri_callback_refusing_many_tags_in_synchronous_mode => "expected/events_uri_many_refused_mode2.txt",
+    uri_callback_accepting_many_tags => "expected/events_uri_many_accepted_mode1.txt",
+    uri_callback_alternating_over_many_tags => "expected/events_uri_many_alternating_mode1.txt",
     ssml_trace_mode0 => "expected/trace_ssml_mode0.txt",
     ssml_trace_mode1 => "expected/trace_ssml_mode1.txt",
     ssml_trace_mode1_callback => "expected/trace_ssml_mode1_callback.txt",

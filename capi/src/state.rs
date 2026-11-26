@@ -75,7 +75,10 @@ impl State {
 
 /// Run `f` on the initialized state; `None` when the library is not initialized.
 pub fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> Option<R> {
-    lock(&STATE).as_mut().map(f)
+    let mut held = lock(&STATE);
+    #[cfg(test)]
+    fault::visit();
+    held.as_mut().map(f)
 }
 
 pub fn install(state: State) {
@@ -100,4 +103,42 @@ pub fn set_pending_path(path: Option<PathBuf>) {
 
 pub fn pending_path() -> Option<PathBuf> {
     lock(&PENDING_PATH).clone()
+}
+
+/// Test hook: panics on the `n`th `with_state` visit after `arm(n)`, while the state lock is held.
+#[cfg(test)]
+pub mod fault {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static COUNTDOWN: AtomicUsize = AtomicUsize::new(0);
+    static VISITS: AtomicUsize = AtomicUsize::new(0);
+
+    pub fn arm(n: usize) {
+        COUNTDOWN.store(n, Ordering::SeqCst);
+    }
+
+    pub fn disarm() {
+        COUNTDOWN.store(0, Ordering::SeqCst);
+    }
+
+    /// Visits since the last `reset_visits`.
+    pub fn visits() -> usize {
+        VISITS.load(Ordering::SeqCst)
+    }
+
+    pub fn reset_visits() {
+        VISITS.store(0, Ordering::SeqCst);
+    }
+
+    pub fn visit() {
+        VISITS.fetch_add(1, Ordering::SeqCst);
+        let left = COUNTDOWN.load(Ordering::SeqCst);
+        if left == 0 {
+            return;
+        }
+        COUNTDOWN.store(left - 1, Ordering::SeqCst);
+        if left == 1 {
+            panic!("injected fault");
+        }
+    }
 }

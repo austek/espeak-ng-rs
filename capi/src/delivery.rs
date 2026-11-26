@@ -84,6 +84,8 @@ fn call(t: &Target, samples: Option<&mut [i16]>, events: &mut [EspeakEvent]) -> 
 }
 
 fn deliver_block(t: &Target, block: &Block) -> bool {
+    #[cfg(test)]
+    crate::state::fault::visit();
     let mut names = Vec::new();
     let mut events = c_events(t, &block.events, &mut names);
     let mut samples = block.samples.clone();
