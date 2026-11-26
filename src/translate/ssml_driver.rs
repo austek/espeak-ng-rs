@@ -71,6 +71,7 @@ impl MessageCounts {
             new_sentence: opens,
             end_char: source.end_char.max(0) as u32,
             end_ix: closing_pause_ix(source, codes),
+            source: None,
         };
         self.words += words;
         self.new_sentence = terminator.is_sentence() || (blank && self.new_sentence);
@@ -99,6 +100,26 @@ pub(crate) const TAG_CLAUSE_END: char = '\u{E002}';
 /// Character of the [`Token::ClauseBoundary`] that ends the clause at an embedded voice change,
 /// which C ends with `CLAUSE_VOICE`: no pause, no intonation, no sentence.
 pub(crate) const VOICE_CLAUSE_END: char = '\u{E003}';
+
+/// Characters of the [`Token::ClauseBoundary`] that ends a clause at a blank line: `ReadClause`
+/// returns `CLAUSE_PARAGRAPH` (70) for one, 100 and 130 for more newlines, and a `?` or `!`
+/// before the blank line keeps its tone with 35 more.
+pub(crate) const PARAGRAPH_CLAUSE_ENDS: [char; 3] = ['\u{E010}', '\u{E011}', '\u{E012}'];
+pub(crate) const QUESTION_PARAGRAPH_END: char = '\u{E013}';
+pub(crate) const EXCLAMATION_PARAGRAPH_END: char = '\u{E014}';
+
+/// The terminator of a paragraph sentinel.
+pub(crate) fn paragraph_terminator(c: char) -> Option<Terminator> {
+    let paragraph = Terminator::PARAGRAPH.bits();
+    match c {
+        QUESTION_PARAGRAPH_END => Some(Terminator::QUESTION.plus_pause(35)),
+        EXCLAMATION_PARAGRAPH_END => Some(Terminator::EXCLAMATION.plus_pause(35)),
+        _ => PARAGRAPH_CLAUSE_ENDS
+            .iter()
+            .position(|&p| p == c)
+            .map(|n| Terminator::from_bits(paragraph + 30 * n as u32)),
+    }
+}
 
 fn single_clause(mut tokens: Vec<Token>) -> Vec<Token> {
     let last = tokens.iter().rposition(|t| !matches!(t, Token::Space));

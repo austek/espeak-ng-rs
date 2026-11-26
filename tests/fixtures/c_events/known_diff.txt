@@ -1,3 +1,2 @@
-plain_newlines	audio
 plain_embedded_unknown_letter	audio
 plain_embedded_break_z	audio

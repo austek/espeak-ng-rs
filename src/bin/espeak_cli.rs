@@ -1464,7 +1464,13 @@ fn punct_list(arg: Option<&str>) -> Vec<char> {
     match arg {
         None => Vec::new(),
         Some("") => vec!['\0'],
-        Some(chars) => chars.chars().collect(),
+        // C copies the option through `signed char`, so the bytes of a non-ASCII character
+        // sign-extend and never match (the library's wide list does match them), and it keeps
+        // the first `N_PUNCTLIST - 1` bytes.
+        Some(chars) => {
+            let ascii: Vec<char> = chars.bytes().take(espeak_ng::translate::PUNCTUATION_LIST_MAX).filter(u8::is_ascii).map(char::from).collect();
+            if ascii.is_empty() { vec!['\0'] } else { ascii }
+        }
     }
 }
 
