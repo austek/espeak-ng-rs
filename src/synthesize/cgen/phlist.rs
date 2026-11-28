@@ -129,6 +129,16 @@ pub struct ClauseCounters {
     pub end_char: u32,
     /// `source_index` once `TranslateClause` has consumed the clause's closing NUL: the `sourceix` of its two closing pauses.
     pub end_ix: u16,
+    /// `word_count` of `TranslateClause` and whether the clause source is all blanks, when the
+    /// clause reader gave them; the pause rules read both.
+    pub source: Option<ClauseSource>,
+}
+
+/// What the clause source holds, as `TranslateClause` sees it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ClauseSource {
+    pub words: usize,
+    pub blank: bool,
 }
 
 impl ClauseCodes {
@@ -136,18 +146,38 @@ impl ClauseCodes {
         let terminator = if clause_char == Some(crate::translate::ssml_driver::VOICE_CLAUSE_END) {
             Terminator::VOICE
         } else {
-            clause_char.and_then(|c| Terminator::from_codepoint(c as u32)).unwrap_or(Terminator::PERIOD)
+            clause_char
+                .and_then(|c| crate::translate::ssml_driver::paragraph_terminator(c).or_else(|| Terminator::from_codepoint(c as u32)))
+                .unwrap_or(Terminator::PERIOD)
         };
         ClauseCodes { codes, terminator, eof: false, voice_after: None, counters: None }
     }
+}
+
+/// Whether a clause end after `clause` is the one the tokenizer adds for a clause mark that
+/// `ReadClause` leaves as text: it follows the mark's own marker.
+fn closes_tail_mark(clause: &[PhonemeCode], mark: Option<char>) -> bool {
+    let sounds = |k: &PhonemeCode| k.marker.is_none() && !k.is_boundary && k.code > 8 && k.code != PHON_END_WORD;
+    matches!(clause.last().and_then(|k| k.marker.as_ref()), Some(CodeMarker::Punctuation(p)) if Some(*p) == mark)
+        && !clause.iter().any(sounds)
 }
 
 /// Split the code stream into clauses.
 pub fn split_clauses(codes: &[PhonemeCode]) -> Vec<ClauseCodes> {
     let mut out = Vec::new();
     let mut cur: Vec<PhonemeCode> = Vec::new();
-    for c in codes {
-        if c.code == 0 && c.is_boundary && c.marker.is_none() {
+    let mut tail_marks = false;
+    // Only marks after the last sounding code are the text's tail.
+    let tail_start = codes
+        .iter()
+        .rposition(|k| k.marker.is_none() && !k.is_boundary && k.code > 8 && k.code != PHON_END_WORD)
+        .map_or(usize::MAX, |ix| ix + 1);
+    for (ix, c) in codes.iter().enumerate() {
+        if ix >= tail_start && !codes[ix + 1..].iter().any(|k| matches!(&k.marker, Some(CodeMarker::Punctuation(p)) if crate::translate::is_bracket(*p))) && c.code == 0 && c.is_boundary && c.marker.is_none() && closes_tail_mark(&cur, c.clause_char) {
+            // `ReadClause` keeps a mark with no letter or digit before it as text, so the marks
+            // after the last clause end are one clause that ends with the text.
+            tail_marks = true;
+        } else if c.code == 0 && c.is_boundary && c.marker.is_none() {
             let abbreviated = cur.iter().any(|k| matches!(k.marker, Some(CodeMarker::AbbreviationDot)));
             let mut clause = ClauseCodes::plain(std::mem::take(&mut cur), c.clause_char);
             if abbreviated {
@@ -166,7 +196,7 @@ pub fn split_clauses(codes: &[PhonemeCode]) -> Vec<ClauseCodes> {
         Some(_) => true,
         None => c.code != 0 && !(c.code == PHON_END_WORD && cur.iter().any(blank_mark)),
     };
-    if cur.iter().any(speaks) {
+    if tail_marks || cur.iter().any(speaks) {
         out.push(ClauseCodes::plain(cur, None));
     }
     if out.is_empty() {

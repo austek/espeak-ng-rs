@@ -68,8 +68,8 @@
     "wav": 4
   },
   "chr": {
-    "events": 38,
-    "wav": 38
+    "events": 23,
+    "wav": 23
   },
   "cmn": {
     "events": 12,
@@ -88,8 +88,8 @@
     "wav": 0
   },
   "cv": {
-    "events": 16,
-    "wav": 14
+    "events": 6,
+    "wav": 3
   },
   "cy": {
     "events": 0,
@@ -104,8 +104,8 @@
     "wav": 0
   },
   "el": {
-    "events": 2,
-    "wav": 1
+    "events": 1,
+    "wav": 0
   },
   "en": {
     "events": 0,
@@ -204,8 +204,8 @@
     "wav": 1
   },
   "gn": {
-    "events": 1,
-    "wav": 1
+    "events": 0,
+    "wav": 0
   },
   "grc": {
     "events": 6,
@@ -384,8 +384,8 @@
     "wav": 0
   },
   "nci": {
-    "events": 3,
-    "wav": 3
+    "events": 2,
+    "wav": 2
   },
   "ne": {
     "events": 4,
@@ -432,8 +432,8 @@
     "wav": 4
   },
   "ps-x-southeast": {
-    "events": 8,
-    "wav": 5
+    "events": 7,
+    "wav": 4
   },
   "ps-x-yusufzai": {
     "events": 7,
@@ -460,8 +460,8 @@
     "wav": 2
   },
   "quc": {
-    "events": 6,
-    "wav": 3
+    "events": 4,
+    "wav": 1
   },
   "qya": {
     "events": 5,
@@ -500,8 +500,8 @@
     "wav": 1
   },
   "sjn": {
-    "events": 14,
-    "wav": 12
+    "events": 7,
+    "wav": 5
   },
   "sk": {
     "events": 0,

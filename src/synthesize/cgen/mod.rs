@@ -427,8 +427,8 @@ impl<'a> Renderer<'a> {
     /// `TranslateClause`'s pause: a clause with no words only makes up the
     /// previous pause, and the last clause of the text without words, or with
     /// no end pause wanted, keeps just 10 ms.
-    fn clause_pause(&mut self, pause: i32, empty: bool, last: bool) -> i32 {
-        let pause = if empty {
+    fn clause_pause(&mut self, pause: i32, (blank, no_words): (bool, bool), last: bool) -> i32 {
+        let pause = if blank {
             let made_up = (pause - self.max_clause_pause).max(0);
             self.max_clause_pause += made_up;
             made_up
@@ -436,7 +436,7 @@ impl<'a> Renderer<'a> {
             self.max_clause_pause = pause;
             pause
         };
-        if last && (empty || self.no_final_pause) { 10 } else { pause }
+        if last && (no_words || self.no_final_pause) { 10 } else { pause }
     }
 
     /// The sound-icon table (`soundicon_tab`): 16-bit clips `EMBED_I` plays by index.
@@ -501,7 +501,8 @@ impl<'a> Renderer<'a> {
         let empty = codes
             .iter()
             .all(|c| c.marker.is_none() && (c.code == 0 || c.code == crate::phoneme::PHON_END_WORD));
-        let post_pause = self.clause_pause(base_pause, empty, clause.eof);
+        let (blank, no_words) = clause.counters.and_then(|k| k.source).map_or((empty, empty), |s| (s.blank, s.words == 0));
+        let post_pause = self.clause_pause(base_pause, (blank, no_words), clause.eof);
         let phdata = active_table(self.phdata, &self.switched, self.active.as_deref());
         let mut c = phlist::build_list(codes, phdata, &self.switched, post_pause, start_sentence, self.tr.stress_flags);
         if let Some(k) = clause.counters {

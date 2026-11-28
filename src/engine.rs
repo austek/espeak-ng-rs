@@ -595,9 +595,12 @@ impl EspeakNg {
     ///
     /// `Some(chars)` announces only those punctuation characters by name;
     /// `Some(empty)` announces all; `None` disables announcement.  Mirrors
-    /// `espeak_ng_SetPunctuationList`.
+    /// `espeak_ng_SetPunctuationList`, which keeps the first 59 characters.
     pub fn set_punctuation_list(&mut self, chars: Option<Vec<char>>) {
-        self.punct = chars;
+        self.punct = chars.map(|mut list| {
+            list.truncate(crate::translate::PUNCTUATION_LIST_MAX);
+            list
+        });
     }
 
     /// Use an explicit `pitch <base> <range>` instead of the one the data

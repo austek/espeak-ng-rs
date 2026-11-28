@@ -11,7 +11,7 @@ use super::{
 };
 use crate::error::Result;
 use crate::phoneme::PHON_END_WORD;
-use crate::synthesize::cgen::phlist::{split_clauses, ClauseCodes, ClauseCounters};
+use crate::synthesize::cgen::phlist::{split_clauses, ClauseCodes, ClauseCounters, ClauseSource};
 
 impl Translator {
     /// The clauses of plain `text`, each with the counters C reads while generating it.
@@ -23,7 +23,21 @@ impl Translator {
             base += piece.chars().count();
             codes.extend(self.translate_codes_in_mode(&source, true, None, TokenizeMode::Plain, None, Some(&charix))?);
         }
-        Ok(plain_clauses(&codes, text, &self.plain_reads(text)))
+        let mut clauses = plain_clauses(&codes, text, &self.plain_reads(text));
+        if self.options.punct.is_some() {
+            // `AnnouncePunctuation` writes a name into the clause (readclause.c:264), so what the
+            // reader read of a clause with a listed mark no longer tells whether it has a word.
+            let chars = text_without_list_commands(text);
+            for clause in &mut clauses {
+                if let Some(counters) = clause.counters.as_mut() {
+                    let span = chars.get(counters.start_char as usize..(counters.end_char as usize).min(chars.len())).unwrap_or(&[]);
+                    if span.iter().any(|&c| c.is_some_and(|c| crate::translate::punct_covers(&self.options, c))) {
+                        counters.source = None;
+                    }
+                }
+            }
+        }
+        Ok(clauses)
     }
 
     /// What `ReadClause` and `TranslateClause` make of each clause of plain `text`.
@@ -39,6 +53,22 @@ impl Translator {
         };
         clauses.iter().map(read).collect()
     }
+}
+
+/// The characters of `text`, `None` for those of a `\x01B` command, which the clause reader
+/// blanks and which name no mark of the clause.
+fn text_without_list_commands(text: &str) -> Vec<Option<char>> {
+    let mut out = Vec::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == CTRL_EMBEDDED && chars.next_if_eq(&'B').is_some() {
+            let (_, consumed) = punctuation_argument(&mut chars);
+            out.extend(std::iter::repeat_n(None, 2 + consumed));
+        } else {
+            out.push(Some(c));
+        }
+    }
+    out
 }
 
 /// A clause as the reader and the word cutter left it.
@@ -133,6 +163,7 @@ fn plain_clauses(codes: &[PhonemeCode], text: &str, reads: &[ClauseRead]) -> Vec
             new_sentence: opens,
             end_char: end,
             end_ix: ((span.len() - unwritten_mark_bytes(span, marks.get(i).copied().flatten()) + 1 + eof_pad) & 0x7ff) as u16,
+            source: read.map(|r| ClauseSource { words: r.cut.len(), blank: r.blank }),
         });
         tally.words += read.map_or_else(|| clause.codes.iter().filter(|c| c.source.is_some()).count() as u32, |r| r.cut.len() as u32);
         tally.new_sentence = clause.terminator.is_sentence() || (blank && tally.new_sentence);

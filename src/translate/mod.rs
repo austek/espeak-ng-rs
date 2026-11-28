@@ -581,6 +581,10 @@ pub struct NumberGrammar {
     /// The text is one clause the clause reader already cut: a dot left in it is text, not a
     /// clause end.
     pub clause_text: bool,
+    /// The dot that C's `ReadClause` keeps in the clause after a Roman capital (or after digits
+    /// with a hyphen behind them) is dropped when a blank line ends that clause: it is no clause
+    /// end of its own.  Off while the punctuation list names the dot.
+    pub silent_ordinal_dot: bool,
     /// C's `langopts.lowercase_sentence`: a dot before a lower-case word still ends the clause.
     pub lowercase_sentence: bool,
     /// Longest run of 5 to 32 digits read as a cardinal; longer runs up to 32
@@ -1046,6 +1050,7 @@ impl Default for NumberGrammar {
             elide_tens_vowel: false,
             thousands_variant: SlavicThousands::None,
             clause_text: false,
+            silent_ordinal_dot: false,
             lowercase_sentence: false,
             max_digits: 14,
             break_numbers: BREAK_THOUSANDS,
@@ -1087,8 +1092,8 @@ impl Default for LangOptions {
 /// Whether `--punct` is active and covers character `c`.  An empty set means
 /// "all punctuation" (`--punct` with no argument); the SSML clause-break
 /// sentinel is never announced.
-fn punct_covers(opts: &LangOptions, c: char) -> bool {
-    if c == ssml_driver::TAG_CLAUSE_END || c == ssml_driver::VOICE_CLAUSE_END {
+pub(crate) fn punct_covers(opts: &LangOptions, c: char) -> bool {
+    if c == ssml_driver::TAG_CLAUSE_END || c == ssml_driver::VOICE_CLAUSE_END || ssml_driver::paragraph_terminator(c).is_some() {
         return false;
     }
     match &opts.punct {
@@ -2001,7 +2006,7 @@ fn is_punctuation_command(cmd: EmbeddedCmd) -> bool {
 pub(crate) const PUNCTUATION_COMMAND_BLANKS: usize = 3;
 
 /// C's `N_PUNCTLIST`: a punctuation list holds at most one character fewer.
-const PUNCTUATION_LIST_MAX: usize = 59;
+pub const PUNCTUATION_LIST_MAX: usize = 59;
 
 /// Consumes what C's `ReadClause` reads after `\x01B`: one argument character, then for a list
 /// every character up to a blank, that blank included.  Returns the listed characters, each
@@ -2090,12 +2095,118 @@ fn clause_pieces(text: &str, used: &mut usize) -> Vec<(String, bool)> {
     pieces
 }
 
+/// Whether the dot just read stays in the clause in C and a blank line ends the clause: in a
+/// language with `NUM_ORDINAL_DOT` the dot after a Roman capital, or after digits with a hyphen
+/// behind it, is no clause end (readclause.c:878), and only letters or digits would give the clause
+/// more to say before the blank line (`rest` is the text after the dot).
+fn kept_ordinal_dot<I: Iterator<Item = char> + Clone>(tokens: &[Token], rest: I, grammar: &NumberGrammar) -> Option<(char, KeptDot)> {
+    let is_roman = |c: char| matches!(c, 'I' | 'V' | 'X' | 'L');
+    let kept = match tokens.last() {
+        Some(Token::Word(w)) => {
+            let mut rev = w.chars().rev();
+            let blank_before = tokens.len().checked_sub(2).is_none_or(|k| matches!(tokens[k], Token::Space | Token::ClauseBoundary(_)));
+            rev.next().is_some_and(is_roman) && rev.next().map_or(blank_before, is_roman)
+        }
+        Some(Token::Number(NumberToken::Cardinal(_))) => rest.clone().find(|&c| !readclause::ctype::is_blank(c)) == Some('-'),
+        _ => false,
+    };
+    if kept && grammar.c_numbers & ordinal::NUM_ORDINAL_DOT != 0 {
+        blank_line_before_letters(rest)
+    } else {
+        None
+    }
+}
+
+/// How a dot that C keeps in a clause is written when a blank line ends the clause.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum KeptDot {
+    No,
+    /// The paragraph end takes the dot's place, and the marks before the blank line go.
+    Replaced,
+    /// The dot stays a clause end and the blank line adds nothing: an opening bracket or quote
+    /// before the blank line would give the word after it a pause in the clause of the dot.
+    Plain,
+}
+
+/// The paragraph end of the first blank line (two newlines among blanks) that the text reaches
+/// before any letter or digit and before a clause end of another kind: a mark followed by a
+/// blank ends the clause, which then does not go on to the blank line.  Only opening brackets
+/// and quotes make it `Plain`; closing ones carry no pause.
+fn blank_line_before_letters<I: Iterator<Item = char>>(rest: I) -> Option<(char, KeptDot)> {
+    let chars: Vec<char> = rest.collect();
+    let word_at = chars.iter().position(|c| c.is_alphanumeric());
+    let tail = &chars[..word_at.unwrap_or(chars.len())];
+    let mut ends = Vec::new();
+    let mut run: Vec<char> = Vec::new();
+    for &c in tail.iter().chain(std::iter::once(&'x')) {
+        if readclause::ctype::is_blank(c) {
+            run.push(c);
+        } else {
+            ends.extend(paragraph_in_blanks(&run));
+            run.clear();
+        }
+    }
+    let marks = tail.iter().any(|&c| clause_punctuation_class(c).is_some());
+    let opener = tail.iter().any(|&c| is_bracket(c) && !matches!(c, ')' | ']' | '}' | '>' | '»' | '”' | '’' | '›' | '」' | '』' | '》' | '）' | '］' | '｝'));
+    match ends.as_slice() {
+        [] => None,
+        [end] if !marks && !(opener && word_at.is_some()) => Some((*end, KeptDot::Replaced)),
+        [end, ..] => Some((*end, KeptDot::Plain)),
+    }
+}
+
+/// Whether the clause being read holds nothing but closing brackets and blanks after a mark that
+/// ended an earlier clause which no blank line ended.
+fn closers_after_clause_end(tokens: &[Token]) -> bool {
+    let clause: Vec<&Token> = tokens.iter().rev().take_while(|t| !matches!(t, Token::ClauseBoundary(_))).collect();
+    let is_paragraph = |t: Option<&Token>| matches!(t, Some(Token::ClauseBoundary(p)) if ssml_driver::paragraph_terminator(*p).is_some());
+    clause.len() < tokens.len()
+        && !is_paragraph(tokens.iter().rev().nth(clause.len()))
+        && clause.iter().any(|t| matches!(t, Token::Punctuation(')' | ']' | '}')))
+        && clause.iter().all(|t| matches!(t, Token::Space | Token::Punctuation(' ' | '-' | ')' | ']' | '}')))
+}
+
+fn after_paragraph(tokens: &[Token]) -> bool {
+    matches!(
+        tokens.iter().rev().find(|t| !matches!(t, Token::Space | Token::Punctuation(' '))),
+        Some(Token::ClauseBoundary(p)) if ssml_driver::paragraph_terminator(*p).is_some()
+    )
+}
+
+/// The tokenizer writes a mark that a blank line follows as the mark and then the paragraph end.
+/// C speaks a mark that punctuation covers and then ends the clause with the paragraph; any
+/// other mark gives way to the paragraph end.
+fn fuse_paragraph_marks(tokens: Vec<Token>, options: &LangOptions, wide_closer: bool) -> Vec<Token> {
+    let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
+    let mut tokens = tokens.into_iter().peekable();
+    while let Some(token) = tokens.next() {
+        let paragraph = |t: Option<&Token>| matches!(t, Some(Token::ClauseBoundary(p)) if ssml_driver::paragraph_terminator(*p).is_some());
+        match token {
+            // A full-width closer is no bracket to C, so the mark before it ends no clause there and
+            // the blank line right behind the closer opens none either.
+            Token::ClauseBoundary(p) if wide_closer && paragraph(Some(&Token::ClauseBoundary(p))) && closers_after_clause_end(&out) => {}
+            Token::ClauseBoundary(c) if ssml_driver::paragraph_terminator(c).is_none() && paragraph(tokens.peek()) => {
+                if punct_covers(options, c) {
+                    out.push(Token::ClauseBoundary(c));
+                }
+            }
+            // A mark that opens the clause after a blank line is spoken like any other.
+            Token::Operator(c) if is_clause_punctuation(c) && punct_covers(options, c) && after_paragraph(&out) => {
+                out.push(Token::ClauseBoundary(c));
+            }
+            other => out.push(other),
+        }
+    }
+    out
+}
+
 /// Adds the clause boundaries C's `ReadClause` inserts when its source buffer fills.
 /// `--punct`: C's `AnnouncePunctuation` for a clause-ending mark.  A clause
 /// that already holds text ends with a short pause, and the mark's name is then
 /// read as a clause of its own; a mark that is the last character of the text
 /// is lost with it.  Marks the option does not cover pass through.
-fn announce_clause_punctuation(tokens: Vec<Token>, options: &LangOptions) -> Vec<Token> {
+fn announce_clause_punctuation(tokens: Vec<Token>, options: &LangOptions, wide_closer: bool) -> Vec<Token> {
+    let tokens = fuse_paragraph_marks(tokens, options, wide_closer);
     let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
     let total = tokens.len();
     for (ix, token) in tokens.into_iter().enumerate() {
@@ -2196,6 +2307,10 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
     let mut chars = CountedChars::new(text);
     let mut before: Option<char> = None;
     let mut blank_run = 0usize;
+    // `\x01B` changes the punctuation list from here on, which this tokenizer does not follow.
+    let mut list_command = false;
+    // A dot C keeps in the clause (see `kept_ordinal_dot`) is the last clause end read.
+    let mut kept_dot = KeptDot::No;
 
     while let Some(c) = chars.next() {
         let previous = before.replace(c);
@@ -2210,6 +2325,7 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             let was_alnum = chars.any_alnum();
             match read_embedded_command(&mut chars) {
                 Some(cmd) if is_punctuation_command(cmd) => {
+                    list_command = true;
                     blanks = PUNCTUATION_COMMAND_BLANKS + punctuation_argument(&mut chars.chars).0;
                     chars.any_alnum = was_alnum;
                     ' '
@@ -2233,7 +2349,20 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
         } else {
             c
         };
-        if c.is_whitespace() {
+        if c.is_alphanumeric() && kept_dot == KeptDot::Plain {
+            kept_dot = KeptDot::No;
+        }
+        let paragraph = (c == '\n' || chars.peek().is_some_and(|&n| n.is_whitespace()))
+            .then(|| paragraph_in_blanks(&std::iter::once(c).chain(chars.clone()).take_while(|&b| readclause::ctype::is_blank(b)).collect::<Vec<_>>()))
+            .flatten()
+            // A kept dot's clause goes on to the blank line as it does without one.
+            .filter(|_| readclause::ctype::is_blank(c) && kept_dot != KeptDot::Plain);
+        if let Some(end) = paragraph {
+            while chars.next_if(|&n| readclause::ctype::is_blank(n)).is_some() {}
+            before = Some(' ');
+            tokens.push(if std::mem::replace(&mut kept_dot, KeptDot::No) == KeptDot::No { Token::ClauseBoundary(end) } else { Token::Space });
+            chars.end_clause();
+        } else if c.is_whitespace() {
             // Collapse runs of whitespace into a single Space token.
             while chars.peek().map(|c| c.is_whitespace()).unwrap_or(false) {
                 chars.next();
@@ -2307,13 +2436,14 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             // stop and comma, the Armenian/Syriac/Ethiopic/Mongolian/Tibetan
             // terminators, the ellipsis, the en/em dash.  Unspaced (`a–b`) they
             // are dropped instead, which is C's behaviour too.
-            let newline = newline_follows(chars.clone());
+            let newlines = newline_count(chars.clone());
+            let newline = newlines > 0;
             while chars.peek().map(|ch| ch.is_whitespace()).unwrap_or(false) {
                 chars.next();
                 before = Some(' ');
             }
             if chars.any_alnum() || newline {
-                tokens.push(Token::ClauseBoundary(c));
+                push_clause_end(&mut tokens, c, newlines, list_command, &mut kept_dot);
                 chars.end_clause();
             } else {
                 tokens.push(Token::Operator(c));
@@ -2384,13 +2514,36 @@ pub fn tokenize_opts(text: &str, grammar: &NumberGrammar) -> Vec<Token> {
             let dot_ends = c == '.'
                 && (dot_ends_before_lower_case(chars.clone(), grammar.lowercase_sentence)
                     || no_break_space_after_blanks(chars.clone()));
+            let newlines = newline_count(chars.clone());
+            // A dot with a hyphen right behind it is no clause end to C (readclause.c:815).
+            let glued_dash = chars.peek() == Some(&'-');
             // Absorb trailing whitespace after punctuation
             while chars.peek().is_some_and(|&ch| readclause::ctype::is_blank(ch)) {
                 chars.next();
                 before = Some(' ');
             }
-            tokens.push(Token::ClauseBoundary(c));
-            chars.end_clause();
+            let kept_end = (c == '.' && newlines == 0 && grammar.silent_ordinal_dot)
+                .then(|| {
+                    kept_ordinal_dot(&tokens, chars.clone(), grammar).or_else(|| {
+                        glued_dash.then(|| blank_line_before_letters(chars.clone()).map(|(end, _)| (end, KeptDot::Plain))).flatten()
+                    })
+                })
+                .flatten();
+            match kept_end {
+                Some((end, KeptDot::Replaced)) => {
+                    tokens.push(Token::ClauseBoundary(end));
+                    kept_dot = KeptDot::Replaced;
+                }
+                Some((_, plain)) => {
+                    push_clause_end(&mut tokens, c, newlines, list_command, &mut kept_dot);
+                    chars.end_clause();
+                    kept_dot = plain;
+                }
+                None => {
+                    push_clause_end(&mut tokens, c, newlines, list_command, &mut kept_dot);
+                    chars.end_clause();
+                }
+            }
             if dot_ends {
                 tokens.push(Token::DotEndsClause);
             }
@@ -6707,10 +6860,24 @@ pub(crate) enum TranslateEntryKind {
 
 /// C `TranslateClause`: a clause ended by a dot whose last word may take a dot (`$allowdot`,
 /// `$needsdot`) stopped on an abbreviation such as `Dr.`; the flag marks that boundary.
-fn abbreviation_flags(entries: &[TranslateEntry]) -> u32 {
-    let last_word = entries.iter().rev().find(|e| e.kind != TranslateEntryKind::Other);    last_word
+fn abbreviation_flags(entries: &[TranslateEntry], english: bool) -> u32 {
+    let last_word = entries.iter().rev().find(|e| e.kind != TranslateEntryKind::Other);
+    last_word
         .filter(|e| e.kind == TranslateEntryKind::Word)
-        .map_or(0, |e| e.dict_flags & (crate::dictionary::FLAG_ALLOW_DOT | crate::dictionary::FLAG_NEEDS_DOT))
+        .map_or(0, |e| {
+            let flags = e.dict_flags & (crate::dictionary::FLAG_ALLOW_DOT | crate::dictionary::FLAG_NEEDS_DOT);
+            if english && is_single_letter_abbreviation(e) { flags | crate::dictionary::FLAG_ALLOW_DOT } else { flags }
+        })
+}
+
+/// C `TranslateWord` (translateword.c:788): any single English letter but `i` before a dot is
+/// an abbreviation.  The clause's last word (translate.c:1796) is then the word the dot follows,
+/// so a bracket between the letter and the dot ends the rule (`b>.`).
+fn is_single_letter_abbreviation(entry: &TranslateEntry) -> bool {
+    let mut letters = entry.word_lower.iter().flat_map(|w| w.chars());
+    // A list entry marked `$abbrev` (`C`) is taken before this rule is reached.
+    entry.dict_flags & crate::dictionary::FLAG_ABBREV == 0
+        && matches!((letters.next(), letters.next()), (Some(c), None) if c.is_alphabetic() && c != 'i')
 }
 
 pub(crate) struct TranslateEntry {
@@ -6844,7 +7011,9 @@ fn spaced_dash(tokens: &[Token], ix: usize) -> bool {
 fn dash_is_blank(tokens: &[Token], ix: usize) -> bool {
     let is_dash = |t: Option<&Token>| matches!(t, Some(Token::Punctuation('-') | Token::Operator('-')));
     let before = ix > 0 && matches!(tokens[ix - 1], Token::Space | Token::Embedded(_));
-    let after = matches!(tokens.get(ix + 1), Some(Token::Space));
+    // A blank line after the dash is blanks to C, and the tokenizer folds it into the clause end.
+    let after = matches!(tokens.get(ix + 1), Some(Token::Space))
+        || matches!(tokens.get(ix + 1), Some(Token::ClauseBoundary(p)) if ssml_driver::paragraph_terminator(*p).is_some());
     let second_of_doubled = ix > 0 && is_dash(tokens.get(ix - 1)) && ix > 1 && matches!(tokens[ix - 2], Token::Space | Token::Embedded(_));
     (before && after) || is_dash(tokens.get(ix + 1)) || second_of_doubled
 }
@@ -6933,6 +7102,75 @@ fn glued_to_clause_mark(tokens: &[Token], previous: Option<char>) -> bool {
             tokens.iter().rev().find(|t| !matches!(t, Token::Space | Token::Punctuation(' '))),
             Some(Token::ClauseBoundary(_))
         )
+}
+
+/// Whether the word after `before` is opened by a bracket, a blank dash and marks read as text
+/// aside: the bracket's pause belongs to the word (translate.c:1295), whose leading break goes.
+fn opened_by_bracket(before: &[Token]) -> bool {
+    for (i, t) in before.iter().enumerate().rev() {
+        match t {
+            Token::Operator(p) if !is_bracket(*p) => {}
+            Token::Punctuation('-') | Token::Embedded(_) => {}
+            Token::Space if matches!(i.checked_sub(1).map(|k| &before[k]), Some(Token::Punctuation('-'))) => {}
+            Token::Punctuation(p) | Token::Operator(p) => return is_bracket(*p),
+            _ => return false,
+        }
+    }
+    false
+}
+
+/// Whether the clause the token at `at` is in ends at a blank line, or opens right after one.  A
+/// mark that is text to `ReadClause` (no letter before it) only ends the clause when a newline
+/// follows (readclause.c:754, :851), and the clause then ends once, at that end.
+fn paragraph_bounds_clause(tokens: &[Token], at: usize) -> bool {
+    let paragraph = |t: Option<&Token>| matches!(t, Some(Token::ClauseBoundary(p)) if ssml_driver::paragraph_terminator(*p).is_some());
+    let next_end = tokens[at + 1..].iter().position(|t| matches!(t, Token::ClauseBoundary(_))).map(|k| at + 1 + k);
+    // Brackets and quotes between that end and the blank line are a clause of their own, which
+    // the blank line then closes.
+    let closers_then_paragraph = next_end.is_some_and(|k| {
+        paragraph(tokens[k + 1..].iter().find(|t| !matches!(t, Token::Space | Token::Punctuation(' ')) && !matches!(t, Token::Punctuation(c) if is_bracket(*c))))
+    });
+    paragraph(next_end.map(|k| &tokens[k]))
+        || closers_then_paragraph
+        || next_end.is_some() && paragraph(tokens[..at].iter().rev().find(|t| !matches!(t, Token::Space | Token::Punctuation(' ' | '-'))))
+}
+
+/// Whether the code list ends with a blank line's clause end and markers only, after a clause of
+/// its own (`A,\n— ;\n\n?`): the marks that follow are a clause of their own.
+fn only_paragraph_end_before_marks(codes: &[PhonemeCode]) -> bool {
+    let mut rest = codes.iter().rev().skip_while(|c| c.marker.is_some());
+    rest.next().is_some_and(|c| c.is_boundary && c.clause_char.is_some_and(|m| ssml_driver::paragraph_terminator(m).is_some()))
+}
+
+/// Whether the nearest bracket before the word, blanks, dots and dashes aside, opens it (not a quote).
+fn opened_by_round_bracket(before: &[Token]) -> bool {
+    before
+        .iter()
+        .rev()
+        .find(|t| !matches!(t, Token::Space | Token::Punctuation(' ' | '-' | '.') | Token::Operator(_) | Token::Embedded(_)))
+        .is_some_and(|t| matches!(t, Token::Punctuation('(' | '[' | '{' | '<' | '\u{300a}')))
+}
+
+/// Whether the next word after `at` is a Latin word of more than one letter that Japanese
+/// hands to English letter by letter (one token per letter, blank between): C gives such a word
+/// no pause from a bracket before it, while a single letter keeps it.  `source` tells a word
+/// from separate letters.
+fn spelled_latin_word_after(tokens: &[Token], entries: &[TranslateEntry], at: usize, source: &str) -> bool {
+    let Some(first) = tokens[at + 1..].iter().position(|t| matches!(t, Token::Word(_))).map(|k| at + 1 + k) else {
+        return false;
+    };
+    let spelled = |ix: usize| entries[ix].phonemes.contains(&crate::phoneme::PHON_SWITCH);
+    let letters: String = tokens[first..]
+        .iter()
+        .enumerate()
+        .take_while(|&(k, t)| match t {
+            Token::Word(w) => spelled(first + k) && w.chars().count() == 1,
+            Token::Space => k % 2 == 1,
+            _ => false,
+        })
+        .filter_map(|(_, t)| if let Token::Word(w) = t { Some(w.as_str()) } else { None })
+        .collect();
+    letters.chars().count() > 1 && source.to_lowercase().contains(&letters.to_lowercase())
 }
 
 /// How many clause ends close the code list, markers aside.
@@ -7380,7 +7618,48 @@ where
 /// Whether a newline is among the blanks after a clause mark, the case where C ends the clause
 /// without asking for a letter or digit before it (`nl_count`).
 fn newline_follows<I: Iterator<Item = char>>(after: I) -> bool {
-    after.take_while(|c| c.is_whitespace()).any(|c| c == '\n')
+    newline_count(after) > 0
+}
+
+/// `nl_count`: the newlines among the blanks that follow a clause mark.
+fn newline_count<I: Iterator<Item = char>>(after: I) -> usize {
+    after.take_while(|c| readclause::ctype::is_blank(*c)).filter(|&c| c == '\n').count()
+}
+
+/// The clause end of mark `c`: the mark, and the paragraph end after it when more than one
+/// newline follows (`fuse_paragraph_marks` decides whether the mark is spoken).  After a
+/// punctuation list command no mark before a blank line is spoken.  `kept_dot`: the clause is
+/// the one a kept dot left open, which the blank line ends with no clause of its own.
+fn push_clause_end(tokens: &mut Vec<Token>, c: char, newlines: usize, list_command: bool, kept_dot: &mut KeptDot) {
+    if newlines < 2 || !(list_command || *kept_dot == KeptDot::Replaced) {
+        tokens.push(Token::ClauseBoundary(c));
+    } else {
+        tokens.push(Token::Space);
+    }
+    // The blanks are already absorbed after a mark, as when no blank line follows.
+    if newlines > 1 && *kept_dot != KeptDot::Plain {
+        tokens.push(if *kept_dot == KeptDot::No { Token::ClauseBoundary(paragraph_mark(c)) } else { Token::Space });
+    }
+    if *kept_dot == KeptDot::Replaced {
+        *kept_dot = KeptDot::No;
+    }
+}
+
+/// The paragraph terminator character for a clause mark `c` followed by more than one newline.
+fn paragraph_mark(c: char) -> char {
+    match clause_punctuation_class(c) {
+        Some((ClauseTerminator::Question, false)) => ssml_driver::QUESTION_PARAGRAPH_END,
+        Some((ClauseTerminator::Exclamation, false)) => ssml_driver::EXCLAMATION_PARAGRAPH_END,
+        _ => ssml_driver::PARAGRAPH_CLAUSE_ENDS[0],
+    }
+}
+
+/// The paragraph character for a blank line inside `run`, the blanks from the current one on:
+/// the newlines after the first one decide the length, at most three.
+fn paragraph_in_blanks(run: &[char]) -> Option<char> {
+    let first = run.iter().position(|&c| c == '\n')?;
+    let more = run[first + 1..].iter().filter(|&&c| c == '\n').count();
+    (more > 0).then(|| ssml_driver::PARAGRAPH_CLAUSE_ENDS[more.min(3) - 1])
 }
 
 /// C reads `e.g.` as the words `e . g .`, which a multi-word list entry
@@ -7454,6 +7733,24 @@ fn stray_mark_phonemes(
     wr.phonemes.iter().any(|&b| b != 0).then_some((wr.phonemes, wr.found_in_list))
 }
 
+/// The text after the last blank line: `ReadClause` ends a clause there and starts the next one
+/// with no letter or digit read (`any_alnum`).
+fn text_after_blank_line(text: &str) -> &str {
+    let mut start = 0;
+    let mut newlines = 0;
+    for (ix, c) in text.char_indices() {
+        if !c.is_whitespace() {
+            if newlines > 1 {
+                start = ix;
+            }
+            newlines = 0;
+        } else if c == '\n' {
+            newlines += 1;
+        }
+    }
+    &text[start..]
+}
+
 /// C ends a clause at a mark that a quote or bracket follows, and reads that
 /// closer as a clause of its own: one more, empty, output line.
 pub(crate) fn closes_after_mark(text: &str) -> bool {
@@ -7461,9 +7758,15 @@ pub(crate) fn closes_after_mark(text: &str) -> bool {
     const MARKS: &str = ".,!?;:";
     let trimmed = text.trim_end();
     let before = trimmed.trim_end_matches(|c: char| CLOSERS.contains(c) || c.is_whitespace());
-    before.len() < trimmed.len()
-        && before.chars().next_back().is_some_and(|c| MARKS.contains(c))
-        && before.chars().rev().skip(1).any(char::is_alphanumeric)
+    let after = &trimmed[before.len()..];
+    let blank_line_first = after.chars().take_while(|c| c.is_whitespace()).filter(|&c| c == '\n').count() > 1;
+    let clause = text_after_blank_line(before);
+    // A newline after the mark ends the clause with no letter before it (readclause.c:851).
+    let newline_ends = clause.len() < before.len() && after.chars().take_while(|c| c.is_whitespace()).any(|c| c == '\n');
+    after.chars().any(|c| CLOSERS.contains(c))
+        && (blank_line_first
+            || before.chars().next_back().is_some_and(|c| MARKS.contains(c))
+                && (newline_ends || clause.chars().rev().skip(1).any(char::is_alphanumeric)))
 }
 
 /// Whether a digit directly follows a leading `-`, so the hyphen is a unary
@@ -9085,7 +9388,7 @@ fn suppress_abbreviation_periods(tokens: &mut Vec<Token>) {
                 tokens[i] = if follows_colon_digits(tokens, i) { Token::Punctuation(' ') } else { Token::Space };
             }
         }
-        if matches!(tokens[i], Token::ClauseBoundary(ssml_driver::VOICE_CLAUSE_END)) {
+        if matches!(tokens[i], Token::ClauseBoundary(c) if c == ssml_driver::VOICE_CLAUSE_END || ssml_driver::paragraph_terminator(c).is_some()) {
             next_word = None;
         } else if !matches!(tokens[i], Token::Space | Token::WordJoin | Token::ClauseBoundary(_) | Token::DotEndsClause) {
             next_word = Some(i);
@@ -10777,7 +11080,7 @@ pub(crate) fn build_translate_entries(
                 repeat.clear();
                 entries.push(TranslateEntry {
                     phonemes:   Vec::new(),
-                    dict_flags: if matches!(*punct, '.' | ssml_driver::TAG_CLAUSE_END) { abbreviation_flags(&entries) } else { 0 },
+                    dict_flags: if matches!(*punct, '.' | ssml_driver::TAG_CLAUSE_END) { abbreviation_flags(&entries, *punct == '.' && primary_bcp47_subtag(&options.lang) == "en" && matches!(tokens[..token_ix].iter().rev().find(|t| !matches!(t, Token::Space)), Some(Token::Word(_)))) } else { 0 },
                     kind:       TranslateEntryKind::ClauseBoundary,
                     word_lower: None,
                     word_group: None, spelled: false,
@@ -11814,14 +12117,19 @@ impl Translator {
     /// one more clause boundary, as C reports it.
     pub fn translate_to_clause_codes(&self, text: &str) -> Result<Vec<PhonemeCode>> {
         let mut codes = self.translate_to_codes(text)?;
-        if closes_after_mark(text) && trailing_clause_ends_up_to(&codes, 2) < 2 {
+        let is_paragraph = |c: &PhonemeCode| c.clause_char.is_some_and(|m| ssml_driver::paragraph_terminator(m).is_some());
+        // The end of a blank line closes the text before it, not the closer.
+        let marks: Vec<PhonemeCode> = codes.iter().filter(|c| !is_paragraph(c)).cloned().collect();
+        let ends_with_paragraph = codes.last().is_some_and(is_paragraph);
+        if closes_after_mark(text) && !ends_with_paragraph && trailing_clause_ends_up_to(&marks, 2) < 2 {
             let boundary = || PhonemeCode { is_boundary: true, clause_char: Some('.'), ..Default::default() };
             let ends_clause = codes
                 .iter()
                 .rev()
-                .find(|c| c.marker.is_none())
+                .find(|c| c.marker.is_none() && !(c.code == 15 && c.clause_char.is_none()))
                 .is_some_and(|c| c.is_boundary && c.clause_char.is_some());
-            if !ends_clause {
+            let after_paragraph = trailing_clause_ends_up_to(&codes, usize::MAX) > trailing_clause_ends_up_to(&marks, usize::MAX);
+            if !ends_clause && !after_paragraph {
                 codes.push(boundary());
             }
             codes.push(boundary());
@@ -11832,8 +12140,18 @@ impl Translator {
     /// [`text_to_ipa`](Self::text_to_ipa) for phoneme output: the empty clause of
     /// a closer after the last mark is one more, empty, line.
     pub fn text_to_ipa_clauses(&self, text: &str) -> Result<String> {
-        let ipa = self.text_to_ipa(text)?;
-        Ok(if closes_after_mark(text) && !ipa.ends_with('\n') { format!("{ipa}\n") } else { ipa })
+        let codes = self.translate_to_clause_codes(text)?;
+        let mut phdata = PhonemeData::load(&self.data_dir)?;
+        select_phoneme_table(&mut phdata, &self.data_dir, &self.options.lang)?;
+        Ok(phoneme_ipa::codes_to_ipa_opts(
+            &codes,
+            &phdata,
+            &self.data_dir,
+            &self.options.lang,
+            false,
+            self.options.ipa_tie,
+            self.options.ipa_separator,
+        ))
     }
 
     /// [`translate_to_codes`](Self::translate_to_codes) with `phonSWITCH`
@@ -11936,6 +12254,7 @@ impl Translator {
         let text = schwa_for_article_apostrophe(&text, lang);
         let number_grammar = NumberGrammar {
             clause_text: matches!(mode, TokenizeMode::Clause { .. }),
+            silent_ordinal_dot: !punct_covers(&self.options, '.'),
             ..with_dict_ordinal_suffixes(&self.options.number_grammar, &text, dict)
         };
         let say_as_start = carry.as_deref().map_or(0, |c| c.say_as.mode);
@@ -11950,7 +12269,7 @@ impl Translator {
         merge_digit_follow(&mut tokens, dict);
         let start_emphasis = carry.as_deref().map_or(0, |c| c.emphasis);
         expand_dotted_phrases(&mut tokens, dict, lang, start_emphasis);
-        tokens = announce_clause_punctuation(tokens, &self.options);
+        tokens = announce_clause_punctuation(tokens, &self.options, source_text.contains(['）', '］', '｝']));
         suppress_abbreviation_periods(&mut tokens);
         let alts = letters::AltLangs::new(&self.data_dir);
         let run_hands_over = |word: &str| {
@@ -12260,7 +12579,9 @@ impl Translator {
                 || (matches!(token, Token::Punctuation('-') | Token::Operator('-')) && spaced_dash(&tokens, token_ix)))
                 && entry.phonemes.is_empty()
                 && !(matches!(token, Token::Punctuation('\'')) && plural_possessive_quote(&tokens, token_ix));
-            let trailing_mark = matches!(token, Token::Operator(c) if is_clause_punctuation(*c)) && !word_follows_in_text[token_ix];
+            let trailing_mark = (matches!(token, Token::Operator(c) if is_clause_punctuation(*c))
+                || matches!(token, Token::Punctuation('-')) && entry.phonemes.is_empty())
+                && !word_follows_in_text[token_ix];
             if open_switch.is_some()
                 && (entry.phonemes.iter().any(|&b| b != 0 && b != crate::phoneme::PHON_END_WORD)
                     || bracket_here
@@ -12351,7 +12672,12 @@ impl Translator {
                             // The pre-pause loop in C spends 2 per `phonPAUSE`.
                             let tight_after_bracket = token_ix
                                 .checked_sub(1)
-                                .is_some_and(|k| matches!(&tokens[k], Token::Punctuation(p) if is_bracket(*p)));
+                                .is_some_and(|k| {
+                                    // A dash that opens the clause after a blank line counts as a bracket.
+                                    let opens_clause = k > 0 && matches!(&tokens[k - 1], Token::ClauseBoundary(p) if ssml_driver::paragraph_terminator(*p).is_some());
+                                    matches!(&tokens[k], Token::Punctuation(p) if is_bracket(*p))
+                                        || opens_clause && matches!(&tokens[k], Token::Operator(p) if is_bracket(*p))
+                                });
                             // Quote pauses are C's `pre_pause_add`, kept as the largest before the next word.
                             let quote_after_quote = *c == '\''
                                 && tokens[..token_ix]
@@ -12372,7 +12698,10 @@ impl Translator {
                                     ..Default::default()
                                 });
                             }
-                            let pauses = if pause_open {
+                            let switched_next = primary_bcp47_subtag(&self.options.lang) == "ja"
+                                && matches!(*c, '(' | '[' | '{' | '<' | '\u{300a}')
+                                && spelled_latin_word_after(&tokens, &entries, token_ix, source_text);
+                            let pauses = if pause_open || switched_next {
                                 0
                             } else if spoken_bracket || punct_covers(&self.options, *c) {
                                 announced / 2
@@ -12400,7 +12729,8 @@ impl Translator {
                             && (matches!(token, Token::Operator(_)) && is_clause_punctuation(*c)
                                 || matches!(token, Token::Punctuation(_)) && matches!(c, '(' | '[' | '{' | '<' | '\u{300a}'))
                             && !word_follows_in_text[token_ix]
-                            && trailing_clause_ends_up_to(&codes, 2) == 1
+                            && !paragraph_bounds_clause(&tokens, token_ix)
+                            && (trailing_clause_ends_up_to(&codes, 2) == 1 || only_paragraph_end_before_marks(&codes))
                         {
                             codes.push(PhonemeCode {
                                 code: 0, is_boundary: true, clause_char: Some(*c), marker: None,
@@ -12554,7 +12884,13 @@ impl Translator {
                         if option_emphasis >= 3 && pre_pause < 1 && (is_word(token) || emphasized_dot) {
                             pre_pause = 1;
                         }
-                        if is_word(token) && previous_word_has_open_quote(&tokens, token_ix, &self.options) {
+                        let spelled_in_other_table = primary_bcp47_subtag(&self.options.lang) == "ja"
+                            && spelled_latin_word_after(&tokens, &entries, token_ix.wrapping_sub(1), source_text)
+                            && opened_by_round_bracket(&tokens[..token_ix]);
+                        if is_word(token)
+                            && !spelled_in_other_table
+                            && previous_word_has_open_quote(&tokens, token_ix, &self.options)
+                        {
                             pre_pause = pre_pause.max(i32::from(self.options.bracket_pause.0));
                         }
                         // The pause goes *before* the word separator, so it
@@ -12620,13 +12956,17 @@ impl Translator {
                     } else {
                         consume_word_break_syllabic(&entry.phonemes, phdata)
                     };
-                    let opened_by_bracket = tokens[..token_ix]
-                        .iter()
-                        .rfind(|t| !matches!(t, Token::Operator(_) | Token::Punctuation('-') | Token::Embedded(_)))
-                        .is_some_and(|t| matches!(t, Token::Punctuation(p) if is_bracket(*p)));
+                    let opened_by_bracket = opened_by_bracket(&tokens[..token_ix]);
                     let after_clause_start_pauses =
                         pause_opens_clause || (opened_by_bracket && only_pauses_since_clause_start(&codes));
                     let leading_breaks = plain.iter().take_while(|&&b| b == crate::phoneme::PHON_END_WORD).count();
+                    // The break that is dropped would have taken the language's own word gap (Latin `_`).
+                    if after_clause_start_pauses && leading_breaks > 0 && (stress_opts.word_gap & 7) == 2 && open_switch.is_none() {
+                        let gap = phdata.lookup_phoneme("_");
+                        if gap != 0 {
+                            codes.push(PhonemeCode { code: gap, is_boundary: false, clause_char: None, marker: None, voice_table: false, source: None });
+                        }
+                    }
                     for &b in &plain[if after_clause_start_pauses { leading_breaks } else { 0 }..] {
                         // `phonX1` is a marker, not a sound: C reads it as
                         // "double the next word's initial consonant"
@@ -14262,9 +14602,19 @@ fn apply_list_editing_instructions(
         if ph.program == 0 {
             continue;
         }
-        let prev = n.checked_sub(1).map(|k| codes[real[k]].code).unwrap_or(0);
-        let next = real.get(n + 1).map(|&k| codes[k].code).unwrap_or(0);
-        let next2 = real.get(n + 2).map(|&k| codes[k].code).unwrap_or(0);
+        // `MakePhonemeList` builds one clause at a time, so a phoneme never sees one of the next.
+        let ends_clause = |from: usize, to: usize| codes[from + 1..to].iter().any(|c| c.is_boundary && c.code == 0 && c.clause_char.is_some());
+        let prev = n
+            .checked_sub(1)
+            .filter(|&k| !ends_clause(real[k], i))
+            .map(|k| codes[real[k]].code)
+            .unwrap_or(0);
+        let next_here = real.get(n + 1).filter(|&&k| !ends_clause(i, k));
+        let next = next_here.map(|&k| codes[k].code).unwrap_or(0);
+        let next2 = next_here
+            .and_then(|&k| real.get(n + 2).filter(|&&j| !ends_clause(k, j)))
+            .map(|&j| codes[j].code)
+            .unwrap_or(0);
         // A boundary *or* an `END_WORD` between this phoneme and the next means
         // the next one starts a word, so `nextPhW` must not see through it.
         // (Composed numbers join their parts with `END_WORD` alone, and without
@@ -14281,7 +14631,7 @@ fn apply_list_editing_instructions(
             next,
             next2,
             this_wordstart: starts[n],
-            prev_wordstart: n.checked_sub(1).is_some_and(|k| starts[k]),
+            prev_wordstart: prev != 0 && n.checked_sub(1).is_some_and(|k| starts[k]),
             next_wordstart,
             next2_wordstart: next_wordstart,
             ..Default::default()
