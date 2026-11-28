@@ -445,7 +445,11 @@ GPL-3.0-or-later — same as eSpeak NG.
 
 ## Authors
 
-- [Eugene Hauptmann](https://github.com/eugenehp)
+- [Eugene Hauptmann](https://github.com/eugenehp) — original Rust port
+- [Ali Ustek](https://github.com/austek) — the `dengjen` branch: the golden and
+  WAV/event ratchets, synthesis state carry-over, CLI and C-API parity work,
+  CI, fuzzing, and the translator fixes recorded in `CHANGELOG.md`
+- Other contributors are listed in the git history.
 
 ---
 
@@ -453,8 +457,12 @@ GPL-3.0-or-later — same as eSpeak NG.
 
 Copyright © 2026 Eugene Hauptmann
 
-This project is a from-scratch Pure Rust reimplementation and does not copy
-C source from eSpeak NG, but it is licensed under the same terms:
-[GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html).
+Copyright © 2026 Ali Ustek, for the changes made on the `dengjen` branch
 
-Source: <https://github.com/eugenehp/espeak-ng-rs>
+This is a Pure Rust port of eSpeak NG and follows its C sources and data
+closely, so it is a derivative work of eSpeak NG (Copyright © Jonathan Duddington
+and the eSpeak NG contributors). It is licensed under the same terms: [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html). Keep
+these notices when you copy or modify the code.
+
+Sources: <https://github.com/eugenehp/espeak-ng-rs> (upstream) and
+<https://github.com/austek/espeak-ng-rs> (`dengjen` branch)
